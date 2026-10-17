@@ -114,6 +114,7 @@ function App() {
       return;
     }
 
+    const selectedTenantId = activeTenantId;
     const controller = new AbortController();
     setWorkspaceContext(null);
     setWorkspaceLoading(true);
@@ -123,7 +124,7 @@ function App() {
       try {
         const response = await fetch(apiBaseUrl + "/workspace/context", {
           credentials: "include",
-          headers: { "X-Tenant-Id": activeTenantId },
+          headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => ({})) as {
