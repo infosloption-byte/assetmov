@@ -105,10 +105,27 @@ model User {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   memberships       Membership[]
+  sessions          Session[]
   auditEvents       AuditLog[]          @relation("AuditActor")
   assetEvents       AssetTransaction[]  @relation("TransactionActor")
   submittedRequests AssetRequest[]      @relation("RequestSubmitter")
   decidedRequests   AssetRequest[]      @relation("RequestDecider")
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique @db.Char(64)
+  csrfTokenHash  String    @db.Char(64)
+  expiresAt      DateTime
+  lastSeenAt     DateTime?
+  ipAddress      String?   @db.VarChar(64)
+  userAgent      String?   @db.VarChar(500)
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
 }
 
 model Membership {
