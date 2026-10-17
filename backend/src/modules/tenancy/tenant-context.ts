@@ -1,17 +1,8 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
-import type { AuthContext } from "../auth/auth-middleware.js";
 import { expandLocationScope } from "./location-scope.js";
 
 type LocationMode = "read" | "manage";
-
-declare global {
-  namespace Express {
-    interface Request {
-      auth?: AuthContext;
-    }
-  }
-}
 
 function sendError(
   response: Response,
