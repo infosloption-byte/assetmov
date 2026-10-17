@@ -4,6 +4,7 @@ import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 import LocationsPage from "./features/locations/LocationsPage";
 import TransferPage from "./features/transfers/TransferPage";
+import EmployeePage from "./features/employees/EmployeePage";
 
 type ApiHealth = "checking" | "online" | "offline";
 
@@ -39,7 +40,7 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers">("overview");
+  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -227,6 +228,7 @@ function App() {
           <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
           <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
           <button className={"nav-item " + (activePage === "transfers" ? "active" : "")} type="button" onClick={() => setActivePage("transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</button>
+          <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
           <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
@@ -239,7 +241,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -282,6 +284,15 @@ function App() {
           />
         ) : activePage === "transfers" ? (
           <TransferPage
+            tenantId={activeTenantId}
+            csrfToken={csrfToken}
+            permissions={activeWorkspaceContext?.permissions ?? []}
+            accessibleLocationIds={activeWorkspaceContext?.locationScope.accessibleLocationIds ?? []}
+            manageableLocationIds={activeWorkspaceContext?.locationScope.manageableLocationIds ?? []}
+            allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
+          />
+        ) : activePage === "employees" ? (
+          <EmployeePage
             tenantId={activeTenantId}
             csrfToken={csrfToken}
             permissions={activeWorkspaceContext?.permissions ?? []}
