@@ -81,7 +81,7 @@ export function requireCsrf(
   const suppliedToken = request.get("x-csrf-token");
   const expectedToken = request.auth?.csrfToken;
 
-  if (!suppliedToken || !expectedHash || !hashesMatch(hashToken(suppliedToken), expectedHash)) {
+  if (!suppliedToken || !expectedToken || !hashesMatch(suppliedToken, expectedToken)) {
     response.status(403).json({
       error: { code: "CSRF_INVALID", message: "The security token is missing or expired. Refresh and try again." },
     });
