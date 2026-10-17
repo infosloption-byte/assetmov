@@ -370,7 +370,7 @@ assetRouter.post(
             limit: error.limit,
             current: error.current,
             maximum: error.maximum,
-            nextStep: "Upgrade the company plan or remove assets only through an approved permanent-purge process.",
+            nextStep: "Ask your company administrator or platform administrator to upgrade the subscription plan.",
           },
         });
         return;
