@@ -12,6 +12,7 @@ import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 import { assetRouter } from "./modules/assets/asset.routes.js";
 import { locationRouter } from "./modules/locations/location.routes.js";
 import { transferRouter } from "./modules/transfers/transfer.routes.js";
+import { employeeRouter } from "./modules/employees/employee.routes.js";
 
 export const app = express();
 
@@ -71,6 +72,7 @@ app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
 app.use("/api/transfers", transferRouter);
+app.use("/api/employees", employeeRouter);
 
 app.use((_request, response) => {
   response.status(404).json({
