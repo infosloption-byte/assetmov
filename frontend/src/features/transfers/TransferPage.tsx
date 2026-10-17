@@ -202,13 +202,14 @@ function TransferPage({
       return;
     }
 
+    const selectedTenantId = tenantId;
     const controller = new AbortController();
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
         const response = await fetch(apiBaseUrl + "/locations", {
           credentials: "include",
-          headers: { "X-Tenant-Id": tenantId },
+          headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => ({})) as {
@@ -238,6 +239,7 @@ function TransferPage({
       return;
     }
 
+    const selectedTenantId = tenantId;
     const controller = new AbortController();
     setEligibleAssetsLoading(true);
     setEligibleAssetsError("");
@@ -253,7 +255,7 @@ function TransferPage({
         });
         const response = await fetch(apiBaseUrl + "/assets?" + params.toString(), {
           credentials: "include",
-          headers: { "X-Tenant-Id": tenantId },
+          headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => ({})) as {
@@ -465,8 +467,8 @@ function TransferPage({
           <p>Dispatch available assets between locations, record receiving decisions, and keep each handover in the asset timeline.</p>
         </div>
         {canDispatch && (
-          <button className="primary-button" type="button" onClick={openDispatch} disabled={originOptions.length === 0}>
-            Dispatch assets <span>＋</span>
+          <button className="primary-button" type="button" onClick={openDispatch} disabled={locationsLoading || originOptions.length === 0}>
+            {locationsLoading ? "Loading locations…" : "Dispatch assets"} {!locationsLoading && <span>＋</span>}
           </button>
         )}
       </div>
