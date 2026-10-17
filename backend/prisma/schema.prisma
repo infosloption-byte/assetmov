@@ -605,11 +605,11 @@ model AuditLog {
   actorUserId       String? @db.VarChar(36)
   action      String   @db.VarChar(100)
   entityType  String   @db.VarChar(100)
-  entityId          String? @db.VarChar(191) @db.VarChar(100)
+  entityId          String? @db.VarChar(100)
   oldData     Json?
   newData     Json?
   ipAddress   String?  @db.VarChar(64)
-  requestId         String? @db.VarChar(191) @db.VarChar(36)
+  requestId         String? @db.VarChar(36)
   createdAt   DateTime @default(now())
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -661,7 +661,7 @@ model PlatformAuditLog {
   actorUserId       String? @db.VarChar(36)
   action      String   @db.VarChar(100)
   entityType  String   @db.VarChar(100)
-  entityId          String? @db.VarChar(191) @db.VarChar(100)
+  entityId          String? @db.VarChar(100)
   reason      String   @db.Text
   oldData     Json?
   newData     Json?
