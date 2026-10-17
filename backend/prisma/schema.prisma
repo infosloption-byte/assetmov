@@ -43,6 +43,20 @@ enum AssetEventType {
   CORRECTED
 }
 
+enum TransferStatus {
+  IN_TRANSIT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+enum TransferLineStatus {
+  IN_TRANSIT
+  RECEIVED
+  REJECTED
+}
+
 enum AssetRequestType {
   ASSET
   SOFTWARE
@@ -87,6 +101,8 @@ model Tenant {
   manufacturers     Manufacturer[]
   assets            Asset[]
   assetTransactions AssetTransaction[]
+  transfers         AssetTransfer[]
+  transferLines     AssetTransferLine[]
   auditLogs         AuditLog[]
   requests          AssetRequest[]
   serviceRecords    ServiceRecord[]
@@ -111,6 +127,8 @@ model User {
   assetEvents       AssetTransaction[]  @relation("TransactionActor")
   submittedRequests AssetRequest[]      @relation("RequestSubmitter")
   decidedRequests   AssetRequest[]      @relation("RequestDecider")
+  createdTransfers  AssetTransfer[]     @relation("TransferCreator")
+  resolvedTransferLines AssetTransferLine[] @relation("TransferLineResolver")
 }
 
 model Session {
@@ -217,6 +235,8 @@ model Location {
   employees Employee[]   @relation("EmployeeHomeLocation")
   sentTransactions AssetTransaction[] @relation("TransactionFromLocation")
   receivedTransactions AssetTransaction[] @relation("TransactionToLocation")
+  outgoingTransfers    AssetTransfer[]    @relation("TransferOrigin")
+  incomingTransfers    AssetTransfer[]    @relation("TransferDestination")
   membershipAssignments MembershipLocation[] @relation("LocationMembershipAccess")
 
   @@unique([tenantId, code])
@@ -357,6 +377,7 @@ model Asset {
   currentLocation     Location?       @relation("CurrentAssetLocation", fields: [currentLocationId], references: [id], onDelete: Restrict)
   custodian            Employee?      @relation("AssetCustodian", fields: [assignedEmployeeId], references: [id], onDelete: Restrict)
   transactions        AssetTransaction[]
+  transferLines       AssetTransferLine[]
   serviceRecords      ServiceRecord[]
   tags                AssetTag[]
 
@@ -413,6 +434,55 @@ model AssetRequest {
   @@unique([tenantId, id])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, requestedById, createdAt])
+}
+
+model AssetTransfer {
+  id                  String        @id @default(cuid())
+  tenantId            String
+  transferNumber      String        @db.VarChar(64)
+  originLocationId    String
+  destinationLocationId String
+  status              TransferStatus @default(IN_TRANSIT)
+  notes               String?       @db.Text
+  createdByUserId     String
+  dispatchedAt        DateTime      @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originLocation      Location      @relation("TransferOrigin", fields: [tenantId, originLocationId], references: [tenantId, id], onDelete: Restrict)
+  destinationLocation Location      @relation("TransferDestination", fields: [tenantId, destinationLocationId], references: [tenantId, id], onDelete: Restrict)
+  createdBy           User          @relation("TransferCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines               AssetTransferLine[]
+
+  @@unique([tenantId, transferNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, originLocationId, status])
+  @@index([tenantId, destinationLocationId, status])
+}
+
+model AssetTransferLine {
+  id               String            @id @default(cuid())
+  tenantId         String
+  transferId       String
+  assetId          String
+  status           TransferLineStatus @default(IN_TRANSIT)
+  decisionReason   String?           @db.Text
+  resolvedByUserId String?
+  resolvedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transfer         AssetTransfer     @relation(fields: [tenantId, transferId], references: [tenantId, id], onDelete: Cascade)
+  asset            Asset             @relation(fields: [tenantId, assetId], references: [tenantId, id], onDelete: Restrict)
+  resolvedBy       User?             @relation("TransferLineResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, transferId, assetId])
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, transferId, status])
+  @@index([tenantId, assetId, status])
 }
 
 model ServiceRecord {
