@@ -10,6 +10,7 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
 import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 import { assetRouter } from "./modules/assets/asset.routes.js";
+import { locationRouter } from "./modules/locations/location.routes.js";
 
 export const app = express();
 
@@ -67,6 +68,7 @@ app.get("/api/health", async (_request, response, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
+app.use("/api/locations", locationRouter);
 
 app.use((_request, response) => {
   response.status(404).json({
