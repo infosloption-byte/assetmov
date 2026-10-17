@@ -7,6 +7,18 @@ export interface AuthContext {
   sessionId: string;
   csrfToken: string;
   userId: string;
+  tenantId?: string;
+  tenantName?: string;
+  tenantSlug?: string;
+  tenantStatus?: string;
+  membershipId?: string;
+  roleId?: string;
+  roleKey?: string;
+  roleName?: string;
+  permissions?: string[];
+  allLocationsAccess?: boolean;
+  accessibleLocationIds?: string[];
+  manageableLocationIds?: string[];
 }
 
 declare global {
@@ -17,7 +29,7 @@ declare global {
   }
 }
 
-function hashesMatch(left: string, right: string): boolean {
+function tokensMatch(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left, "utf8");
   const rightBuffer = Buffer.from(right, "utf8");
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
@@ -81,7 +93,7 @@ export function requireCsrf(
   const suppliedToken = request.get("x-csrf-token");
   const expectedToken = request.auth?.csrfToken;
 
-  if (!suppliedToken || !expectedToken || !hashesMatch(suppliedToken, expectedToken)) {
+  if (!suppliedToken || !expectedToken || !tokensMatch(suppliedToken, expectedToken)) {
     response.status(403).json({
       error: { code: "CSRF_INVALID", message: "The security token is missing or expired. Refresh and try again." },
     });
