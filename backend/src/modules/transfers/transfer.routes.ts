@@ -385,7 +385,7 @@ transferRouter.post(
       const result = await prisma.$transaction(async (tx) => {
         // Serialize receipt decisions for this transfer so concurrent receivers
         // cannot overwrite the summary status using stale line snapshots.
-        await tx.$queryRaw`SELECT `id` FROM `AssetTransfer` WHERE `id` = ${request.params.id} AND `tenantId` = ${tenantId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM AssetTransfer WHERE id = ${request.params.id} AND tenantId = ${tenantId} FOR UPDATE`;
 
         const transfer = await tx.assetTransfer.findFirst({
           where: { id: request.params.id, tenantId },
