@@ -134,6 +134,12 @@ employeeRouter.get(
   requirePermission("employee.read"),
   async (request, response, next) => {
     try {
+      const employeeId = request.params.id;
+      if (typeof employeeId !== "string" || employeeId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid employee ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       if (!tenantId || !request.auth?.membershipId) {
         sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
@@ -141,7 +147,7 @@ employeeRouter.get(
       }
 
       const employee = await prisma.employee.findFirst({
-        where: { id: request.params.id, tenantId },
+        where: { id: employeeId, tenantId },
         include: {
           ...employeeInclude,
           assignedAssets: {
@@ -262,6 +268,12 @@ employeeRouter.patch(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const employeeId = request.params.id;
+      if (typeof employeeId !== "string" || employeeId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid employee ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       const actorUserId = request.auth?.userId;
       if (!tenantId || !actorUserId || !request.auth?.membershipId) {
@@ -278,7 +290,7 @@ employeeRouter.patch(
       const input = parsed.data;
       const result = await prisma.$transaction(async (tx) => {
         const existing = await tx.employee.findFirst({
-          where: { id: request.params.id, tenantId },
+          where: { id: employeeId, tenantId },
         });
         if (!existing || !canAccessLocation(request, existing.homeLocationId)) {
           throw new Error("EMPLOYEE_NOT_FOUND");
