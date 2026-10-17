@@ -178,6 +178,12 @@ transferRouter.get(
   requireAnyPermission(["asset.transfer.read", "asset.transfer.dispatch", "asset.transfer.receive"]),
   async (request, response, next) => {
     try {
+      const transferId = request.params.id;
+      if (typeof transferId !== "string" || transferId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid transfer ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       if (!tenantId) {
         sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
@@ -185,7 +191,7 @@ transferRouter.get(
       }
 
       const transfer = await prisma.assetTransfer.findFirst({
-        where: { id: request.params.id, tenantId },
+        where: { id: transferId, tenantId },
         include: transferInclude,
       });
 
@@ -368,6 +374,12 @@ transferRouter.post(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const transferId = request.params.id;
+      if (typeof transferId !== "string" || transferId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid transfer ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       const actorUserId = request.auth?.userId;
       if (!tenantId || !actorUserId || !request.auth?.membershipId) {
@@ -385,11 +397,11 @@ transferRouter.post(
       const result = await prisma.$transaction(async (tx) => {
         // Serialize receipt decisions for this transfer so concurrent receivers
         // cannot overwrite the summary status using stale line snapshots.
-        await tx.$queryRaw`SELECT id FROM AssetTransfer WHERE id = ${request.params.id} AND tenantId = ${tenantId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM AssetTransfer WHERE id = ${transferId} AND tenantId = ${tenantId} FOR UPDATE`;
 
         const transfer = await tx.assetTransfer.findFirst({
-          where: { id: request.params.id, tenantId },
-          include: { lines: true },
+          where: { id: transferId, tenantId },
+          include: transferInclude,
         });
 
         if (!transfer || !hasLocationAccess(request, transfer.destinationLocationId)) {
