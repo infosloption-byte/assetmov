@@ -2,11 +2,11 @@
 
 ## Requirements
 
-- Windows with WampServer and its MySQL service running
+- Windows with WampServer and MySQL **5.7 or newer** (or a compatible supported MariaDB version)
 - Node.js 22 or newer within the supported project range
 - npm
 
-AssetMov uses the repository root as an npm workspace. Run `npm install` and the root-level verification scripts from the **repository root** unless a step below explicitly says to use the backend folder.
+AssetMov uses the repository root as an npm workspace. Run `npm install` and the root-level verification scripts from the **repository root** unless a step below explicitly says to use the backend folder. The Prisma schema uses JSON fields, which require MySQL 5.7 or newer. Check your exact database version in phpMyAdmin with `SELECT VERSION() AS version, @@version_comment AS distribution;`. Do not proceed with MySQL 5.0–5.6 without upgrading the database server or changing the data model and persistence implementation.
 
 ## Prepare WAMP and environment files
 
@@ -21,7 +21,7 @@ Copy-Item frontend/.env.example frontend/.env
 
 Do not overwrite existing `.env` files blindly; preserve any settings you already have.
 
-Check `backend/.env` and set `DATABASE_URL` to match your actual WAMP MySQL username, password, port and database. The example uses the common local WAMP setup of `root`, no password and port `3306`. Confirm these values in your own installation. Also make sure it contains:
+Check `backend/.env` and set `DATABASE_URL` to match your actual WAMP MySQL username, password, port and database. Generated primary/foreign keys are stored as 36-character strings, and generic audit entity IDs as 100-character strings, so composite indexes fit older MySQL key-size limits while retaining `utf8mb4`. The example uses the common local WAMP setup of `root`, no password and port `3306`. Confirm these values in your own installation. Also make sure it contains:
 
 ```dotenv
 API_PORT=4000
