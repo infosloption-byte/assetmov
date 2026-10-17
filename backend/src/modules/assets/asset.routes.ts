@@ -338,3 +338,178 @@ assetRouter.post(
     }
   },
 );
+
+
+const assetUpdateSchema = z.object({
+  assetNumber: z.string().trim().max(191).optional(),
+  serialNumber: z.string().trim().max(191).optional(),
+  title: z.string().trim().min(1).max(191).optional(),
+  description: z.string().trim().max(20000).optional(),
+  modelId: z.string().trim().min(1).optional(),
+  manufacturerId: z.string().trim().min(1).optional(),
+  supplierId: z.string().trim().min(1).optional(),
+  purchaseOrderNumber: z.string().trim().max(191).optional(),
+  accountCode: z.string().trim().max(100).optional(),
+  purchasedAt: optionalDate,
+  purchaseCost: z.coerce.number().finite().min(0).optional(),
+  salvageValue: z.coerce.number().finite().min(0).optional(),
+  warrantyStart: optionalDate,
+  warrantyEnd: optionalDate,
+  expectedLifeMonths: z.coerce.number().int().min(1).max(1200).optional(),
+  depreciationMethod: z.string().trim().max(60).optional(),
+  notes: z.string().trim().max(20000).optional(),
+}).strict().refine(
+  (input) => Object.values(input).some((value) => value !== undefined),
+  "Provide at least one field to update.",
+);
+
+const financialFields = new Set([
+  "purchaseOrderNumber",
+  "accountCode",
+  "purchasedAt",
+  "purchaseCost",
+  "salvageValue",
+  "warrantyStart",
+  "warrantyEnd",
+  "expectedLifeMonths",
+  "depreciationMethod",
+]);
+
+assetRouter.patch(
+  "/:id",
+  requireSession,
+  requireTenant,
+  requirePermission("asset.update"),
+  requireCsrf,
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      const actorUserId = request.auth?.userId;
+      if (!tenantId || !actorUserId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = assetUpdateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Check the fields you want to update.");
+        return;
+      }
+
+      const input = parsed.data;
+      const financialUpdateRequested = Object.keys(input).some((key) => financialFields.has(key));
+      if (financialUpdateRequested && !request.auth.permissions?.includes("asset.financial.update")) {
+        sendError(response, 403, "FINANCIAL_PERMISSION_REQUIRED", "You are not allowed to change asset financial or warranty fields.");
+        return;
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.asset.findFirst({
+          where: { id: request.params.id, tenantId },
+        });
+        if (!existing) throw new Error("ASSET_NOT_FOUND");
+
+        if (
+          !request.auth?.allLocationsAccess &&
+          (!existing.currentLocationId || !(request.auth?.accessibleLocationIds ?? []).includes(existing.currentLocationId))
+        ) {
+          throw new Error("ASSET_NOT_FOUND");
+        }
+
+        const [model, manufacturer, supplier] = await Promise.all([
+          input.modelId
+            ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true } })
+            : Promise.resolve(null),
+          input.manufacturerId
+            ? tx.manufacturer.findFirst({ where: { id: input.manufacturerId, tenantId, isActive: true }, select: { id: true } })
+            : Promise.resolve(null),
+          input.supplierId
+            ? tx.supplier.findFirst({ where: { id: input.supplierId, tenantId, isActive: true }, select: { id: true } })
+            : Promise.resolve(null),
+        ]);
+        if (input.modelId && !model) throw new Error("ASSET_REFERENCE_INVALID");
+        if (input.manufacturerId && !manufacturer) throw new Error("ASSET_REFERENCE_INVALID");
+        if (input.supplierId && !supplier) throw new Error("ASSET_REFERENCE_INVALID");
+
+        const updated = await tx.asset.update({
+          where: { id: existing.id },
+          data: {
+            ...(input.assetNumber !== undefined ? { assetNumber: input.assetNumber } : {}),
+            ...(input.serialNumber !== undefined ? { serialNumber: input.serialNumber } : {}),
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
+            ...(input.manufacturerId !== undefined ? { manufacturerId: input.manufacturerId } : {}),
+            ...(input.supplierId !== undefined ? { supplierId: input.supplierId } : {}),
+            ...(input.purchaseOrderNumber !== undefined ? { purchaseOrderNumber: input.purchaseOrderNumber } : {}),
+            ...(input.accountCode !== undefined ? { accountCode: input.accountCode } : {}),
+            ...(input.purchasedAt !== undefined ? { purchasedAt: dateValue(input.purchasedAt) } : {}),
+            ...(input.purchaseCost !== undefined ? { purchaseCost: input.purchaseCost } : {}),
+            ...(input.salvageValue !== undefined ? { salvageValue: input.salvageValue } : {}),
+            ...(input.warrantyStart !== undefined ? { warrantyStart: dateValue(input.warrantyStart) } : {}),
+            ...(input.warrantyEnd !== undefined ? { warrantyEnd: dateValue(input.warrantyEnd) } : {}),
+            ...(input.expectedLifeMonths !== undefined ? { expectedLifeMonths: input.expectedLifeMonths } : {}),
+            ...(input.depreciationMethod !== undefined ? { depreciationMethod: input.depreciationMethod } : {}),
+            ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          },
+        });
+
+        await tx.assetTransaction.create({
+          data: {
+            tenantId,
+            assetId: updated.id,
+            eventType: "CORRECTED",
+            actorUserId,
+            notes: "Asset details updated",
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId,
+            action: "asset.updated",
+            entityType: "Asset",
+            entityId: updated.id,
+            oldData: {
+              inventoryNumber: existing.inventoryNumber,
+              title: existing.title,
+              serialNumber: existing.serialNumber,
+              purchaseCost: existing.purchaseCost?.toString() ?? null,
+              warrantyEnd: existing.warrantyEnd?.toISOString() ?? null,
+            },
+            newData: {
+              inventoryNumber: updated.inventoryNumber,
+              title: updated.title,
+              serialNumber: updated.serialNumber,
+              purchaseCost: updated.purchaseCost?.toString() ?? null,
+              warrantyEnd: updated.warrantyEnd?.toISOString() ?? null,
+            },
+            ipAddress: request.ip?.slice(0, 64),
+          },
+        });
+
+        return tx.asset.findFirst({
+          where: { id: updated.id, tenantId },
+          include: assetInclude,
+        });
+      });
+
+      response.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
+        sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_REFERENCE_INVALID") {
+        sendError(response, 400, "INVALID_REFERENCE", "Choose active reference data from this workspace.");
+        return;
+      }
+      if (isForeignKeyError(error)) {
+        sendError(response, 400, "INVALID_REFERENCE", "One of the selected references is no longer available.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
