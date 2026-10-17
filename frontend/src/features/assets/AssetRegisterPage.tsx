@@ -49,19 +49,11 @@ interface AssetSummary {
   }>;
 }
 
-interface ApiErrorPayload {
-  error?: { code?: string; message?: string };
-}
-
 interface AssetPageProps {
   tenantId: string | null;
   csrfToken: string | null;
   permissions: string[];
   allLocationsAccess: boolean;
-}
-
-function getErrorMessage(payload: ApiErrorPayload, fallback: string): string {
-  return payload.error?.message ?? fallback;
 }
 
 function formatDate(value: string | null | undefined): string {
