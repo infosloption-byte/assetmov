@@ -59,12 +59,13 @@ The developer ran the following commands from the repository root against the cu
 - `npm test` — 29 tests passed, 0 failed.
 - `npm run build` — frontend production build and backend TypeScript compilation passed.
 
-These are developer-reported local results. They do not establish database migration, API integration, browser acceptance, production-readiness, or successful GitHub Actions.
+These are developer-reported local results. The developer has also confirmed local schema validation and successful creation/application of the initial migration. This does not establish API integration, browser acceptance, production-readiness, or successful GitHub Actions. The generated migration SQL has not yet been reviewed or committed.
 
 ### Still outstanding before accepting the foundation
 
-- Run `npm run db:validate` and confirm the schema validates in the local environment.
-- Review/apply and commit the initial Prisma migration. As of this review, `backend/prisma/migrations/` is not present on `main`.
+- [x] Run `npm run db:validate`; the Prisma schema validated locally on 2026-10-17.
+- [x] Generate and apply the initial migration to the local `assetmov` MySQL database on 2026-10-17 (`20261017170733_initial_assetmov_schema`); Prisma reported that the database is in sync.
+- [ ] Review the generated `migration.sql`, commit the migration directory to Git, and ensure other environments can reproduce the schema from the committed migration. The migration is not yet present on `main`.
 - Against a disposable MySQL database, exercise register/login/logout, workspace context, location create/list, asset create/list/detail/update, CSRF rejection, permission denial, subscription/trial behavior, and cross-tenant isolation.
 - Add database-backed transfer/assignment concurrency tests and route integration tests.
 - Resolve the observed GitHub Actions `startup_failure`/zero-job state and obtain a successful CI run before accepting this as a validated foundation.
