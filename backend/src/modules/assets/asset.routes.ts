@@ -568,3 +568,281 @@ assetRouter.patch(
     }
   },
 );
+
+
+const assetAssignmentSchema = z.object({
+  employeeId: z.string().trim().min(1),
+  notes: z.string().trim().max(4000).optional(),
+}).strict();
+
+const assetUnassignmentSchema = z.object({
+  notes: z.string().trim().max(4000).optional(),
+}).strict();
+
+function canManageAssetLocation(
+  request: import("express").Request,
+  locationId: string | null,
+): boolean {
+  if (request.auth?.allLocationsAccess) return true;
+  return Boolean(locationId && request.auth?.manageableLocationIds?.includes(locationId));
+}
+
+assetRouter.post(
+  "/:id/assign",
+  requireSession,
+  requireTenant,
+  requirePermission("asset.assign"),
+  requireCsrf,
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      const actorUserId = request.auth?.userId;
+      if (!tenantId || !actorUserId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = assetAssignmentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Choose a valid employee and check the assignment note.");
+        return;
+      }
+
+      const input = parsed.data;
+      const result = await prisma.$transaction(async (tx) => {
+        const asset = await tx.asset.findFirst({
+          where: { id: request.params.id, tenantId },
+        });
+        if (!asset) throw new Error("ASSET_NOT_FOUND");
+        if (!canManageAssetLocation(request, asset.currentLocationId)) {
+          throw new Error("ASSET_LOCATION_SCOPE_DENIED");
+        }
+        if (asset.status !== "AVAILABLE" || asset.assignedEmployeeId !== null) {
+          throw new Error("ASSET_NOT_AVAILABLE");
+        }
+        if (!asset.currentLocationId) throw new Error("ASSET_LOCATION_REQUIRED");
+
+        const employee = await tx.employee.findFirst({
+          where: {
+            id: input.employeeId,
+            tenantId,
+            isActive: true,
+            homeLocationId: asset.currentLocationId,
+          },
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            homeLocationId: true,
+          },
+        });
+        if (!employee) throw new Error("EMPLOYEE_LOCATION_MISMATCH");
+
+        const changed = await tx.asset.updateMany({
+          where: {
+            id: asset.id,
+            tenantId,
+            status: "AVAILABLE",
+            assignedEmployeeId: null,
+            currentLocationId: asset.currentLocationId,
+          },
+          data: {
+            status: "ASSIGNED",
+            assignedEmployeeId: employee.id,
+          },
+        });
+        if (changed.count !== 1) throw new Error("ASSET_CONCURRENT_CHANGE");
+
+        const updated = await tx.asset.findFirst({
+          where: { id: asset.id, tenantId },
+          include: assetInclude,
+        });
+
+        await tx.assetTransaction.create({
+          data: {
+            tenantId,
+            assetId: asset.id,
+            eventType: "ASSIGNED",
+            fromLocationId: asset.currentLocationId,
+            toLocationId: asset.currentLocationId,
+            toEmployeeId: employee.id,
+            actorUserId,
+            notes: `Assigned to ${employee.firstName} ${employee.lastName} (${employee.employeeCode}).${input.notes ? ` ${input.notes}` : ""}`,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId,
+            action: "asset.assigned",
+            entityType: "Asset",
+            entityId: asset.id,
+            oldData: {
+              status: asset.status,
+              assignedEmployeeId: asset.assignedEmployeeId,
+              currentLocationId: asset.currentLocationId,
+            },
+            newData: {
+              status: "ASSIGNED",
+              assignedEmployeeId: employee.id,
+              currentLocationId: asset.currentLocationId,
+            },
+            ipAddress: request.ip?.slice(0, 64),
+          },
+        });
+
+        return updated;
+      });
+
+      response.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
+        sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_LOCATION_SCOPE_DENIED") {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage this asset's location to assign it.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_NOT_AVAILABLE") {
+        sendError(response, 409, "ASSET_NOT_AVAILABLE", "Only available, unassigned assets can be assigned.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_LOCATION_REQUIRED") {
+        sendError(response, 400, "LOCATION_REQUIRED", "Assign the asset to a location before assigning a custodian.");
+        return;
+      }
+      if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_MISMATCH") {
+        sendError(response, 400, "EMPLOYEE_LOCATION_MISMATCH", "Choose an active employee whose home location matches the asset location.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_CONCURRENT_CHANGE") {
+        sendError(response, 409, "ASSET_CHANGED", "The asset changed during assignment. Refresh and try again.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+assetRouter.post(
+  "/:id/unassign",
+  requireSession,
+  requireTenant,
+  requirePermission("asset.assign"),
+  requireCsrf,
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      const actorUserId = request.auth?.userId;
+      if (!tenantId || !actorUserId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = assetUnassignmentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Check the return note and try again.");
+        return;
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const asset = await tx.asset.findFirst({
+          where: { id: request.params.id, tenantId },
+        });
+        if (!asset) throw new Error("ASSET_NOT_FOUND");
+        if (!canManageAssetLocation(request, asset.currentLocationId)) {
+          throw new Error("ASSET_LOCATION_SCOPE_DENIED");
+        }
+        if (asset.status !== "ASSIGNED" || !asset.assignedEmployeeId) {
+          throw new Error("ASSET_NOT_ASSIGNED");
+        }
+        if (!asset.currentLocationId) throw new Error("ASSET_LOCATION_REQUIRED");
+
+        const employee = await tx.employee.findFirst({
+          where: { id: asset.assignedEmployeeId, tenantId },
+          select: { id: true, employeeCode: true, firstName: true, lastName: true },
+        });
+
+        const changed = await tx.asset.updateMany({
+          where: {
+            id: asset.id,
+            tenantId,
+            status: "ASSIGNED",
+            assignedEmployeeId: asset.assignedEmployeeId,
+            currentLocationId: asset.currentLocationId,
+          },
+          data: { status: "AVAILABLE", assignedEmployeeId: null },
+        });
+        if (changed.count !== 1) throw new Error("ASSET_CONCURRENT_CHANGE");
+
+        const updated = await tx.asset.findFirst({
+          where: { id: asset.id, tenantId },
+          include: assetInclude,
+        });
+
+        await tx.assetTransaction.create({
+          data: {
+            tenantId,
+            assetId: asset.id,
+            eventType: "UNASSIGNED",
+            fromLocationId: asset.currentLocationId,
+            toLocationId: asset.currentLocationId,
+            fromEmployeeId: asset.assignedEmployeeId,
+            actorUserId,
+            notes: `Returned from ${employee ? `${employee.firstName} ${employee.lastName} (${employee.employeeCode})` : "the assigned employee"}.${parsed.data.notes ? ` ${parsed.data.notes}` : ""}`,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId,
+            action: "asset.unassigned",
+            entityType: "Asset",
+            entityId: asset.id,
+            oldData: {
+              status: asset.status,
+              assignedEmployeeId: asset.assignedEmployeeId,
+              currentLocationId: asset.currentLocationId,
+            },
+            newData: {
+              status: "AVAILABLE",
+              assignedEmployeeId: null,
+              currentLocationId: asset.currentLocationId,
+            },
+            ipAddress: request.ip?.slice(0, 64),
+          },
+        });
+
+        return updated;
+      });
+
+      response.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
+        sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_LOCATION_SCOPE_DENIED") {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage this asset's location to unassign it.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_NOT_ASSIGNED") {
+        sendError(response, 409, "ASSET_NOT_ASSIGNED", "This asset is not currently assigned to an employee.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_LOCATION_REQUIRED") {
+        sendError(response, 400, "LOCATION_REQUIRED", "A location is required for the asset return.");
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_CONCURRENT_CHANGE") {
+        sendError(response, 409, "ASSET_CHANGED", "The asset changed during return. Refresh and try again.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
