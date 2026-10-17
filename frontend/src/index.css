@@ -25,7 +25,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .brand-copy small { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: #8b958e; }
 .workspace-label { padding: 0 13px 12px; color: #9aa39c; letter-spacing: 1.7px; font-size: 9px; font-weight: 700; }
 .side-nav { display: grid; gap: 5px; }
-.nav-item { min-height: 43px; padding: 0 12px; display: flex; align-items: center; gap: 11px; color: #738078; border-radius: 9px; font-size: 12px; font-weight: 600; }
+.nav-item { width: 100%; min-height: 43px; padding: 0 12px; display: flex; align-items: center; gap: 11px; border: 0; background: transparent; text-align: left; font-family: inherit; cursor: pointer; color: #738078; border-radius: 9px; font-size: 12px; font-weight: 600; }
 .nav-item:hover { background: #f5f8f5; color: var(--green-dark); }
 .nav-item.active { background: #edf4ee; color: var(--green-dark); }
 .nav-icon { width: 19px; font-size: 16px; text-align: center; color: #799185; }
