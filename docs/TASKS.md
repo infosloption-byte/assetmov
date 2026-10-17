@@ -148,26 +148,19 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## K. SaaS readiness and operations — P1/P2
 
-- [ ] Subscription/plan/entitlement models and dedicated platform admin screens.
-- [ ] Tenant onboarding flow after registration: profile, location hierarchy, categories/custom fields, members/roles and import entry point.
-- [ ] Company Admin self-service screens for nested location types, membership/location scopes, custom roles and tenant master data.
-- [ ] Platform-versus-tenant authorization tests and audited support-access controls.
-- [ ] Define versioned, data-driven plans, feature entitlements and typed limit records editable by Platform Super Admin.
-- [ ] Add the shared server-side plan/entitlement/quota service and standard FEATURE_REQUIRED / LIMIT_REACHED API errors.
-- [ ] Enforce quotas across API, bulk actions, imports, uploads, exports, reports, scheduled work and background jobs.
-- [ ] Add concurrency-safe usage counters/reservations, idempotent async processing and usage reconciliation.
-- [ ] Add Company Admin usage/billing view with resource counts, caps, billing-period usage, warning thresholds and upgrade path.
-- [ ] Add configurable trial expiry, payment grace, past-due, suspension, cancellation and reactivation policies.
-- [ ] Implement safe upgrade/downgrade behavior, including preserving records when current usage exceeds the new plan.
-- [ ] Add entitlement/limit tests for boundary values, parallel requests, tenant isolation, retries, overrides and billing transitions.
-- [ ] Payment provider integration, signed webhooks and idempotency.
-- [ ] Trial, plan limits, upgrade/downgrade, cancellation and grace states (specification: [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md)).
-- [ ] Email/in-app notifications and template management.
-- [ ] Dependency/security scans and threat model review.
-- [ ] DB backup/restore drill, retention and disaster recovery procedures.
-- [ ] Metrics/alerts, request correlation IDs and redacted logs.
-- [ ] Production configuration, deployment workflow and runbooks.
-- [ ] Accessibility, responsive UX and supported-browser review.
+- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration.
+- [ ] Add dedicated Platform Super Admin plan management and tenant plan assignment screens.
+- [ ] Add Company Admin plan/usage view showing asset count, active users, storage usage and trial/renewal information.
+- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior.
+- [ ] Enforce active-user caps across invitations, membership creation and reactivation.
+- [ ] Enforce storage caps during uploads, including concurrent upload reservations and cleanup on failure.
+- [ ] Enforce trial expiry using server-side timestamps and the configured trial policy.
+- [ ] Preserve existing data after a limit is reached or plan is downgraded; block only additional consumption over the cap.
+- [ ] Add usage warnings at configurable thresholds and a clear upgrade path.
+- [ ] Add subscription status, billing-period and cancellation fields when billing integration is implemented.
+- [ ] Add verified, idempotent payment webhooks if a payment provider is integrated.
+- [ ] Add database-backed tests for limit boundaries, concurrency, trial expiry, over-limit downgrade and tenant isolation.
+- [ ] Complete accessibility, responsive UX, security review, dependency scans, backup/restore, observability and production runbooks.
 
 ## L. Legacy data migration
 
