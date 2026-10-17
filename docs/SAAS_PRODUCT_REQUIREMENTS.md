@@ -110,16 +110,26 @@ The migrated feature inventory should become configurable multi-tenant modules:
 
 Each module must inherit tenant context, role permissions, location scope, audit policy and plan entitlements rather than inventing inconsistent access logic.
 
-## 8. Platform plans and entitlements
+## 8. Platform plans, feature entitlements and usage guardrails
 
-Subscription entitlements are separate from role permissions:
+Subscription entitlements are separate from user permissions and tenant lifecycle state. Every request must pass tenant/subscription eligibility, plan feature/limit checks, user permission, location scope where relevant, and domain validation. The backend is authoritative; frontend feature flags and counters are presentation only.
 
-- **Entitlements** answer whether a tenant's plan includes a module/capability and its limits.
-- **Permissions** answer whether this user may perform the action.
-- An operation is allowed only when tenant status/plan allows the feature, the authenticated membership has permission, the relevant location scope allows it, and domain validation succeeds.
-- Platform Super Admin can manage plans/limits and tenant lifecycle; company users cannot edit plan definitions or grant themselves paid entitlements.
-- Payment webhooks must be signature-verified, idempotent and auditable. Billing must never trust browser-only status values.
+The proposed plan matrix and mandatory rules are maintained in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). It includes proposed Trial, Starter, Growth, Business and Enterprise defaults for asset records, users, locations, roles, custom fields, storage, exports, feature gates, warning thresholds, trial and payment grace, upgrades/downgrades, data retention and acceptance tests. Proposed quantities are not final prices or a published commercial promise.
 
+Non-negotiable rules:
+
+- Platform Super Admin can configure and version plans, features, limits, trial policy, grace policy and audited tenant-specific overrides. These are data-driven configuration, not hard-coded plan-name branches.
+- Company Admin can view the current plan, feature availability, usage, caps, billing period and upgrade path; cannot edit plan definitions, subscription state, entitlements or usage counters.
+- Distinguish feature-not-in-plan from user-permission-denied and quota-exceeded outcomes. Provide machine-readable, tenant-safe errors and useful user-facing recovery steps.
+- Enforce resource and period quotas for direct API calls, UI actions, bulk operations, imports, uploads, exports, scheduled jobs and background tasks. Handle simultaneous creates/uploads safely with atomic counters or reservations and make retries idempotent.
+- At limits, block net-new consumption rather than locking a company out of its existing data. Reads, exports, safe edits and reductions remain available unless a separately defined suspension/security policy restricts them.
+- Downgrades must not delete records automatically. Preserve over-limit data and block new consumption until usage falls below the new cap. Subscription lifecycle, payment state, tenant status and plan entitlements are distinct fields/records.
+- Payment-provider events must be signature-verified, idempotent and audited. Client/browser values never determine subscription state or quota usage.
+- Usage accounting has an explicit definition for archived/soft-deleted records, disabled users, stored bytes, failed/retried jobs and billing-period boundaries. Reconciliation detects usage counter drift.
+- Platform abuse throttles apply even to the highest plan; commercial quotas do not replace security rate limits.
+- Do not represent Enterprise as an unsafe infinite bypass. Enterprise caps are configurable and still constrained by service capacity, security and platform policy.
+
+The current source tree has no complete subscription/plan enforcement system. Treat this as target behavior until schema, shared entitlement service, administration UI, billing flows and DB-backed acceptance tests are completed.
 ## 9. UX expectations
 
 - Company-facing screens must clearly show the active company/workspace when users belong to more than one tenant.
