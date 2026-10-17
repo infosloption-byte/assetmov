@@ -179,3 +179,17 @@ Separate core inventory from billing concerns. The platform should eventually su
 ## 12. Quality gates
 
 A milestone is not complete because a page renders. It needs domain unit tests, API integration tests, tenant-isolation/permission tests, migration checks, meaningful loading/empty/error states, keyboard accessibility, responsive layout, logging/redaction review, and documented acceptance criteria.
+
+
+## 13. SaaS administration boundaries — required product rule
+
+AssetMov serves multiple independent customer companies. There are two separate authority scopes: **Platform Super Admin** and **Company Admin / tenant owner**. The first registered user becomes the initial admin of that one tenant, not a platform operator.
+
+- Platform administration is a separate protected area and permission scope for tenant lifecycle, plans/entitlements, subscription/support operations, platform staff and service health.
+- Company Admin manages only its own tenant: company profile/preferences, users/memberships, custom roles and their permission grants, location hierarchy and user/location scopes, categories/models/custom fields, numbering, suppliers/manufacturers and all company asset workflows.
+- The platform defines valid permission keys; company admins assemble tenant roles from the allowed catalogue. They cannot create arbitrary backend privilege keys or grant platform permissions.
+- Company-admin authority never makes tenant IDs trustworthy and does not relax tenant/location checks. Platform-admin access must use explicit platform policies and must be audited.
+- Role changes must prevent privilege escalation and lockout, including protecting the last tenant owner/admin and auditing role/scope changes.
+- Subscription entitlements are distinct from user permissions: a feature must be included in the tenant plan **and** permitted for the user **and** within location scope before its business rules run.
+
+See [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) for detailed flows, tenant-configurable fields, module scope and acceptance criteria. All subsequent modules should satisfy that document before being considered complete.
