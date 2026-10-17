@@ -13,16 +13,6 @@ enum TenantStatus {
   SUSPENDED
 }
 
-enum MembershipRole {
-  TENANT_OWNER
-  TENANT_ADMIN
-  ASSET_MANAGER
-  LOCATION_MANAGER
-  APPROVER
-  AUDITOR
-  EMPLOYEE
-}
-
 enum AssetStatus {
   DRAFT
   AVAILABLE
@@ -59,6 +49,17 @@ enum AssetRequestType {
   SERVICE
 }
 
+enum RequestStatus {
+  PENDING
+  CHANGES_REQUESTED
+  PARTIALLY_APPROVED
+  APPROVED
+  REJECTED
+  CANCELLED
+  FULFILLMENT_IN_PROGRESS
+  FULFILLED
+}
+
 enum ServiceStatus {
   OPEN
   IN_PROGRESS
@@ -75,6 +76,8 @@ model Tenant {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   memberships       Membership[]
+  roles             Role[]
+  requestItems      AssetRequestItem[]
   locations         Location[]
   employees         Employee[]
   categories        AssetCategory[]
@@ -101,25 +104,62 @@ model User {
   disabledAt      DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
-  memberships     Membership[]
-  auditEvents     AuditLog[]         @relation("AuditActor")
-  assetEvents     AssetTransaction[] @relation("TransactionActor")
+  memberships       Membership[]
+  auditEvents       AuditLog[]          @relation("AuditActor")
+  assetEvents       AssetTransaction[]  @relation("TransactionActor")
+  submittedRequests AssetRequest[]      @relation("RequestSubmitter")
+  decidedRequests   AssetRequest[]      @relation("RequestDecider")
 }
 
 model Membership {
   id        String         @id @default(cuid())
   tenantId  String
   userId    String
-  role      MembershipRole @default(EMPLOYEE)
+  roleId    String
   isActive  Boolean        @default(true)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role           @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, userId])
   @@index([userId, isActive])
   @@index([tenantId, role, isActive])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  tenantId    String
+  key         String           @db.VarChar(100)
+  name        String           @db.VarChar(191)
+  description String?          @db.Text
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  permissions RolePermission[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, name])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique @db.VarChar(120)
+  description String?          @db.Text
+  assignments RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
 }
 
 model Location {
@@ -137,6 +177,9 @@ model Location {
   parent    Location?  @relation("LocationTree", fields: [parentId], references: [id], onDelete: SetNull)
   children  Location[] @relation("LocationTree")
   assets    Asset[]    @relation("CurrentAssetLocation")
+  employees Employee[]   @relation("EmployeeHomeLocation")
+  sentTransactions AssetTransaction[] @relation("TransactionFromLocation")
+  receivedTransactions AssetTransaction[] @relation("TransactionToLocation")
 
   @@unique([tenantId, code])
   @@index([tenantId, parentId])
@@ -157,6 +200,9 @@ model Employee {
   updatedAt      DateTime @updatedAt
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignedAssets Asset[]  @relation("AssetCustodian")
+  homeLocation   Location? @relation("EmployeeHomeLocation", fields: [homeLocationId], references: [id], onDelete: SetNull)
+  sentTransactions AssetTransaction[] @relation("TransactionFromEmployee")
+  receivedTransactions AssetTransaction[] @relation("TransactionToEmployee")
 
   @@unique([tenantId, employeeCode])
   @@index([tenantId, lastName, firstName])
@@ -209,6 +255,8 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assets    Asset[]
+  softwareLicenses SoftwareLicense[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive])
@@ -222,6 +270,8 @@ model Manufacturer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assets    Asset[]
+  softwareLicenses SoftwareLicense[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive])
@@ -257,6 +307,8 @@ model Asset {
   updatedAt           DateTime        @updatedAt
   tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   model               AssetModel?     @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  manufacturer        Manufacturer?    @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  supplier            Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   currentLocation     Location?       @relation("CurrentAssetLocation", fields: [currentLocationId], references: [id], onDelete: SetNull)
   custodian            Employee?      @relation("AssetCustodian", fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
   transactions        AssetTransaction[]
@@ -286,6 +338,10 @@ model AssetTransaction {
   tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   asset          Asset           @relation(fields: [assetId], references: [id], onDelete: Restrict)
   actor          User?           @relation("TransactionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  fromLocation    Location?       @relation("TransactionFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
+  toLocation      Location?       @relation("TransactionToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
+  fromEmployee    Employee?       @relation("TransactionFromEmployee", fields: [fromEmployeeId], references: [id], onDelete: SetNull)
+  toEmployee      Employee?       @relation("TransactionToEmployee", fields: [toEmployeeId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, assetId, occurredAt])
   @@index([tenantId, eventType, occurredAt])
@@ -353,6 +409,25 @@ model SoftwareLicense {
 
   @@unique([tenantId, name])
   @@index([tenantId, licenseEnd, isActive])
+}
+
+model AssetRequestItem {
+  id               String           @id @default(cuid())
+  tenantId         String
+  requestId        String
+  itemType         AssetRequestType
+  description      String           @db.VarChar(500)
+  quantity         Int              @default(1)
+  approvedQuantity Int?
+  notes            String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  request          AssetRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  softwareLicense  SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: SetNull)
+  softwareLicenseId String?
+
+  @@index([tenantId, requestId])
 }
 
 model LicenseAssignment {
