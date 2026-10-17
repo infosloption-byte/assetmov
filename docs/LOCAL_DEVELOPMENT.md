@@ -21,7 +21,7 @@ Copy-Item frontend/.env.example frontend/.env
 
 Do not overwrite existing `.env` files blindly; preserve any settings you already have.
 
-Check `backend/.env` and set `DATABASE_URL` to match your actual WAMP MySQL username, password, port and database. AssetMov stores generated IDs and relation IDs in 36-character columns to keep composite indexes within older MySQL key-size limits while preserving the `utf8mb4` character set and collation. The example uses the common local WAMP setup of `root`, no password and port `3306`. Confirm these values in your own installation. Also make sure it contains:
+Check `backend/.env` and set `DATABASE_URL` to match your actual WAMP MySQL username, password, port and database. Generated primary/foreign keys are stored as 36-character strings, and generic audit entity IDs as 100-character strings, so composite indexes fit older MySQL key-size limits while retaining `utf8mb4`. The example uses the common local WAMP setup of `root`, no password and port `3306`. Confirm these values in your own installation. Also make sure it contains:
 
 ```dotenv
 API_PORT=4000
