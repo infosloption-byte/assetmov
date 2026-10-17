@@ -4,42 +4,43 @@ on:
   push:
     branches: ["main", "develop", "feature/**"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Frontend checks
+  validate:
+    name: Lint, typecheck, tests and build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install
-      - run: npm run typecheck
-      - run: npm run build
-
-  backend:
-    name: Backend checks
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     env:
       NODE_ENV: test
       DATABASE_URL: mysql://assetmov:assetmov_dev_only_change_me@127.0.0.1:3307/assetmov
       FRONTEND_ORIGIN: http://localhost:5173
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run db:validate
-      - run: npm run build
-      - run: npm test
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm install
+
+      - name: Validate database schema
+        run: npm run db:validate
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run type checks
+        run: npm run typecheck
+
+      - name: Run backend unit tests
+        run: npm test
+
+      - name: Build frontend and backend
+        run: npm run build
