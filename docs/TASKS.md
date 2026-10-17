@@ -28,14 +28,25 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
 - [ ] Add tenant admin UI for member/role assignment and permission editing.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
-- [ ] Separate platform-admin capabilities from tenant roles.
+- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role.
+- [ ] Implement tenant/company administration for company profile, settings, users and memberships.
+- [ ] Add tenant admin UI to create/update/deactivate custom roles and assign permission-catalogue actions.
+- [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
+- [ ] Add invitations, membership activation/deactivation and tenant-scoped session revocation.
+- [ ] Add platform tenant lifecycle controls (trial/active/suspended/cancelled), with reasons and audit.
+- [ ] Keep plan entitlements independent from role permissions and enforce both server-side.
+- [ ] Add tests proving platform routes reject company admins and company routes never allow cross-tenant escalation.
 - [ ] Extend audit events to all membership, role, session-revocation and security administration changes (tenant creation and asset/location writes are currently audited).
 - [ ] Write cross-tenant IDOR tests for list/detail/create/update/delete/search/export/upload/download.
+- [ ] Maintain a documented authorization matrix for platform roles, tenant roles, permissions, location scope and plan entitlements.
+- [ ] Add two-tenant regression fixtures and require isolation tests for every new module.
 - [ ] Add authorization matrix and seed development roles/data.
 
 ## C. Tenant setup and master data — P0
 
 - [ ] Tenant preferences (timezone, locale, currency, date format, fiscal year).
+- [ ] Company profile/setup wizard, tenant-specific defaults and safe update policies.
+- [ ] Build a tenant-owned category/model/custom-field administration UI; fields must be type-validated and drive asset forms dynamically.
 - [x] Location list/search/create endpoint and frontend screen.
 - [ ] Add location edit/deactivate/delete-safe flows; current location API is list/create only.
 - [x] Location descendant expansion helper and tenant membership location-scope middleware.
@@ -137,6 +148,11 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## K. SaaS readiness and operations — P1/P2
 
+- [ ] Subscription/plan/entitlement models and dedicated platform admin screens.
+- [ ] Tenant onboarding flow after registration: profile, location hierarchy, categories/custom fields, members/roles and import entry point.
+- [ ] Company Admin self-service screens for nested location types, membership/location scopes, custom roles and tenant master data.
+- [ ] Platform-versus-tenant authorization tests and audited support-access controls.
+- [ ] Tenant lifecycle workflow and usage/quota enforcement.
 - [ ] Subscription/plan/entitlement models and platform admin screens.
 - [ ] Payment provider integration, signed webhooks and idempotency.
 - [ ] Trial, plan limits, upgrade/downgrade, cancellation and grace states.
@@ -159,6 +175,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Invite users to reset credentials; never copy legacy sessions/tokens.
 - [ ] Reconcile row counts and key totals; obtain customer sign-off.
 - [ ] Document rollback and cutover.
+
+## Product architecture rule
+
+The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md). This checklist must be interpreted through its Platform Super Admin / Company Admin boundary. No company-owned feature is complete without tenant isolation, tenant-configurable data, server-side permissions, location scope where relevant and tests.
 
 ## Suggested next pull request
 
