@@ -11,11 +11,11 @@
     "build": "npm run db:generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint src prisma.config.ts eslint.config.js",
+    "lint": "eslint src tests prisma.config.ts eslint.config.js",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/asset-lifecycle.test.ts tests/location-scope.test.ts tests/password.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
