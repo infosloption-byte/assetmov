@@ -21,7 +21,7 @@ The platform administration area is responsible for service-level operations, in
 
 - View and manage tenant lifecycle: registered, trial, active, suspended, cancelled/deletion-pending.
 - View plan, subscription, billing status, usage/quotas and account-level health.
-- Create and manage plans, feature entitlements, tenant limits and platform-wide defaults.
+- Create and manage plans, asset limits, active-user limits, storage allowances, trial duration and platform-wide defaults.
 - Review platform-level security events, abuse/risk signals, operational health and support cases.
 - Manage platform notices, feature flags and shared reference catalogues where appropriate.
 - Trigger controlled support or recovery operations with reason, limited duration/scope where applicable, and immutable audit evidence.
@@ -40,7 +40,7 @@ The first user who successfully registers a company becomes its initial Company 
 - Asset master data: categories, models/types, typed custom-field definitions, numbering rules, suppliers, manufacturers, service types, depreciation options and tenant-specific lists.
 - Company records and workflows: employees/custodians, assets, assignment/return, transfers/receipts, requests/approvals, maintenance/upgrade, software/license records, barcodes/tags, physical audits, reports, imports/exports and audit history according to permissions.
 - Company-specific notifications, approval routing and other configurable workflow rules as those modules are implemented.
-- Company data export and lifecycle actions subject to platform policy, plan entitlements and appropriate confirmation/audit requirements.
+- Company data export and lifecycle actions subject to platform policy, subscription state and appropriate confirmation/audit requirements.
 
 Tenant users may be authorized for narrower responsibilities. The Company Admin's broad administrative authority is tenant-scoped and must never bypass tenant isolation or global safety controls.
 
@@ -55,7 +55,7 @@ Expected flow:
 5. The company admin verifies their email and completes the company profile/setup wizard.
 6. The admin builds the location hierarchy, configures categories/models/custom fields, invites staff and creates tenant roles.
 7. Invited users join the correct tenant, receive an explicitly assigned role and any permitted location scope, then use only the screens/APIs allowed by those permissions.
-8. Subscription/plan entitlements govern feature availability and limits, but do not replace authorization checks.
+8. Subscription status controls paid/trial access timing; plans limit only asset count, active users and storage. Neither replaces authorization checks.
 
 Registration must not allow a request body, client header, URL, or manipulated role ID to grant Platform Super Admin access.
 
@@ -106,9 +106,9 @@ The migrated feature inventory should become configurable multi-tenant modules:
 - **Physical audits:** expected snapshots, scans, found/missing/moved/damaged/tag mismatch, evidence and reviewed corrective transactions.
 - **Reporting:** dashboard, inventory/location/employee/service/license/financial/depreciation/audit reports, saved filters and authorized CSV/XLSX/PDF exports.
 - **Data exchange:** validated import previews, row-level errors, resumable/idempotent jobs, reconciliation and controlled exports.
-- **SaaS controls:** trial and subscription lifecycle, plan entitlements, quotas, billing events, notifications and tenant lifecycle administration.
+- **SaaS controls:** trial and subscription lifecycle, asset/user/storage limits, billing events, notifications and tenant lifecycle administration.
 
-Each module must inherit tenant context, role permissions, location scope, audit policy and plan entitlements rather than inventing inconsistent access logic.
+Each module must inherit tenant context, role permissions, location scope and audit policy. Asset creation, user membership changes and file uploads must additionally enforce the relevant plan resource limit.
 
 ## 8. Simple subscription plans and resource limits
 
@@ -134,7 +134,7 @@ The current source tree does not have a complete plan/subscription enforcement s
 - Provide a dedicated, separately authorized platform-admin area; do not mix platform operations into the company navigation.
 - Tenant setup should guide an administrator through company profile, locations, categories/custom fields, users/roles and imports.
 - Settings and lists must be tenant-specific, respect permissions and location scope, and display useful loading/empty/error states.
-- Module availability and quotas should be explained without implying that an unavailable feature is a user-permission failure when it is actually a plan limit.
+- Asset, active-user and storage limits should be shown separately from role permissions and subscription status; application modules are not individually gated by plan.
 
 ## 10. Engineering acceptance criteria
 
@@ -146,7 +146,7 @@ A feature is not done until applicable checks cover:
 4. Location hierarchy, inherited scopes and boundary cases.
 5. Tenant-specific configuration and custom-field validation.
 6. Audit coverage for security/admin actions.
-7. Plan/entitlement behavior where relevant.
+7. Asset/user/storage limit enforcement and trial-expiry behavior.
 8. Unit, API/database integration and browser workflow tests.
 9. Schema validation, migrations, typecheck, lint, tests and build in successful CI.
 
