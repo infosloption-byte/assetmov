@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
+import LocationsPage from "./features/locations/LocationsPage";
 
 type ApiHealth = "checking" | "online" | "offline";
 
@@ -37,7 +38,7 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets">("overview");
+  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -223,7 +224,7 @@ function App() {
           <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
           <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">⇄</span> Movements <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">⌂</span> Locations <span className="nav-lock">Soon</span></a>
+          <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
         </nav>
@@ -235,7 +236,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -275,6 +276,14 @@ function App() {
             csrfToken={csrfToken}
             permissions={workspaceContext?.permissions ?? []}
             allLocationsAccess={workspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
+          />
+        ) : activePage === "locations" ? (
+          <LocationsPage
+            tenantId={workspaceContext?.tenant.id ?? null}
+            csrfToken={csrfToken}
+            permissions={workspaceContext?.permissions ?? []}
+            allLocationsAccess={workspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
+            manageableLocationIds={workspaceContext?.locationScope.manageableLocationIds ?? []}
           />
         ) : (
           <>
