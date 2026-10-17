@@ -59,6 +59,7 @@ Use PowerShell's `Copy-Item` instead of `cp` if preferred. Local MySQL uses host
 ## Product and engineering documents
 
 - [SaaS product requirements and administration boundaries](docs/SAAS_PRODUCT_REQUIREMENTS.md)
+- [Subscription plans, limits and enforcement guardrails](docs/SUBSCRIPTION_GUARDRAILS.md)
 - [Legacy feature audit and process flows](docs/LEGACY_FEATURE_AUDIT.md)
 - [Architecture and SaaS security](docs/ARCHITECTURE.md)
 - [Authentication and workspace context](docs/AUTHENTICATION.md)
