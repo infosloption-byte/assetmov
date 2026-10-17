@@ -43,7 +43,9 @@ The current feature branch adds a subscription-plan model, a tenant-subscription
 
 These changes are source-committed on `feat/platform-subscription-foundation`; they must not be treated as accepted until the schema is validated, the initial Prisma migration is reviewed/applied, client generation/build/lint/tests pass, and database-backed route tests pass. The first Platform Super Admin must be provisioned out-of-band; there is no self-promotion registration option. Setup notes are in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md).
 
-Not included in this slice: Platform Admin or Company Admin UI, company usage screen, asset/user/storage quota enforcement, real uploaded-file usage tracking, trial-expiry blocking, payment integration, or quota concurrency tests.
+Single-asset creation now has an initial quota/trial check: it locks the tenant subscription row, checks status and the stored trial end time, counts retained tenant assets, and returns a structured PLAN_LIMIT_REACHED error when the cap is reached. Pure policy tests for cap and trial boundaries are committed to the backend test script but have not been executed.
+
+Not included or not yet verified: Platform Admin or Company Admin UI, company usage screen, active-user quota enforcement, uploaded-file storage tracking, quota enforcement on future bulk/import paths, trial-expiry blocking across the other mutating workflows, payment integration, or DB-backed concurrency tests.
 
 ## Verification not yet confirmed
 
