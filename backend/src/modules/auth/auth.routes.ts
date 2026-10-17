@@ -40,6 +40,7 @@ const loginSchema = z.object({
 });
 
 const reservedSlugs = new Set(["admin", "api", "www", "root", "support", "billing", "login", "register", "assets", "static"]);
+const DUMMY_PASSWORD_HASH = "scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$O1g02FhoC0g3XJkKsFvLrg3_6QcNlo-4z9bc0dKfjTX8n_TcVmiqHjEc7OexElF7Kw4ZRCa8ON8uuohyIvjNKQ";
 
 const permissionDefinitions = [
   ["tenant.settings.manage", "Manage organization settings"],
@@ -279,9 +280,11 @@ authRouter.post("/login", authLimiter, async (request, response, next) => {
       where: { email: parsed.data.email },
     });
 
-    const passwordMatches = user && !user.disabledAt
-      ? await verifyPassword(parsed.data.password, user.passwordHash)
-      : false;
+    // Always perform one password-hash verification to reduce account-enumeration timing leaks.
+    const passwordMatches = await verifyPassword(
+      parsed.data.password,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
 
     if (!user || user.disabledAt || !passwordMatches) {
       sendError(response, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
