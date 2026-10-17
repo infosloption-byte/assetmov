@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
 import { requireAnyPermission, requirePermission, requireTenant } from "../tenancy/tenant-context.js";
+import { areAllTransferLinesResolved, summarizeTransferStatus } from "./transfer-status.js";
 
 export const transferRouter = Router();
 
@@ -432,14 +433,9 @@ transferRouter.post(
           where: { tenantId, transferId: transfer.id },
           select: { status: true },
         });
-        const allResolved = allLines.every((line) => line.status !== "IN_TRANSIT");
-        const nextStatus = allLines.every((line) => line.status === "RECEIVED")
-          ? "RECEIVED"
-          : allLines.every((line) => line.status === "REJECTED")
-            ? "REJECTED"
-            : allLines.some((line) => line.status !== "IN_TRANSIT")
-              ? "PARTIALLY_RECEIVED"
-              : "IN_TRANSIT";
+        const lineStatuses = allLines.map((line) => line.status);
+        const nextStatus = summarizeTransferStatus(lineStatuses);
+        const allResolved = areAllTransferLinesResolved(lineStatuses);
 
         await tx.assetTransfer.update({
           where: { id: transfer.id },
