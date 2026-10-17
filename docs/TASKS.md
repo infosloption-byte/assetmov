@@ -39,8 +39,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Location list/search/create endpoint and frontend screen.
 - [ ] Add location edit/deactivate/delete-safe flows; current location API is list/create only.
 - [x] Location descendant expansion helper and tenant membership location-scope middleware.
-- [ ] Employee/custodian CRUD and employee-type/designation support.
-- [ ] Employee-to-location assignment and history.
+- [x] Employee/custodian list, search, create and edit APIs/UI with tenant and location-scope checks.
+- [ ] Add employee-type/designation fields and safe deactivate/reactivate flows.
+- [x] Employee home-location assignment/change with before/after audit events.
+- [ ] Add a dedicated employee location-history timeline.
 - [ ] Asset categories and asset model CRUD.
 - [ ] Typed custom-field schema (text, number, date, boolean, select, etc.).
 - [ ] Supplier and manufacturer CRUD.
@@ -65,12 +67,13 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Implement movement services so every state change updates projection and ledger atomically.
 - [ ] Controlled damage/disposal/archive/restore workflows with reasons.
 - [ ] Bulk import preview, duplicate checks, row-level errors and retry.
-- [x] Add unit tests for pure asset lifecycle policy, location-scope expansion and password hashing.
+- [x] Add unit tests for asset lifecycle policy, custody assignment policy, location-scope expansion, transfer status outcomes and password hashing (not yet executed in a verified CI run).
 - [ ] Execute tests and add API/DB integration tests, cross-tenant tests and browser acceptance tests.
 
 ## E. Movement, assignment and receipts — P0
 
-- [ ] Single assignment and unassignment.
+- [x] Single asset assignment and return-to-stock endpoints/UI; both append lifecycle transactions and audit events.
+- [ ] Run DB-backed assignment/unassignment integration tests.
 - [ ] Bulk assignment with documented atomicity and per-item result.
 - [x] Transfer header and transfer-line schema for asset movements.
 - [x] Dispatch validation and in-transit reservation inside a database transaction, with conditional updates to prevent duplicate dispatch.
