@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -332,7 +332,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps)
               </div>
               <label htmlFor="assetNotes">Notes</label><textarea id="assetNotes" name="notes" rows={3} maxLength={20000} placeholder="Optional description or notes" />
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
-              {!locationsError && locations.length === 0 && !locationsLoadingPlaceholder && <p className="asset-inline-hint">If your role is restricted to selected locations, choose a location to register this asset.</p>}
+              {!locationsError && locations.length === 0 && <p className="asset-inline-hint">If your role is restricted to selected locations, choose a location to register this asset or ask an administrator to grant location access.</p>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save asset"} {!saving && <span>↗</span>}</button></div>
             </form>
           </section>
@@ -362,7 +362,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps)
                 <div className="asset-history-section"><h3>Lifecycle history</h3>
                   {selectedAsset.transactions?.length ? (
                     <ol className="asset-history-list">
-                      {selectedAsset.transactions.map((event) => <li key={event.id}><span className="history-dot" /><div><strong>{statusLabel(event.eventType as AssetStatus)}</strong><p>{event.fromLocation?.name ? event.fromLocation.name + " → " : ""}{event.toLocation?.name ?? ""}{event.notes ? (event.toLocation?.name ? " · " : "") + event.notes : ""}</p><time>{formatDate(event.occurredAt)}</time></div></li>)}
+                      {selectedAsset.transactions.map((event) => <li key={event.id}><span className="history-dot" /><div><strong>{event.eventType.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())}</strong><p>{event.fromLocation?.name ? event.fromLocation.name + " → " : ""}{event.toLocation?.name ?? ""}{event.notes ? (event.toLocation?.name ? " · " : "") + event.notes : ""}</p><time>{formatDate(event.occurredAt)}</time></div></li>)}
                     </ol>
                   ) : <p className="asset-detail-empty">No lifecycle events were returned for this asset.</p>}
                 </div>
@@ -375,7 +375,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps)
   );
 }
 
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+function Detail({ label, children }: { label: string; children: ReactNode }) {
   return <div className="asset-detail-cell"><span>{label}</span><strong>{children}</strong></div>;
 }
 
