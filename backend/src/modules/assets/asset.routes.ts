@@ -4,6 +4,11 @@ import { prisma } from "../../lib/prisma.js";
 import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
 import { requirePermission, requireTenant } from "../tenancy/tenant-context.js";
 import { canAssignAssetToEmployee, canReturnAssetToStock } from "./assignment-policy.js";
+import {
+  assertAssetCreationAllowed,
+  AssetPlanLimitError,
+  SubscriptionAccessError,
+} from "../subscriptions/subscription-policy.js";
 
 export const assetRouter = Router();
 
@@ -258,6 +263,23 @@ assetRouter.post(
       }
 
       const result = await prisma.$transaction(async (tx) => {
+        // Serialize all asset-count-increasing operations for this tenant on the subscription row.
+        // Imports and future bulk-creation paths must use the same lock + policy.
+        await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM TenantSubscription WHERE tenantId = ${tenantId} FOR UPDATE`;
+
+        const subscription = await tx.tenantSubscription.findUnique({
+          where: { tenantId },
+          include: { plan: { select: { maxAssets: true } } },
+        });
+        const currentAssetCount = await tx.asset.count({ where: { tenantId } });
+        assertAssetCreationAllowed(subscription ? {
+          status: subscription.status,
+          trialEndsAt: subscription.trialEndsAt,
+          maxAssets: subscription.plan.maxAssets,
+          currentAssetCount,
+          now: new Date(),
+        } : null);
+
         const [model, manufacturer, supplier, location] = await Promise.all([
           input.modelId
             ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true } })
@@ -340,6 +362,24 @@ assetRouter.post(
 
       response.status(201).json({ data: result });
     } catch (error) {
+      if (error instanceof AssetPlanLimitError) {
+        response.status(409).json({
+          error: {
+            code: error.code,
+            message: error.message,
+            limit: error.limit,
+            current: error.current,
+            maximum: error.maximum,
+            nextStep: "Upgrade the company plan or remove assets only through an approved permanent-purge process.",
+          },
+        });
+        return;
+      }
+      if (error instanceof SubscriptionAccessError) {
+        const statusCode = error.code === "SUBSCRIPTION_NOT_CONFIGURED" ? 409 : 403;
+        sendError(response, statusCode, error.code, error.message);
+        return;
+      }
       if (isUniqueConstraintError(error)) {
         sendError(response, 409, "INVENTORY_NUMBER_EXISTS", "That inventory number is already in use in this workspace.");
         return;
