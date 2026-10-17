@@ -4,33 +4,41 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## A. Repository and developer experience
 
-- [ ] Create `frontend/` React + TypeScript + Vite app and a responsive app shell.
-- [ ] Create `backend/` Node.js + TypeScript + Express API.
-- [ ] Add ESLint/formatter and scripts for lint, typecheck, tests and build.
-- [ ] Add validated environment config; commit only `.env.example`.
-- [ ] Add Docker Compose for local MySQL and document reset/seed commands.
-- [ ] Add Prisma schema, first migration and migration workflow.
-- [ ] Add CI for frontend/backend lint, typecheck, unit tests and schema validation.
-- [ ] Add health/readiness endpoints and structured error/logging conventions.
+- [x] Create `frontend/` React + TypeScript + Vite app and a responsive app shell (source committed; build still needs verification).
+- [x] Create `backend/` Node.js + TypeScript + Express API (source committed; build still needs verification).
+- [x] Add ESLint/formatter configs and scripts for lint, typecheck, tests and build (not yet confirmed passing).
+- [x] Add validated environment config; commit only `.env.example`.
+- [x] Add Docker Compose for local MySQL and local startup instructions.
+- [ ] Add database reset and safe development seed scripts.
+- [x] Add the initial Prisma schema and migration command configuration.
+- [ ] Validate the schema, generate the Prisma client and commit the first reviewed migration.
+- [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
+- [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
+- [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
 
 ## B. Identity, SaaS and authorization — P0
 
-- [ ] Tenant, user and membership schema.
-- [ ] Secure sign-up/tenant creation and owner onboarding.
-- [ ] Login/logout, password reset, email verification, session rotation and expiry.
-- [ ] Secure cookie/CSRF policy, rate limiting and lockout/throttling strategy.
-- [ ] Role and permission catalogue; tenant-scoped role assignment.
-- [ ] Tenant-context and location-scope middleware.
+- [x] Tenant, user, session, membership, role and permission schema (schema validation remains).
+- [x] Organization registration, trial tenant creation and initial owner membership.
+- [ ] Add email verification and abuse protections before public launch.
+- [x] Login/logout, session issuance/expiry, session restoration and CSRF-protected logout.
+- [ ] Add password reset, email verification and user-visible session revocation.
+- [x] Secure session cookie, CSRF middleware and authentication/API rate limits.
+- [ ] Review throttling/lockout policy against production abuse scenarios.
+- [x] Role/permission schema, seeded owner permission set and request permission helpers.
+- [ ] Add tenant admin UI for member/role assignment and permission editing.
+- [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
 - [ ] Separate platform-admin capabilities from tenant roles.
-- [ ] Add audit events for membership, role and security changes.
+- [ ] Extend audit events to all membership, role, session-revocation and security administration changes (tenant creation and asset/location writes are currently audited).
 - [ ] Write cross-tenant IDOR tests for list/detail/create/update/delete/search/export/upload/download.
 - [ ] Add authorization matrix and seed development roles/data.
 
 ## C. Tenant setup and master data — P0
 
 - [ ] Tenant preferences (timezone, locale, currency, date format, fiscal year).
-- [ ] Location types and hierarchical location CRUD.
-- [ ] Location tree/descendant resolution and scoped-access policies.
+- [x] Location list/search/create endpoint and frontend screen.
+- [ ] Add location edit/deactivate/delete-safe flows; current location API is list/create only.
+- [x] Location descendant expansion helper and tenant membership location-scope middleware.
 - [ ] Employee/custodian CRUD and employee-type/designation support.
 - [ ] Employee-to-location assignment and history.
 - [ ] Asset categories and asset model CRUD.
@@ -41,17 +49,24 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## D. Asset register — P0
 
-- [ ] Define lifecycle states and allowed transition table.
-- [ ] Define tenant asset-numbering policy and uniqueness constraints.
-- [ ] Asset CRUD with validation and permission-scoped lookups.
-- [ ] Asset detail view with custom fields, finance, warranty and ownership.
-- [ ] Search/filter by inventory no., serial/asset no., category/model, location, custodian, state and warranty.
-- [ ] Pagination, sorting, empty/loading/error states.
+- [x] Define initial lifecycle statuses, allowed transitions and unit tests (tests have not yet been executed in CI).
+- [x] Add tenant-scoped inventory number uniqueness.
+- [ ] Implement configurable automatic numbering sequences and concurrency-safe allocation.
+- [x] Add tenant-scoped asset list/detail/create and metadata-update API routes.
+- [ ] Complete status actions, archive/restore and lifecycle mutations.
+- [x] Add asset profile with basic finance/warranty fields, linked master data and event timeline.
+- [ ] Add typed custom-field forms and complete ownership/financial detail coverage.
+- [x] Add search by inventory number, title, asset reference and serial number; status filter; pagination support in API.
+- [ ] Add category/model, location, custodian and warranty filters to UI/API.
+- [x] Add API pagination and initial table loading/empty/error states.
+- [ ] Add sort controls and UI pagination controls (the first UI request is capped at 100).
 - [ ] Attachment upload/download authorization and retention.
-- [ ] Asset event timeline and current-state projection.
+- [x] Add a basic asset event timeline and write initial registration/correction transactions.
+- [ ] Implement movement services so every state change updates projection and ledger atomically.
 - [ ] Controlled damage/disposal/archive/restore workflows with reasons.
 - [ ] Bulk import preview, duplicate checks, row-level errors and retry.
-- [ ] Unit and API integration tests for lifecycle invariants.
+- [x] Add unit tests for pure asset lifecycle policy, location-scope expansion and password hashing.
+- [ ] Execute tests and add API/DB integration tests, cross-tenant tests and browser acceptance tests.
 
 ## E. Movement, assignment and receipts — P0
 
