@@ -1,8 +1,8 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireSession } from "../auth/auth-middleware.js";
-import { requirePermission } from "../tenancy/tenant-context.js";
+import { requirePermission, requireTenant } from "../tenancy/tenant-context.js";
 
 export const assetRouter = Router();
 
@@ -78,17 +78,7 @@ const assetInclude = {
 assetRouter.get(
   "/",
   requireSession,
-  // requireTenant is installed here as well as a permission gate so each resource
-  // route always establishes a trusted tenant context before querying.
-  async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      // Dynamically imported middleware isn't needed; tenant resolution is delegated
-      // to the shared router guard added below.
-      next();
-    } catch (error) {
-      next(error);
-    }
-  },
+  requireTenant,
   requirePermission("asset.read"),
   async (request, response, next) => {
     try {
@@ -150,14 +140,7 @@ assetRouter.get(
 assetRouter.get(
   "/:id",
   requireSession,
-  async (request, response, next) => {
-    try {
-      // Tenant context will be resolved by the common middleware in the route chain.
-      next();
-    } catch (error) {
-      next(error);
-    }
-  },
+  requireTenant,
   requirePermission("asset.read"),
   async (request, response, next) => {
     try {
@@ -215,14 +198,7 @@ assetRouter.get(
 assetRouter.post(
   "/",
   requireSession,
-  async (request, response, next) => {
-    try {
-      // Tenant context will be resolved by the common middleware in the route chain.
-      next();
-    } catch (error) {
-      next(error);
-    }
-  },
+  requireTenant,
   requirePermission("asset.create"),
   async (request, response, next) => {
     try {
