@@ -10,6 +10,8 @@ export const logger = pino({
       "token",
       "accessToken",
       "refreshToken",
+      "csrfToken",
+      "csrfTokenHash",
       "authorization",
       "cookie",
       "headers.authorization",
