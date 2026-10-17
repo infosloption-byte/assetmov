@@ -5,7 +5,7 @@ import { hashToken, SESSION_COOKIE_NAME } from "./session.js";
 
 export interface AuthContext {
   sessionId: string;
-  csrfTokenHash: string;
+  csrfToken: string;
   userId: string;
 }
 
