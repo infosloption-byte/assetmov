@@ -78,7 +78,7 @@ The GitHub Actions runs observed during the last review reported `startup_failur
 3. Platform permissions are separate from tenant roles. Company Admin must never be able to self-grant platform access.
 4. Tenant isolation and API-side authorization are mandatory for every read/write, search, export, upload/download, background job and report.
 5. Company-specific master data and custom fields are configuration, not global hard-coded values.
-6. Plan entitlements and user permissions are separate checks; important business actions are audited.
+6. Subscription plans limit only assets, active users, storage and trial duration; role permissions and platform-wide abuse protections remain separate. Important business actions are audited.
 7. Asset movements remain transaction records, and imports must support validation previews, row-level errors and reconciliation.
 
 [SAAS_PRODUCT_REQUIREMENTS.md](docs/SAAS_PRODUCT_REQUIREMENTS.md) governs future design decisions. The old application is a reference for workflows and field requirements, not a source to copy legacy vulnerabilities, obsolete dependencies, database credentials, historic user accounts or customer records into AssetMov.
