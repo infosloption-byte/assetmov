@@ -17,6 +17,9 @@ cp frontend/.env.example frontend/.env
 docker compose up -d mysql
 npm install
 npm run db:validate
+npm run db:migrate
+npm run db:generate
+npm run db:seed:plans
 npm run build
 ```
 
@@ -40,9 +43,10 @@ After MySQL is healthy:
 ```sh
 npm run db:migrate
 npm run db:generate
+npm run db:seed:plans
 ```
 
-Prisma's migration command creates a migration from the schema and applies it to the local database. Commit the generated migration directory. Never use development migration commands as the production deployment process; production uses reviewed, committed migrations.
+Prisma's migration command creates a migration from the current schema and applies it to the local database. Review and commit the generated initial migration directory before sharing this feature. The plan seed creates proposed defaults only when a plan key is absent. Never use development migration commands as the production deployment process; production uses reviewed, committed migrations.
 
 ## Run the application
 
