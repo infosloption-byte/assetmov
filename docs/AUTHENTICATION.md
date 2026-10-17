@@ -49,3 +49,19 @@ Reusable `requirePermission`, `requireAnyPermission` and `requireLocationAccess`
 - Audit security review, dependency review, abuse monitoring and production-ready email delivery.
 
 **Important:** Authentication is not sufficient authorization. Never return tenant-owned records until the API has resolved the trusted active tenant and verified membership, role permission and applicable location scope.
+
+
+## Platform authority versus company authority
+
+The currently wired registration flow creates a trial tenant and its initial **tenant owner**. It does **not** implement a complete Platform Super Admin system. Do not treat a tenant owner role as platform-wide authority.
+
+Target policy:
+
+- The Platform Super Admin principal/role and its permission checks are separate from tenant-scoped memberships and roles.
+- Company Admin manages only the selected tenant's profile, users, custom roles/permission grants, location hierarchy/scopes, tenant master data and business records.
+- Tenant admins can assign valid application permission keys from a controlled catalogue, but cannot manufacture platform permission keys or grant platform authority.
+- A tenant ID passed in a header/body/query remains a selector only; verified membership is required for tenant routes.
+- Platform routes require explicit platform permissions. They must not silently bypass tenant policies; exceptional support access to customer data must be justified and audited.
+- Every tenant-owned route, background job, report, export and file operation must apply tenant scope, permission checks and relevant location scope.
+
+The implementation of a separate platform-admin scope, tenant user/role management UI, invitations and the associated security tests remains outstanding. Refer to [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md).
