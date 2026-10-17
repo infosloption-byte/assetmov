@@ -200,3 +200,44 @@ button.primary-button { border: 0; font-family: inherit; }
   .session-loading { display: none; }
   .topbar-right { gap: 6px; }
 }
+
+.workspace-select {
+  max-width: 150px;
+  min-width: 105px;
+  min-height: 33px;
+  border: 1px solid #dce5db;
+  border-radius: 7px;
+  padding: 0 8px;
+  outline: 0;
+  background: #fff;
+  color: #52685a;
+  font-size: 10px;
+  font-weight: 600;
+}
+.workspace-select:focus {
+  border-color: #7ea487;
+  box-shadow: 0 0 0 3px #477e5515;
+}
+.workspace-access-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+  color: #738278;
+  font-size: 9px;
+}
+.workspace-access-summary span {
+  border: 1px solid #e4eae2;
+  border-radius: 5px;
+  background: #fbfcfa;
+  padding: 6px 8px;
+}
+.workspace-access-summary strong {
+  color: #43664d;
+}
+@media (max-width: 780px) {
+  .workspace-select { max-width: 125px; min-width: 0; }
+}
+@media (max-width: 520px) {
+  .workspace-select { max-width: 95px; font-size: 9px; }
+}
