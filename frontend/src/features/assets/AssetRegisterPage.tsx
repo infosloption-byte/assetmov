@@ -404,7 +404,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                     {locations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
                   </select>
                 </div>
-                <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>
+                {canEditFinancial && <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>}
               </div>
               <label htmlFor="assetNotes">Notes</label><textarea id="assetNotes" name="notes" rows={3} maxLength={20000} placeholder="Optional description or notes" />
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
