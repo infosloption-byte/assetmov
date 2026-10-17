@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
 import { requirePermission, requireTenant } from "../tenancy/tenant-context.js";
+import { canAssignAssetToEmployee, canReturnAssetToStock } from "./assignment-policy.js";
 
 export const assetRouter = Router();
 
@@ -635,9 +636,10 @@ assetRouter.post(
             firstName: true,
             lastName: true,
             homeLocationId: true,
+            isActive: true,
           },
         });
-        if (!employee) throw new Error("EMPLOYEE_LOCATION_MISMATCH");
+        if (!employee || !canAssignAssetToEmployee(asset, employee)) throw new Error("EMPLOYEE_LOCATION_MISMATCH");
 
         const changed = await tx.asset.updateMany({
           where: {
@@ -756,10 +758,9 @@ assetRouter.post(
         if (!canManageAssetLocation(request, asset.currentLocationId)) {
           throw new Error("ASSET_LOCATION_SCOPE_DENIED");
         }
-        if (asset.status !== "ASSIGNED" || !asset.assignedEmployeeId) {
+        if (!canReturnAssetToStock(asset)) {
           throw new Error("ASSET_NOT_ASSIGNED");
         }
-        if (!asset.currentLocationId) throw new Error("ASSET_LOCATION_REQUIRED");
 
         const employee = await tx.employee.findFirst({
           where: { id: asset.assignedEmployeeId, tenantId },
