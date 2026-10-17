@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import AuthPage from "./features/auth/AuthPage";
+import type { AuthMode, AuthUser } from "./features/auth/types";
 
 type ApiHealth = "checking" | "online" | "offline";
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api")
-  .replace(/\/$/, "");
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
 const modules = [
   { number: "01", title: "Asset register", description: "A single place for every asset, its details, value, warranty and history.", tag: "Core inventory" },
@@ -16,11 +17,16 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(`${apiBaseUrl}/health`, { signal: controller.signal })
+    fetch(apiBaseUrl + "/health", { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("API not ready");
         return response.json() as Promise<{ status?: string; database?: string }>;
@@ -33,6 +39,91 @@ function App() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function restoreSession() {
+      try {
+        const response = await fetch(apiBaseUrl + "/auth/me", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const payload = await response.json() as { user?: AuthUser };
+        if (!payload.user) return;
+
+        setUser(payload.user);
+
+        const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (csrfResponse.ok) {
+          const csrfPayload = await csrfResponse.json() as { csrfToken?: string };
+          setCsrfToken(csrfPayload.csrfToken ?? null);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setCsrfToken(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setSessionLoading(false);
+      }
+    }
+
+    void restoreSession();
+    return () => controller.abort();
+  }, []);
+
+  async function handleLogout() {
+    setActionError("");
+    try {
+      let currentCsrfToken = csrfToken;
+      if (!currentCsrfToken) {
+        const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", { credentials: "include" });
+        const csrfPayload = await csrfResponse.json() as { csrfToken?: string; error?: { message?: string } };
+        if (!csrfResponse.ok || !csrfPayload.csrfToken) {
+          throw new Error(csrfPayload.error?.message ?? "Your session may have expired. Please sign in again.");
+        }
+        currentCsrfToken = csrfPayload.csrfToken;
+      }
+
+      const response = await fetch(apiBaseUrl + "/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRF-Token": currentCsrfToken },
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not sign out.");
+
+      setUser(null);
+      setCsrfToken(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
+    }
+  }
+
+  if (authMode) {
+    return (
+      <AuthPage
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onCancel={() => setAuthMode(null)}
+        onAuthenticated={(authenticatedUser, token) => {
+          setUser(authenticatedUser);
+          setCsrfToken(token);
+          setAuthMode(null);
+          setActionError("");
+        }}
+      />
+    );
+  }
+
+  const currentTenant = user?.memberships[0]?.tenant;
+  const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
 
   return (
     <div className="app-shell">
@@ -52,26 +143,47 @@ function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon">✳</div><strong>Built for clarity.</strong><p>Know what you own, where it is, and what happened to it.</p></div>
-          <div className="sidebar-version"><span className="status-dot" /> Foundation preview <span>v0.1</span></div>
+          <div className="sidebar-version"><span className="status-dot" /> Foundation preview <span>v0.2</span></div>
         </div>
       </aside>
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><b>/</b><strong>Overview</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>Overview</strong></div>
           <div className="topbar-right">
-            <div className={`api-pill ${apiHealth}`}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
-            <div className="avatar" aria-label="No user signed in">AM</div>
+            <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
+            {sessionLoading ? (
+              <span className="session-loading">Checking session…</span>
+            ) : user ? (
+              <>
+                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{currentTenant?.name ?? "No active workspace"}</small></div>
+                <div className="avatar" aria-label={user.fullName}>{initials}</div>
+                <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
+              </>
+            ) : (
+              <>
+                <button className="topbar-button ghost" type="button" onClick={() => setAuthMode("login")}>Sign in</button>
+                <button className="topbar-button solid" type="button" onClick={() => setAuthMode("register")}>Create workspace <span>↗</span></button>
+              </>
+            )}
           </div>
         </header>
+
+        {actionError && <div className="action-error" role="alert">{actionError}</div>}
 
         <section className="welcome-section">
           <div>
             <div className="eyebrow"><span className="eyebrow-line" /> YOUR ASSET OPERATIONS, IN ONE VIEW</div>
             <h1>Good systems make<br /><em>everything</em> easier to track.</h1>
-            <p className="welcome-copy">A clear view of your asset lifecycle is taking shape. Start with the foundation, then bring your inventory, people and processes together.</p>
+            <p className="welcome-copy">{user
+              ? "Welcome, " + user.fullName + ". " + (currentTenant ? currentTenant.name + " is set up as your workspace." : "Your account is ready.") + " Live inventory and movement screens are the next implementation stage."
+              : "A clear view of your asset lifecycle is taking shape. Start with the foundation, then bring your inventory, people and processes together."}</p>
             <div className="welcome-actions">
-              <a className="primary-button" href="#modules">Explore the platform <span>↗</span></a>
+              {user ? (
+                <a className="primary-button" href="#modules">Explore the platform <span>↗</span></a>
+              ) : (
+                <button className="primary-button" type="button" onClick={() => setAuthMode("register")}>Create your workspace <span>↗</span></button>
+              )}
               <a className="text-button" href="https://github.com/infosloption-byte/assetmov" target="_blank" rel="noreferrer">View project <span>↗</span></a>
             </div>
           </div>
@@ -84,7 +196,9 @@ function App() {
         </section>
 
         <section className="stats-section" aria-label="Workspace metrics">
-          <div className="section-intro"><div><h2>Workspace snapshot</h2><p>Live metrics will appear when your organization and data are connected.</p></div><span className="preview-label">PREVIEW</span></div>
+          <div className="section-intro"><div><h2>Workspace snapshot</h2><p>{user && currentTenant
+            ? currentTenant.name + " is created. Live metrics will appear when inventory workflows are connected."
+            : "Live metrics will appear when your organization and data are connected."}</p></div><span className="preview-label">PREVIEW</span></div>
           <div className="stats-grid">
             <Metric label="Tracked assets" icon="◫" detail="Inventory at a glance" />
             <Metric label="Assigned assets" icon="↗" detail="Custody and ownership" />
