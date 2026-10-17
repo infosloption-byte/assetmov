@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
-import { requireSession } from "../auth/auth-middleware.js";
+import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
 import { requirePermission, requireTenant } from "../tenancy/tenant-context.js";
 
 export const assetRouter = Router();
@@ -200,6 +200,7 @@ assetRouter.post(
   requireSession,
   requireTenant,
   requirePermission("asset.create"),
+  requireCsrf,
   async (request, response, next) => {
     try {
       const tenantId = request.auth?.tenantId;
