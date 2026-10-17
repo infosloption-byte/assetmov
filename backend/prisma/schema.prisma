@@ -476,6 +476,7 @@ model AssetTag {
   asset     Asset    @relation(fields: [tenantId, assetId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, code])
+  @@unique([tenantId, id])
   @@index([tenantId, assetId])
 }
 
