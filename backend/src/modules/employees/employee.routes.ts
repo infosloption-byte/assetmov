@@ -1,0 +1,364 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../../lib/prisma.js";
+import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
+import { requirePermission, requireTenant } from "../tenancy/tenant-context.js";
+
+export const employeeRouter = Router();
+
+const employeeListSchema = z.object({
+  q: z.string().trim().max(191).optional(),
+  locationId: z.string().trim().min(1).optional(),
+  includeInactive: z.enum(["true", "false"]).default("false"),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+const employeeCreateSchema = z.object({
+  employeeCode: z.string().trim().min(1).max(100),
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+  email: z.string().trim().toLowerCase().email().max(191).optional(),
+  phone: z.string().trim().max(50).optional(),
+  homeLocationId: z.string().trim().min(1).optional(),
+}).strict();
+
+const employeeUpdateSchema = z.object({
+  employeeCode: z.string().trim().min(1).max(100).optional(),
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  email: z.string().trim().toLowerCase().email().max(191).optional(),
+  phone: z.string().trim().max(50).optional(),
+  homeLocationId: z.string().trim().min(1).optional(),
+}).strict().refine((input) => Object.values(input).some((value) => value !== undefined), {
+  message: "Provide at least one field to update.",
+});
+
+function sendError(response: import("express").Response, status: number, code: string, message: string): void {
+  response.status(status).json({ error: { code, message } });
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function canAccessLocation(request: import("express").Request, locationId: string | null): boolean {
+  if (request.auth?.allLocationsAccess) return true;
+  return Boolean(locationId && request.auth?.accessibleLocationIds?.includes(locationId));
+}
+
+function canManageLocation(request: import("express").Request, locationId: string | null): boolean {
+  if (request.auth?.allLocationsAccess) return true;
+  return Boolean(locationId && request.auth?.manageableLocationIds?.includes(locationId));
+}
+
+const employeeInclude = {
+  homeLocation: { select: { id: true, name: true, code: true } },
+} as const;
+
+employeeRouter.get(
+  "/",
+  requireSession,
+  requireTenant,
+  requirePermission("employee.read"),
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      if (!tenantId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = employeeListSchema.safeParse(request.query);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Check the employee search and filter values.");
+        return;
+      }
+
+      const { q, locationId, includeInactive, page, pageSize } = parsed.data;
+      if (locationId && !canAccessLocation(request, locationId)) {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You cannot view employees in that location.");
+        return;
+      }
+
+      const scopedLocationIds = request.auth.allLocationsAccess
+        ? undefined
+        : (request.auth.accessibleLocationIds ?? []);
+
+      const where = {
+        tenantId,
+        ...(includeInactive === "true" ? {} : { isActive: true }),
+        ...(locationId ? { homeLocationId: locationId } : {}),
+        ...(request.auth.allLocationsAccess || locationId
+          ? {}
+          : { homeLocationId: { in: scopedLocationIds } }),
+        ...(q ? {
+          OR: [
+            { employeeCode: { contains: q } },
+            { firstName: { contains: q } },
+            { lastName: { contains: q } },
+            { email: { contains: q } },
+          ],
+        } : {}),
+      };
+
+      const [total, data] = await Promise.all([
+        prisma.employee.count({ where }),
+        prisma.employee.findMany({
+          where,
+          include: {
+            ...employeeInclude,
+            _count: { select: { assignedAssets: true } },
+          },
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+
+      response.status(200).json({
+        data,
+        pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+employeeRouter.get(
+  "/:id",
+  requireSession,
+  requireTenant,
+  requirePermission("employee.read"),
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      if (!tenantId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const employee = await prisma.employee.findFirst({
+        where: { id: request.params.id, tenantId },
+        include: {
+          ...employeeInclude,
+          assignedAssets: {
+            where: { tenantId },
+            include: {
+              currentLocation: { select: { id: true, name: true, code: true } },
+            },
+            orderBy: { inventoryNumber: "asc" },
+          },
+        },
+      });
+
+      if (!employee || !canAccessLocation(request, employee.homeLocationId)) {
+        sendError(response, 404, "EMPLOYEE_NOT_FOUND", "The requested employee was not found.");
+        return;
+      }
+
+      response.status(200).json({ data: employee });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+employeeRouter.post(
+  "/",
+  requireSession,
+  requireTenant,
+  requirePermission("employee.manage"),
+  requireCsrf,
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      const actorUserId = request.auth?.userId;
+      if (!tenantId || !actorUserId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = employeeCreateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Check the employee details and try again.");
+        return;
+      }
+
+      const input = parsed.data;
+      if (!input.homeLocationId && !request.auth.allLocationsAccess) {
+        sendError(response, 400, "LOCATION_REQUIRED", "Choose a home location for this employee.");
+        return;
+      }
+      if (input.homeLocationId && !canManageLocation(request, input.homeLocationId)) {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage the selected location to add an employee there.");
+        return;
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        if (input.homeLocationId) {
+          const location = await tx.location.findFirst({
+            where: { id: input.homeLocationId, tenantId, isActive: true },
+            select: { id: true },
+          });
+          if (!location) throw new Error("EMPLOYEE_LOCATION_INVALID");
+        }
+
+        const employee = await tx.employee.create({
+          data: {
+            tenantId,
+            employeeCode: input.employeeCode,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            email: input.email || undefined,
+            phone: input.phone || undefined,
+            homeLocationId: input.homeLocationId || undefined,
+          },
+          include: employeeInclude,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId,
+            action: "employee.created",
+            entityType: "Employee",
+            entityId: employee.id,
+            newData: {
+              employeeCode: employee.employeeCode,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              homeLocationId: employee.homeLocationId,
+            },
+            ipAddress: request.ip?.slice(0, 64),
+          },
+        });
+
+        return employee;
+      });
+
+      response.status(201).json({ data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_INVALID") {
+        sendError(response, 400, "INVALID_LOCATION", "Choose an active location in this workspace.");
+        return;
+      }
+      if (errorCode(error) === "P2002") {
+        sendError(response, 409, "EMPLOYEE_CODE_EXISTS", "That employee code is already used in this workspace.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+employeeRouter.patch(
+  "/:id",
+  requireSession,
+  requireTenant,
+  requirePermission("employee.manage"),
+  requireCsrf,
+  async (request, response, next) => {
+    try {
+      const tenantId = request.auth?.tenantId;
+      const actorUserId = request.auth?.userId;
+      if (!tenantId || !actorUserId || !request.auth?.membershipId) {
+        sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
+        return;
+      }
+
+      const parsed = employeeUpdateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendError(response, 400, "VALIDATION_ERROR", "Check the employee fields you want to update.");
+        return;
+      }
+
+      const input = parsed.data;
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.employee.findFirst({
+          where: { id: request.params.id, tenantId },
+        });
+        if (!existing || !canAccessLocation(request, existing.homeLocationId)) {
+          throw new Error("EMPLOYEE_NOT_FOUND");
+        }
+
+        const nextLocationId = input.homeLocationId ?? existing.homeLocationId;
+        if (!canManageLocation(request, nextLocationId)) {
+          throw new Error("EMPLOYEE_LOCATION_SCOPE_DENIED");
+        }
+
+        if (input.homeLocationId) {
+          const location = await tx.location.findFirst({
+            where: { id: input.homeLocationId, tenantId, isActive: true },
+            select: { id: true },
+          });
+          if (!location) throw new Error("EMPLOYEE_LOCATION_INVALID");
+        }
+
+        const updated = await tx.employee.update({
+          where: { id: existing.id },
+          data: {
+            ...(input.employeeCode !== undefined ? { employeeCode: input.employeeCode } : {}),
+            ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+            ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+            ...(input.email !== undefined ? { email: input.email || null } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
+            ...(input.homeLocationId !== undefined ? { homeLocationId: input.homeLocationId } : {}),
+          },
+          include: employeeInclude,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId,
+            action: "employee.updated",
+            entityType: "Employee",
+            entityId: updated.id,
+            oldData: {
+              employeeCode: existing.employeeCode,
+              firstName: existing.firstName,
+              lastName: existing.lastName,
+              email: existing.email,
+              phone: existing.phone,
+              homeLocationId: existing.homeLocationId,
+            },
+            newData: {
+              employeeCode: updated.employeeCode,
+              firstName: updated.firstName,
+              lastName: updated.lastName,
+              email: updated.email,
+              phone: updated.phone,
+              homeLocationId: updated.homeLocationId,
+            },
+            ipAddress: request.ip?.slice(0, 64),
+          },
+        });
+
+        return updated;
+      });
+
+      response.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message === "EMPLOYEE_NOT_FOUND") {
+        sendError(response, 404, "EMPLOYEE_NOT_FOUND", "The requested employee was not found.");
+        return;
+      }
+      if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_SCOPE_DENIED") {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage both the current and new location to move an employee.");
+        return;
+      }
+      if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_INVALID") {
+        sendError(response, 400, "INVALID_LOCATION", "Choose an active location in this workspace.");
+        return;
+      }
+      if (errorCode(error) === "P2002") {
+        sendError(response, 409, "EMPLOYEE_CODE_EXISTS", "That employee code is already used in this workspace.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
