@@ -37,6 +37,11 @@ const receiveSchema = z.object({
 }).strict().refine(
   (input) => new Set(input.decisions.map((decision) => decision.lineId)).size === input.decisions.length,
   { message: "Each transfer line can only be decided once per submission.", path: ["decisions"] },
+).refine(
+  (input) => input.decisions.every((decision) =>
+    decision.decision !== "REJECTED" || Boolean(decision.reason && decision.reason.length >= 3),
+  ),
+  { message: "A rejection reason of at least 3 characters is required.", path: ["decisions"] },
 );
 
 const transferInclude = {
