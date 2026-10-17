@@ -64,3 +64,15 @@ Before treating this as a validated foundation:
 - Authorized legacy data mapping, importer and reconciliation/cutover plan.
 
 The legacy feature inventory and process flows remain in [LEGACY_FEATURE_AUDIT.md](LEGACY_FEATURE_AUDIT.md); see [TASKS.md](TASKS.md) and [ROADMAP.md](ROADMAP.md) for delivery planning.
+
+
+## SaaS administration scope clarified
+
+The product target is a true multi-tenant SaaS, not a copy of the legacy single-company application. [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) is the product source of truth.
+
+- **Implemented partially:** tenant creation, first owner membership, tenant-scoped roles/permissions schema and selected tenant context.
+- **Not yet implemented/verified:** separate Platform Super Admin authorization and administration UI; complete Company Admin self-service for users, custom roles and permission grants; invitations; tenant preferences; category/model/custom-field configuration; plans and server-enforced entitlements; full cross-tenant authorization regression suite.
+- The first registration role is a tenant owner, not a Platform Super Admin.
+- The existing tenant-aware schema and route checks are a foundation only; successful build, generated Prisma client, migrations, DB-backed integration tests and CI remain to be verified.
+
+Do not claim that platform/company administration or full SaaS security is complete until the outstanding tasks have been implemented and accepted against the product requirements.
