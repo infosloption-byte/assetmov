@@ -152,10 +152,17 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Tenant onboarding flow after registration: profile, location hierarchy, categories/custom fields, members/roles and import entry point.
 - [ ] Company Admin self-service screens for nested location types, membership/location scopes, custom roles and tenant master data.
 - [ ] Platform-versus-tenant authorization tests and audited support-access controls.
+- [ ] Define versioned, data-driven plans, feature entitlements and typed limit records editable by Platform Super Admin.
+- [ ] Add the shared server-side plan/entitlement/quota service and standard FEATURE_REQUIRED / LIMIT_REACHED API errors.
+- [ ] Enforce quotas across API, bulk actions, imports, uploads, exports, reports, scheduled work and background jobs.
+- [ ] Add concurrency-safe usage counters/reservations, idempotent async processing and usage reconciliation.
+- [ ] Add Company Admin usage/billing view with resource counts, caps, billing-period usage, warning thresholds and upgrade path.
+- [ ] Add configurable trial expiry, payment grace, past-due, suspension, cancellation and reactivation policies.
+- [ ] Implement safe upgrade/downgrade behavior, including preserving records when current usage exceeds the new plan.
+- [ ] Add entitlement/limit tests for boundary values, parallel requests, tenant isolation, retries, overrides and billing transitions.
 - [ ] Tenant lifecycle workflow and usage/quota enforcement.
-- [ ] Subscription/plan/entitlement models and platform admin screens.
 - [ ] Payment provider integration, signed webhooks and idempotency.
-- [ ] Trial, plan limits, upgrade/downgrade, cancellation and grace states.
+- [ ] Trial, plan limits, upgrade/downgrade, cancellation and grace states (specification: [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md)).
 - [ ] Email/in-app notifications and template management.
 - [ ] Dependency/security scans and threat model review.
 - [ ] DB backup/restore drill, retention and disaster recovery procedures.
@@ -178,7 +185,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## Product architecture rule
 
-The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md). This checklist must be interpreted through its Platform Super Admin / Company Admin boundary. No company-owned feature is complete without tenant isolation, tenant-configurable data, server-side permissions, location scope where relevant and tests.
+The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md); subscription enforcement details are in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). This checklist must be interpreted through its Platform Super Admin / Company Admin boundary. No company-owned feature is complete without tenant isolation, tenant-configurable data, server-side permissions, location scope where relevant and tests.
 
 ## Suggested next pull request
 
