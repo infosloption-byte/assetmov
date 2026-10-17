@@ -62,7 +62,8 @@ function LocationsPage({
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set("q", search.trim());
-      const query = params.size ? "?" + params.toString() : "";
+      const encodedParams = params.toString();
+      const query = encodedParams ? "?" + encodedParams : "";
       const response = await fetch(apiBaseUrl + "/locations" + query, {
         credentials: "include",
         headers: { "X-Tenant-Id": tenantId },
