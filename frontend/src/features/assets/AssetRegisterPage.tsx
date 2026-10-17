@@ -23,6 +23,8 @@ interface AssetSummary {
   purchaseCost: string | number | null;
   purchasedAt: string | null;
   warrantyEnd: string | null;
+  accountCode?: string | null;
+  purchaseOrderNumber?: string | null;
   currentLocationId: string | null;
   currentLocation: LocationSummary | null;
   model?: { id: string; name: string; category?: { name: string } } | null;
@@ -96,9 +98,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [selectedAsset, setSelectedAsset] = useState<AssetSummary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [editingAsset, setEditingAsset] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const canCreate = permissions.includes("asset.create");
   const canReadLocations = permissions.includes("location.read");
+  const canEditFinancial = permissions.includes("asset.financial.update");
 
   const loadAssets = useCallback(async (signal?: AbortSignal) => {
     if (!tenantId) {
@@ -178,6 +184,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     if (!tenantId) return;
     setDetailLoading(true);
     setDetailError("");
+    setEditingAsset(false);
+    setEditError("");
     setSelectedAsset(null);
 
     try {
@@ -248,6 +256,81 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       setCreateError(createLoadError instanceof Error ? createLoadError.message : "Could not register the asset.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveAssetEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !selectedAsset || editSaving) return;
+
+    if (!csrfToken) {
+      setEditError("Your security token is missing. Sign in again and retry.");
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError("");
+    const formData = new FormData(event.currentTarget);
+    const body: Record<string, string | number> = {
+      title: String(formData.get("title") ?? "").trim(),
+    };
+
+    const optionalFields = ["assetNumber", "serialNumber", "description", "notes"] as const;
+    for (const field of optionalFields) {
+      const value = String(formData.get(field) ?? "").trim();
+      if (value) body[field] = value;
+    }
+
+    if (canEditFinancial) {
+      const financialTextFields = ["accountCode", "purchaseOrderNumber", "warrantyEnd"] as const;
+      for (const field of financialTextFields) {
+        const value = String(formData.get(field) ?? "").trim();
+        if (value) body[field] = value;
+      }
+
+      const purchaseCostValue = String(formData.get("purchaseCost") ?? "").trim();
+      if (purchaseCostValue) {
+        const purchaseCost = Number(purchaseCostValue);
+        if (!Number.isFinite(purchaseCost) || purchaseCost < 0) {
+          setEditError("Enter a valid non-negative purchase cost.");
+          setEditSaving(false);
+          return;
+        }
+        body.purchaseCost = purchaseCost;
+      }
+    }
+
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/" + encodeURIComponent(selectedAsset.id), {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": tenantId,
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        data?: AssetSummary;
+        error?: { message?: string };
+      };
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error?.message ?? "Could not update this asset.");
+      }
+
+      setSelectedAsset({
+        ...payload.data,
+        transactions: selectedAsset.transactions,
+        serviceRecords: selectedAsset.serviceRecords,
+      });
+      setEditingAsset(false);
+      setSuccessMessage("Asset details updated.");
+      await loadAssets();
+    } catch (updateError) {
+      setEditError(updateError instanceof Error ? updateError.message : "Could not update this asset.");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -343,10 +426,45 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       {(detailLoading || selectedAsset || detailError) && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setSelectedAsset(null); setDetailError(""); } }}>
           <section className="asset-modal asset-detail-modal" role="dialog" aria-modal="true" aria-labelledby="assetDetailTitle">
-            <div className="asset-modal-heading"><div><span className="module-tag">ASSET PROFILE</span><h2 id="assetDetailTitle">{selectedAsset?.title ?? (detailLoading ? "Loading asset…" : "Asset details")}</h2>{selectedAsset && <p>{selectedAsset.inventoryNumber}</p>}</div><button type="button" className="modal-close" aria-label="Close details" onClick={() => { setSelectedAsset(null); setDetailError(""); }}>×</button></div>
+            <div className="asset-modal-heading">
+              <div><span className="module-tag">ASSET PROFILE</span><h2 id="assetDetailTitle">{selectedAsset?.title ?? (detailLoading ? "Loading asset…" : "Asset details")}</h2>{selectedAsset && <p>{selectedAsset.inventoryNumber}</p>}</div>
+              <div className="asset-modal-heading-actions">
+                {selectedAsset && permissions.includes("asset.update") && !editingAsset && <button type="button" className="topbar-button ghost" onClick={() => { setEditingAsset(true); setEditError(""); }}>Edit details</button>}
+                {selectedAsset && editingAsset && <button type="button" className="topbar-button ghost" onClick={() => { setEditingAsset(false); setEditError(""); }}>Cancel edit</button>}
+                <button type="button" className="modal-close" aria-label="Close details" onClick={() => { setSelectedAsset(null); setDetailError(""); setEditingAsset(false); }}>×</button>
+              </div>
+            </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading asset history…</div>}
             {detailError && <div className="asset-inline-error" role="alert">{detailError}</div>}
-            {selectedAsset && (
+            {selectedAsset && (editingAsset ? (
+              <form className="asset-edit-form" onSubmit={(event) => void saveAssetEdit(event)}>
+                <label htmlFor="editAssetTitle">Asset name <span>*</span></label>
+                <input id="editAssetTitle" name="title" required maxLength={191} defaultValue={selectedAsset.title} />
+                <div className="asset-form-two-col">
+                  <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} defaultValue={selectedAsset.assetNumber ?? ""} /></div>
+                  <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} defaultValue={selectedAsset.serialNumber ?? ""} /></div>
+                </div>
+                <label htmlFor="editDescription">Description</label>
+                <textarea id="editDescription" name="description" rows={3} maxLength={20000} defaultValue={selectedAsset.description ?? ""} />
+                <label htmlFor="editNotes">Notes</label>
+                <textarea id="editNotes" name="notes" rows={3} maxLength={20000} defaultValue={selectedAsset.notes ?? ""} />
+                {canEditFinancial && (
+                  <>
+                    <div className="asset-edit-section-label">Financial and warranty details</div>
+                    <div className="asset-form-two-col">
+                      <div><label htmlFor="editPurchaseCost">Purchase cost</label><input id="editPurchaseCost" name="purchaseCost" type="number" min="0" step="0.01" defaultValue={selectedAsset.purchaseCost == null ? "" : String(selectedAsset.purchaseCost)} /></div>
+                      <div><label htmlFor="editAccountCode">Account code</label><input id="editAccountCode" name="accountCode" maxLength={100} defaultValue={selectedAsset.accountCode ?? ""} /></div>
+                    </div>
+                    <div className="asset-form-two-col">
+                      <div><label htmlFor="editPurchaseOrder">Purchase order</label><input id="editPurchaseOrder" name="purchaseOrderNumber" maxLength={191} defaultValue={selectedAsset.purchaseOrderNumber ?? ""} /></div>
+                      <div><label htmlFor="editWarrantyEnd">Warranty end</label><input id="editWarrantyEnd" name="warrantyEnd" type="date" defaultValue={selectedAsset.warrantyEnd?.slice(0, 10) ?? ""} /></div>
+                    </div>
+                  </>
+                )}
+                {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
+                <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => { setEditingAsset(false); setEditError(""); }}>Cancel</button><button className="primary-button" type="submit" disabled={editSaving}>{editSaving ? "Saving…" : "Save changes"} {!editSaving && <span>↗</span>}</button></div>
+              </form>
+            ) : selectedAsset ? (
               <>
                 <div className="asset-detail-grid">
                   <Detail label="Status"><span className={"asset-status-badge " + selectedAsset.status.toLowerCase().replaceAll("_", "-")}>{statusLabel(selectedAsset.status)}</span></Detail>
@@ -368,7 +486,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   ) : <p className="asset-detail-empty">No lifecycle events were returned for this asset.</p>}
                 </div>
               </>
-            )}
+            ) : null)}
           </section>
         </div>
       )}
