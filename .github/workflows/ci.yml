@@ -16,7 +16,7 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: mysql://assetmov:assetmov_dev_only_change_me@127.0.0.1:3307/assetmov
-      FRONTEND_ORIGIN: http://localhost:5173
+      FRONTEND_ORIGIN: http://localhost:5176
     steps:
       - name: Checkout
         uses: actions/checkout@v4
