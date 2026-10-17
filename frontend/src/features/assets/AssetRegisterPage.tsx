@@ -55,6 +55,7 @@ interface AssetPageProps {
   tenantId: string | null;
   csrfToken: string | null;
   permissions: string[];
+  allLocationsAccess: boolean;
 }
 
 function getErrorMessage(payload: ApiErrorPayload, fallback: string): string {
@@ -79,7 +80,7 @@ function statusLabel(status: AssetStatus): string {
   return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps) {
+function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAccess }: AssetPageProps) {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,7 +324,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps)
               </div>
               <div className="asset-form-two-col">
                 <div><label htmlFor="currentLocationId">Current location</label>
-                  <select id="currentLocationId" name="currentLocationId" defaultValue="">
+                  <select id="currentLocationId" name="currentLocationId" defaultValue="" required={!allLocationsAccess}>
                     <option value="">No location selected</option>
                     {locations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
                   </select>
@@ -332,7 +333,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions }: AssetPageProps)
               </div>
               <label htmlFor="assetNotes">Notes</label><textarea id="assetNotes" name="notes" rows={3} maxLength={20000} placeholder="Optional description or notes" />
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
-              {!locationsError && locations.length === 0 && <p className="asset-inline-hint">If your role is restricted to selected locations, choose a location to register this asset or ask an administrator to grant location access.</p>}
+              {!allLocationsAccess && !locationsError && locations.length === 0 && <p className="asset-inline-hint">This role needs an accessible location to register an asset. Ask an administrator to grant location access or create a location.</p>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save asset"} {!saving && <span>↗</span>}</button></div>
             </form>
           </section>
