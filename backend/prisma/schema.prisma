@@ -82,6 +82,16 @@ enum ServiceStatus {
   CANCELLED
 }
 
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  GRACE
+  CANCEL_AT_PERIOD_END
+  EXPIRED
+  SUSPENDED
+}
+
 model Tenant {
   id                String               @id @default(cuid())
   name              String               @db.VarChar(191)
@@ -109,6 +119,7 @@ model Tenant {
   softwareLicenses  SoftwareLicense[]
   assetTags         AssetTag[]
   licenseAssignments LicenseAssignment[]
+  subscription      TenantSubscription?
 }
 
 model User {
@@ -129,6 +140,7 @@ model User {
   decidedRequests   AssetRequest[]      @relation("RequestDecider")
   createdTransfers  AssetTransfer[]     @relation("TransferCreator")
   resolvedTransferLines AssetTransferLine[] @relation("TransferLineResolver")
+  platformAuditEvents   PlatformAuditLog[]   @relation("PlatformAuditActor")
 }
 
 model Session {
@@ -605,4 +617,60 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, actorUserId, createdAt])
+}
+
+model SubscriptionPlan {
+  id                String               @id @default(cuid())
+  key               String               @unique @db.VarChar(60)
+  name              String               @db.VarChar(100)
+  description       String?              @db.Text
+  maxAssets         Int?
+  maxActiveUsers    Int?
+  storageLimitBytes BigInt?
+  trialDurationDays Int                  @default(14)
+  isActive          Boolean              @default(true)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  subscriptions     TenantSubscription[]
+
+  @@index([isActive, name])
+}
+
+model TenantSubscription {
+  id                    String             @id @default(cuid())
+  tenantId              String             @unique
+  planId                String
+  status                SubscriptionStatus @default(TRIALING)
+  trialStartedAt        DateTime?
+  trialEndsAt           DateTime?
+  currentPeriodStartsAt DateTime?
+  currentPeriodEndsAt   DateTime?
+  cancelAtPeriodEnd     Boolean            @default(false)
+  cancelledAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan                  SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId, status])
+  @@index([status, trialEndsAt])
+}
+
+model PlatformAuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String   @db.VarChar(100)
+  entityType  String   @db.VarChar(100)
+  entityId    String?  @db.VarChar(191)
+  reason      String   @db.Text
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?  @db.VarChar(64)
+  userAgent   String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("PlatformAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
 }
