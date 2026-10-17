@@ -58,6 +58,7 @@ Use PowerShell's `Copy-Item` instead of `cp` if preferred. Local MySQL uses host
 
 ## Product and engineering documents
 
+- [SaaS product requirements and administration boundaries](docs/SAAS_PRODUCT_REQUIREMENTS.md)
 - [Legacy feature audit and process flows](docs/LEGACY_FEATURE_AUDIT.md)
 - [Architecture and SaaS security](docs/ARCHITECTURE.md)
 - [Authentication and workspace context](docs/AUTHENTICATION.md)
@@ -71,10 +72,12 @@ The GitHub Actions runs observed during the last review reported `startup_failur
 
 ## SaaS principles
 
-1. Tenant/customer data must be isolated on every request and database query.
-2. Authorization is enforced by the API, not only by hiding frontend controls.
-3. Asset movements are transaction records; important lifecycle changes are auditable.
-4. Imports must support validation previews, row-level errors and reconciliation.
-5. Legacy bank-specific behavior should be configurable, not hard-coded into the shared product.
+1. AssetMov is a multi-tenant SaaS: each registered company is its own tenant/workspace.
+2. Platform Super Admin operates the SaaS; Company Admin manages users, custom roles/permission grants, location hierarchy, categories, custom fields, settings and workflows only inside their company.
+3. Platform permissions are separate from tenant roles. Company Admin must never be able to self-grant platform access.
+4. Tenant isolation and API-side authorization are mandatory for every read/write, search, export, upload/download, background job and report.
+5. Company-specific master data and custom fields are configuration, not global hard-coded values.
+6. Plan entitlements and user permissions are separate checks; important business actions are audited.
+7. Asset movements remain transaction records, and imports must support validation previews, row-level errors and reconciliation.
 
-The old application is a reference for workflows and field requirements, not a source to copy legacy vulnerabilities, obsolete dependencies, database credentials, historic user accounts or customer records into AssetMov.
+[SAAS_PRODUCT_REQUIREMENTS.md](docs/SAAS_PRODUCT_REQUIREMENTS.md) governs future design decisions. The old application is a reference for workflows and field requirements, not a source to copy legacy vulnerabilities, obsolete dependencies, database credentials, historic user accounts or customer records into AssetMov.
