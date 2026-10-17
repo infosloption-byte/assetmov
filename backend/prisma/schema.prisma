@@ -205,6 +205,7 @@ model Employee {
   homeLocation   Location? @relation("EmployeeHomeLocation", fields: [tenantId, homeLocationId], references: [tenantId, id], onDelete: Restrict)
   sentTransactions AssetTransaction[] @relation("TransactionFromEmployee")
   receivedTransactions AssetTransaction[] @relation("TransactionToEmployee")
+  licenseAssignments LicenseAssignment[] @relation("LicenseAssignee")
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, id])
