@@ -28,7 +28,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
 - [ ] Add tenant admin UI for member/role assignment and permission editing.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
-- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role.
+- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is drafted on `feat/platform-subscription-foundation`; remain unchecked until verified, and the UI is still outstanding.)
 - [ ] Implement tenant/company administration for company profile, settings, users and memberships.
 - [ ] Add tenant admin UI to create/update/deactivate custom roles and assign permission-catalogue actions.
 - [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
@@ -148,7 +148,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## K. SaaS readiness and operations — P1/P2
 
-- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration.
+- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration. (Schema/API source is drafted on `feat/platform-subscription-foundation`; remain unchecked until migration, build and DB tests pass.)
 - [ ] Add dedicated Platform Super Admin plan management and tenant plan assignment screens.
 - [ ] Add Company Admin plan/usage view showing asset count, active users, storage usage and trial/renewal information.
 - [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior.
