@@ -80,16 +80,16 @@ Do not claim that platform/company administration or full SaaS security is compl
 
 ## Subscription guardrails — specified, not implemented
 
-The target plan matrix, lifecycle policy, usage quota rules, warning behavior, upgrade/downgrade handling and test requirements are documented in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). The proposed Trial, Starter, Growth, Business and Enterprise quantities are planning defaults only, not finalized commercial terms.
+The simplified subscription rules are documented in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). The only plan dimensions are asset limit, active-user limit, storage allowance and trial duration. Proposed values remain planning defaults, not finalized commercial terms.
 
 Still outstanding:
-- Plan, plan-feature, typed-limit and tenant-subscription schema plus migration.
-- Separate tenant subscription/payment lifecycle from TenantStatus.
-- Platform Super Admin plan administration and version/effective-date controls.
-- Shared server-side entitlement and quota service.
-- Race-safe counters/reservations and periodic usage reconciliation.
-- Company Admin usage/plan view and warning notifications.
-- Trial, billing failure/grace, cancellation, downgrade and reactivation workflows.
-- Database-backed tests proving API, imports, uploads, exports and background jobs cannot bypass plan limits.
+- Plan/subscription schema and migration.
+- Platform Super Admin plan controls and tenant plan assignment.
+- Company Admin usage view.
+- Server-side asset, active-user and storage enforcement with concurrency protection.
+- Server-side trial expiry.
+- Safe behavior for reached limits and downgrades.
+- Billing lifecycle/provider integration if selected.
+- DB-backed tests for limits, trial expiry, concurrency and cross-tenant isolation.
 
-Do not describe subscription-based blocking or limit enforcement as implemented until the checks are enforced server-side and verified in successful CI.
+Do not describe subscription limits as implemented until they are enforced server-side and verified in successful CI.
