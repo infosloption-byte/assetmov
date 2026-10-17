@@ -211,7 +211,7 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         data: {
           userId: user.id,
           tokenHash: hashToken(rawToken),
-          csrfTokenHash: hashToken(csrfToken),
+          csrfToken,
           expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
           lastSeenAt: now,
           ipAddress: request.ip?.slice(0, 64),
