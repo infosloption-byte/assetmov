@@ -21,7 +21,7 @@ Registration requires an organization name and slug, a person's name, an email a
 - Sessions expire after 8 hours. Inactive/disabled users cannot use existing sessions.
 - The session cookie uses SameSite=Lax and is Secure in production.
 - Mutating requests that carry the session cookie must come from the configured frontend origin.
-- CSRF tokens are returned by register/login or refreshed through `GET /api/auth/csrf`; send the token in the `X-CSRF-Token` header for logout and future authenticated write routes.
+- A random CSRF token is stored in the server-side session and returned by register/login or `GET /api/auth/csrf`; send it in the `X-CSRF-Token` header for logout and future authenticated write routes. The token remains stable across tabs for the lifetime of that session.
 - Authentication endpoints are rate limited. API errors use a generic credential message to avoid disclosing whether an email address exists.
 
 ## Still required before production
