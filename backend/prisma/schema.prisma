@@ -459,6 +459,7 @@ model LicenseAssignment {
   unassignedAt         DateTime?
   tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   softwareLicense      SoftwareLicense @relation(fields: [tenantId, softwareLicenseId], references: [tenantId, id], onDelete: Cascade)
+  employee             Employee?       @relation("LicenseAssignee", fields: [tenantId, assignedToEmployeeId], references: [tenantId, id], onDelete: Restrict)
 
   @@index([tenantId, softwareLicenseId, unassignedAt])
   @@index([tenantId, assignedToEmployeeId, unassignedAt])
