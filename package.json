@@ -1,0 +1,25 @@
+{
+  "name": "assetmov",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,blue \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:frontend": "npm run dev --workspace @assetmov/frontend",
+    "dev:backend": "npm run dev --workspace @assetmov/backend",
+    "build": "npm run build --workspace @assetmov/frontend && npm run build --workspace @assetmov/backend",
+    "lint": "npm run lint --workspace @assetmov/frontend && npm run lint --workspace @assetmov/backend",
+    "typecheck": "npm run typecheck --workspace @assetmov/frontend && npm run typecheck --workspace @assetmov/backend",
+    "db:validate": "npm run db:validate --workspace @assetmov/backend",
+    "test": "npm test --workspace @assetmov/backend",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,css,html,prisma,md,yml,yaml}\"",
+    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx,css}\" \"backend/src/**/*.ts\" \"backend/prisma/**/*.prisma\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "prettier": "^3.6.2"
+  }
+}
