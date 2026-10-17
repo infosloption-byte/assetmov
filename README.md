@@ -59,6 +59,8 @@ npm run dev
 
 The frontend runs at http://localhost:5176 and the API runs at http://localhost:4000. Update `backend/.env` so `DATABASE_URL` matches your WAMP MySQL username, password and port. The example blank-password URL is intended for local development only.
 
+**The root command is only a workspace convenience, not an architectural requirement.** The React app and Node.js API remain separate packages with their own `package.json` files. To run them independently, open two PowerShell terminals and run `npm run dev` from `frontend/` in one and from `backend/` in the other. You can also run `npm run lint` or `npm run typecheck` within either folder to check only that package. Run `npm install` from the repository root so npm manages the workspace dependencies together.
+
 ## Product and engineering documents
 
 - [SaaS product requirements and administration boundaries](docs/SAAS_PRODUCT_REQUIREMENTS.md)
