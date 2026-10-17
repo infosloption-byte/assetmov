@@ -1,5 +1,6 @@
 export interface AuthMembership {
   id: string;
+  allLocationsAccess: boolean;
   role: {
     id: string;
     key: string;
