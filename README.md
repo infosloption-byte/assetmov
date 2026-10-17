@@ -27,6 +27,7 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 - Workspace context endpoint at `GET /api/workspace/context`.
 - Location list/search/create API and frontend screen.
 - Asset list/search/status filtering, detail/history, creation and metadata update API/UI.
+- Transfer dispatch and receipt-decision API/UI, including partial acceptance, rejection reasons, asset transaction history and audit events.
 - Tenant-scoped asset queries, inventory-number uniqueness, initial registration transaction and audit events.
 - Separate permission check for financial/warranty fields.
 - Prisma model foundation for movements, requests, service, software licenses, asset tags and audit logs.
@@ -34,7 +35,7 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 
 ## Current feature gaps
 
-Transfer dispatch/receipt and GRN processing, assignment/unassignment, request approval, maintenance workflows, software seat management, barcode printing, physical audits, reports/exports, imports, employee/custodian management, password reset/email verification, SaaS billing, and production operations remain to be implemented. Dashboard metrics are still placeholders.
+Printable GRN/receipt documents, assignment/unassignment, request approval, maintenance workflows, software seat management, barcode printing, physical audits, reports/exports, imports, employee/custodian management, password reset/email verification, SaaS billing, and production operations remain to be implemented. The transfer code still needs DB-backed integration and concurrency tests. Dashboard metrics are still placeholders.
 
 ## Start locally
 
