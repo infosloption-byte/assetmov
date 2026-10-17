@@ -31,6 +31,8 @@ This document separates source code committed from build/test verification. A fe
 - Asset metadata/financial update endpoint; financial fields require `asset.financial.update`.
 - Asset lifecycle transition guard and unit tests.
 - Location-aware asset visibility/creation and audit history on asset writes.
+- Transfer dispatch and receiving-decision endpoints, with tenant/location scope checks, per-line accept/reject decisions, transactional asset state changes, audit history and concurrency guards.
+- Transfer list/detail/dispatch/receipt UI with asset selection, partial decisions and rejection reasons.
 
 ## Verification not yet confirmed
 
