@@ -327,9 +327,7 @@ platformRouter.patch(
           include: { plan: true },
         });
         const now = new Date();
-        const trialEndsAt = mode === "trial"
-          ? new Date(now.getTime() + plan.trialDurationDays * 24 * 60 * 60 * 1000)
-          : undefined;
+        const trialEndsAt = new Date(now.getTime() + plan.trialDurationDays * 24 * 60 * 60 * 1000);
         const status = mode === "trial" ? "TRIALING" : mode === "activate" ? "ACTIVE" : "SUSPENDED";
 
         const subscription = await tx.tenantSubscription.upsert({
