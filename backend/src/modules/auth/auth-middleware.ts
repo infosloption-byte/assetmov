@@ -60,7 +60,7 @@ export async function requireSession(
 
     request.auth = {
       sessionId: session.id,
-      csrfTokenHash: session.csrfTokenHash,
+      csrfToken: session.csrfToken,
       userId: session.userId,
     };
     await prisma.session.update({
