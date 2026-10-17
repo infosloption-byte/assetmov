@@ -191,6 +191,12 @@ platformRouter.patch(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const planId = request.params.id;
+      if (typeof planId !== "string" || planId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid subscription plan ID is required.");
+        return;
+      }
+
       const parsed = planUpdateSchema.safeParse(request.body);
       if (!parsed.success) {
         sendError(response, 400, "VALIDATION_ERROR", "Provide valid plan fields and an audit reason.");
@@ -199,7 +205,7 @@ platformRouter.patch(
 
       const { reason, ...changes } = parsed.data;
       const plan = await prisma.$transaction(async (tx) => {
-        const current = await tx.subscriptionPlan.findUnique({ where: { id: request.params.id } });
+        const current = await tx.subscriptionPlan.findUnique({ where: { id: planId } });
         if (!current) throw new Error("PLAN_NOT_FOUND");
 
         const updated = await tx.subscriptionPlan.update({
@@ -307,6 +313,12 @@ platformRouter.patch(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const targetTenantId = request.params.tenantId;
+      if (typeof targetTenantId !== "string" || targetTenantId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid tenant ID is required.");
+        return;
+      }
+
       const parsed = subscriptionChangeSchema.safeParse(request.body);
       if (!parsed.success) {
         sendError(response, 400, "VALIDATION_ERROR", "Choose a plan, an allowed action and an audit reason.");
@@ -315,7 +327,7 @@ platformRouter.patch(
 
       const { planId, mode, reason } = parsed.data;
       const result = await prisma.$transaction(async (tx) => {
-        const tenant = await tx.tenant.findUnique({ where: { id: request.params.tenantId } });
+        const tenant = await tx.tenant.findUnique({ where: { id: targetTenantId } });
         if (!tenant) throw new Error("TENANT_NOT_FOUND");
 
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: planId } });
