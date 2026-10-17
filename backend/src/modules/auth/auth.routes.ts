@@ -76,6 +76,7 @@ function safeUser(user: {
   isPlatformAdmin: boolean;
   memberships: Array<{
     id: string;
+    allLocationsAccess: boolean;
     role: { id: string; key: string; name: string };
     tenant: { id: string; name: string; slug: string; status: string };
   }>;
@@ -88,6 +89,7 @@ function safeUser(user: {
     isPlatformAdmin: user.isPlatformAdmin,
     memberships: user.memberships.map((membership) => ({
       id: membership.id,
+      allLocationsAccess: membership.allLocationsAccess,
       role: {
         id: membership.role.id,
         key: membership.role.key,
@@ -203,6 +205,7 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
           tenantId: tenant.id,
           userId: user.id,
           roleId: ownerRole.id,
+          allLocationsAccess: true,
         },
         include: { tenant: true, role: true },
       });
@@ -244,6 +247,7 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         isPlatformAdmin: false,
         memberships: [{
           id: result.membership.id,
+          allLocationsAccess: result.membership.allLocationsAccess,
           role: {
             id: result.membership.role.id,
             key: result.membership.role.key,
