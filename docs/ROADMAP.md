@@ -107,18 +107,19 @@ The roadmap combines reusable legacy capabilities with SaaS foundations missing 
 ## Phase 9 — Notifications, operations and SaaS launch (P1/P2)
 
 - Email notifications and in-app notification centre.
-- Data-driven, versioned subscription plans and feature entitlements configured by Platform Super Admin.
-- Resource and period limits for assets, users, locations, roles, custom fields, file storage, imports, exports and API usage as appropriate.
-- Shared server-side feature/quota enforcement across UI/API, bulk actions, files, reports, exports and background jobs.
-- Usage dashboard and warning thresholds, concurrency-safe quota accounting and reconciliation.
-- Subscription lifecycle and billing provider, signed/idempotent webhooks, trials, payment grace, suspension/reactivation, upgrade/downgrade/cancel flows.
-- Safe over-limit behavior preserving data after downgrade; documented export and retention policy.
-- Full entitlement/quota tests for boundary values, concurrent consumption, tenant isolation and billing transitions.
-- See [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md) for proposed default plan limits.
-- Security review, dependency scanning, backups and restore drill, observability, rate limits, retention policy and incident playbooks.
+- Simple, data-driven subscription plans configurable by Platform Super Admin.
+- Keep plan dimensions limited to asset cap, active-user cap, storage cap and trial duration.
+- Enforce caps server-side for asset creation/imports, user invitations/reactivation and file uploads.
+- Company Admin usage view and warnings for asset count, active users, storage use and trial expiry.
+- Concurrency-safe counting, upload reservations and usage reconciliation.
+- Subscription and billing lifecycle, signed/idempotent payment webhooks if a provider is adopted, grace, cancellation and reactivation.
+- Safe over-limit downgrade behavior that preserves existing data.
+- Tests for quota boundaries, concurrency, tenant isolation, trial expiry and downgrade-over-limit behavior.
+- See [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md) for proposed defaults.
+- Security review, dependency scanning, backups and restore drill, observability, abuse rate limits, retention policy and incident playbooks.
 - Production deployment, managed secrets, monitoring, runbooks and user help content.
 
-**Exit criteria:** Production onboarding, support and recovery processes are documented and tested.
+**Exit criteria:** Subscription limits cannot be bypassed, company data is preserved at limits, and production onboarding/support/recovery processes are documented and tested.
 
 ## Phase 10 — Legacy migration and adoption (P1 before first real customer cutover)
 
