@@ -197,6 +197,7 @@ function TransferPage({
   useEffect(() => {
     if (!tenantId || !canReadLocations) {
       setLocations([]);
+      setLocationsLoading(false);
       setLocationsError(canReadLocations ? "" : "Your role does not have permission to view locations.");
       return;
     }
@@ -375,7 +376,7 @@ function TransferPage({
 
       const transfer = payload.data;
       setSelectedTransfer(transfer);
-      setDecisions(Object.fromEntries(transfer.lines.map((line) => [line.id, ""])));
+      setDecisions(Object.fromEntries(transfer.lines.map((line) => [line.id, ""])) as Record<string, "" | TransferDecision>);
       setDecisionReasons(Object.fromEntries(transfer.lines.map((line) => [line.id, line.decisionReason ?? ""])));
     } catch (detailLoadError) {
       setDetailError(detailLoadError instanceof Error ? detailLoadError.message : "Could not load transfer details.");
@@ -434,7 +435,7 @@ function TransferPage({
       if (!response.ok || !payload.data) throw new Error(getApiError(payload, "Could not save transfer receipt decisions."));
 
       setSelectedTransfer(payload.data);
-      setDecisions(Object.fromEntries(payload.data.lines.map((line) => [line.id, ""])));
+      setDecisions(Object.fromEntries(payload.data.lines.map((line) => [line.id, ""])) as Record<string, "" | TransferDecision>);
       setDecisionReasons(Object.fromEntries(payload.data.lines.map((line) => [line.id, line.decisionReason ?? ""])));
       setReceiptSuccess("Receipt decisions saved.");
       setSuccess(`Transfer ${payload.data.transferNumber} updated.`);
