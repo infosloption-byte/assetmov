@@ -160,7 +160,6 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Add configurable trial expiry, payment grace, past-due, suspension, cancellation and reactivation policies.
 - [ ] Implement safe upgrade/downgrade behavior, including preserving records when current usage exceeds the new plan.
 - [ ] Add entitlement/limit tests for boundary values, parallel requests, tenant isolation, retries, overrides and billing transitions.
-- [ ] Tenant lifecycle workflow and usage/quota enforcement.
 - [ ] Payment provider integration, signed webhooks and idempotency.
 - [ ] Trial, plan limits, upgrade/downgrade, cancellation and grace states (specification: [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md)).
 - [ ] Email/in-app notifications and template management.
