@@ -34,11 +34,11 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
 - [ ] Add invitations, membership activation/deactivation and tenant-scoped session revocation.
 - [ ] Add platform tenant lifecycle controls (trial/active/suspended/cancelled), with reasons and audit.
-- [ ] Keep plan entitlements independent from role permissions and enforce both server-side.
+- [ ] Keep subscription state and asset/user/storage limits separate from role permissions; enforce each relevant rule server-side.
 - [ ] Add tests proving platform routes reject company admins and company routes never allow cross-tenant escalation.
 - [ ] Extend audit events to all membership, role, session-revocation and security administration changes (tenant creation and asset/location writes are currently audited).
 - [ ] Write cross-tenant IDOR tests for list/detail/create/update/delete/search/export/upload/download.
-- [ ] Maintain a documented authorization matrix for platform roles, tenant roles, permissions, location scope and plan entitlements.
+- [ ] Maintain a documented authorization matrix for platform roles, tenant roles, permissions, location scope and subscription status/resource limits.
 - [ ] Add two-tenant regression fixtures and require isolation tests for every new module.
 - [ ] Add authorization matrix and seed development roles/data.
 
