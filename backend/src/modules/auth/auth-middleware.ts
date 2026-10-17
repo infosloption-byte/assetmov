@@ -79,7 +79,7 @@ export function requireCsrf(
   next: NextFunction,
 ): void {
   const suppliedToken = request.get("x-csrf-token");
-  const expectedHash = request.auth?.csrfTokenHash;
+  const expectedToken = request.auth?.csrfToken;
 
   if (!suppliedToken || !expectedHash || !hashesMatch(hashToken(suppliedToken), expectedHash)) {
     response.status(403).json({
