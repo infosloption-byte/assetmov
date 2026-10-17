@@ -93,7 +93,7 @@ enum SubscriptionStatus {
 }
 
 model Tenant {
-  id                String               @id @default(cuid())
+  id                String @id @default(cuid()) @db.VarChar(36)
   name              String               @db.VarChar(191)
   slug              String               @unique @db.VarChar(100)
   status            TenantStatus         @default(TRIAL)
@@ -123,7 +123,7 @@ model Tenant {
 }
 
 model User {
-  id              String             @id @default(cuid())
+  id              String @id @default(cuid()) @db.VarChar(36)
   email           String             @unique @db.VarChar(191)
   passwordHash    String             @db.VarChar(255)
   fullName        String             @db.VarChar(191)
@@ -144,8 +144,8 @@ model User {
 }
 
 model Session {
-  id             String    @id @default(cuid())
-  userId         String
+  id             String @id @default(cuid()) @db.VarChar(36)
+  userId         String @db.VarChar(36)
   tokenHash      String    @unique @db.Char(64)
   csrfToken      String    @db.Char(43)
   expiresAt      DateTime
@@ -160,10 +160,10 @@ model Session {
 }
 
 model Membership {
-  id        String         @id @default(cuid())
-  tenantId  String
-  userId    String
-  roleId    String
+  id        String @id @default(cuid()) @db.VarChar(36)
+  tenantId  String @db.VarChar(36)
+  userId    String @db.VarChar(36)
+  roleId    String @db.VarChar(36)
   isActive            Boolean               @default(true)
   allLocationsAccess  Boolean               @default(false)
   createdAt           DateTime              @default(now())
@@ -180,10 +180,10 @@ model Membership {
 }
 
 model MembershipLocation {
-  id           String     @id @default(cuid())
-  tenantId     String
-  membershipId String
-  locationId   String
+  id           String @id @default(cuid()) @db.VarChar(36)
+  tenantId     String @db.VarChar(36)
+  membershipId String @db.VarChar(36)
+  locationId   String @db.VarChar(36)
   canManage    Boolean    @default(false)
   createdAt    DateTime   @default(now())
   tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -195,8 +195,8 @@ model MembershipLocation {
 }
 
 model Role {
-  id          String           @id @default(cuid())
-  tenantId    String
+  id          String @id @default(cuid()) @db.VarChar(36)
+  tenantId    String @db.VarChar(36)
   key         String           @db.VarChar(100)
   name        String           @db.VarChar(191)
   description String?          @db.Text
@@ -213,15 +213,15 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(cuid())
+  id          String @id @default(cuid()) @db.VarChar(36)
   key         String           @unique @db.VarChar(120)
   description String?          @db.Text
   assignments RolePermission[]
 }
 
 model RolePermission {
-  roleId       String
-  permissionId String
+  roleId       String @db.VarChar(36)
+  permissionId String @db.VarChar(36)
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
@@ -230,9 +230,9 @@ model RolePermission {
 }
 
 model Location {
-  id        String     @id @default(cuid())
-  tenantId  String
-  parentId  String?
+  id        String @id @default(cuid()) @db.VarChar(36)
+  tenantId  String @db.VarChar(36)
+  parentId  String? @db.VarChar(36)
   name      String     @db.VarChar(191)
   code      String     @db.VarChar(100)
   type      String     @default("BRANCH") @db.VarChar(60)
@@ -258,14 +258,14 @@ model Location {
 }
 
 model Employee {
-  id             String   @id @default(cuid())
-  tenantId       String
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
   employeeCode   String   @db.VarChar(100)
   firstName      String   @db.VarChar(100)
   lastName       String   @db.VarChar(100)
   email          String?  @db.VarChar(191)
   phone          String?  @db.VarChar(50)
-  homeLocationId String?
+  homeLocationId String? @db.VarChar(36)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -283,8 +283,8 @@ model Employee {
 }
 
 model AssetCategory {
-  id          String      @id @default(cuid())
-  tenantId    String
+  id          String @id @default(cuid()) @db.VarChar(36)
+  tenantId    String @db.VarChar(36)
   name        String      @db.VarChar(191)
   code        String      @db.VarChar(100)
   description String?     @db.Text
@@ -301,9 +301,9 @@ model AssetCategory {
 }
 
 model AssetModel {
-  id          String        @id @default(cuid())
-  tenantId    String
-  categoryId  String
+  id          String @id @default(cuid()) @db.VarChar(36)
+  tenantId    String @db.VarChar(36)
+  categoryId  String @db.VarChar(36)
   name        String        @db.VarChar(191)
   code        String?       @db.VarChar(100)
   fieldSchema Json?
@@ -320,8 +320,8 @@ model AssetModel {
 }
 
 model Supplier {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id        String @id @default(cuid()) @db.VarChar(36)
+  tenantId  String @db.VarChar(36)
   name      String   @db.VarChar(191)
   email     String?  @db.VarChar(191)
   phone     String?  @db.VarChar(60)
@@ -339,8 +339,8 @@ model Supplier {
 }
 
 model Manufacturer {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id        String @id @default(cuid()) @db.VarChar(36)
+  tenantId  String @db.VarChar(36)
   name      String   @db.VarChar(191)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -355,18 +355,18 @@ model Manufacturer {
 }
 
 model Asset {
-  id                  String          @id @default(cuid())
-  tenantId            String
+  id                  String @id @default(cuid()) @db.VarChar(36)
+  tenantId            String @db.VarChar(36)
   inventoryNumber     String          @db.VarChar(191)
   assetNumber         String?         @db.VarChar(191)
   serialNumber        String?         @db.VarChar(191)
   title               String          @db.VarChar(191)
   description         String?         @db.Text
-  modelId             String?
-  manufacturerId      String?
-  supplierId          String?
-  currentLocationId   String?
-  assignedEmployeeId  String?
+  modelId             String? @db.VarChar(36)
+  manufacturerId      String? @db.VarChar(36)
+  supplierId          String? @db.VarChar(36)
+  currentLocationId   String? @db.VarChar(36)
+  assignedEmployeeId  String? @db.VarChar(36)
   purchaseOrderNumber String?         @db.VarChar(191)
   accountCode         String?         @db.VarChar(100)
   purchasedAt         DateTime?
@@ -402,15 +402,15 @@ model Asset {
 }
 
 model AssetTransaction {
-  id             String          @id @default(cuid())
-  tenantId       String
-  assetId        String
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
+  assetId        String @db.VarChar(36)
   eventType      AssetEventType
-  fromLocationId String?
-  toLocationId   String?
-  fromEmployeeId String?
-  toEmployeeId   String?
-  actorUserId    String?
+  fromLocationId String? @db.VarChar(36)
+  toLocationId   String? @db.VarChar(36)
+  fromEmployeeId String? @db.VarChar(36)
+  toEmployeeId   String? @db.VarChar(36)
+  actorUserId    String? @db.VarChar(36)
   notes          String?         @db.Text
   occurredAt     DateTime        @default(now())
   createdAt      DateTime        @default(now())
@@ -427,13 +427,13 @@ model AssetTransaction {
 }
 
 model AssetRequest {
-  id             String           @id @default(cuid())
-  tenantId       String
-  requestedById  String
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
+  requestedById  String @db.VarChar(36)
   requestType    AssetRequestType
   status         RequestStatus    @default(PENDING)
   businessReason String?          @db.Text
-  decidedById    String?
+  decidedById    String? @db.VarChar(36)
   decidedAt      DateTime?
   decisionReason String?          @db.Text
   createdAt      DateTime         @default(now())
@@ -449,14 +449,14 @@ model AssetRequest {
 }
 
 model AssetTransfer {
-  id                  String        @id @default(cuid())
-  tenantId            String
+  id                  String @id @default(cuid()) @db.VarChar(36)
+  tenantId            String @db.VarChar(36)
   transferNumber      String        @db.VarChar(64)
-  originLocationId    String
-  destinationLocationId String
+  originLocationId    String @db.VarChar(36)
+  destinationLocationId String @db.VarChar(36)
   status              TransferStatus @default(IN_TRANSIT)
   notes               String?       @db.Text
-  createdByUserId     String
+  createdByUserId     String @db.VarChar(36)
   dispatchedAt        DateTime      @default(now())
   completedAt         DateTime?
   createdAt           DateTime      @default(now())
@@ -475,13 +475,13 @@ model AssetTransfer {
 }
 
 model AssetTransferLine {
-  id               String            @id @default(cuid())
-  tenantId         String
-  transferId       String
-  assetId          String
+  id               String @id @default(cuid()) @db.VarChar(36)
+  tenantId         String @db.VarChar(36)
+  transferId       String @db.VarChar(36)
+  assetId          String @db.VarChar(36)
   status           TransferLineStatus @default(IN_TRANSIT)
   decisionReason   String?           @db.Text
-  resolvedByUserId String?
+  resolvedByUserId String? @db.VarChar(36)
   resolvedAt       DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -498,9 +498,9 @@ model AssetTransferLine {
 }
 
 model ServiceRecord {
-  id            String        @id @default(cuid())
-  tenantId      String
-  assetId       String
+  id            String @id @default(cuid()) @db.VarChar(36)
+  tenantId      String @db.VarChar(36)
+  assetId       String @db.VarChar(36)
   serviceNumber String        @db.VarChar(100)
   serviceType   String?       @db.VarChar(100)
   status        ServiceStatus @default(OPEN)
@@ -523,16 +523,16 @@ model ServiceRecord {
 }
 
 model SoftwareLicense {
-  id             String              @id @default(cuid())
-  tenantId       String
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
   name           String              @db.VarChar(191)
   category       String?             @db.VarChar(100)
   description    String?             @db.Text
   licenseStart   DateTime?
   licenseEnd     DateTime?
   seatCount      Int                 @default(1)
-  supplierId     String?
-  manufacturerId String?
+  supplierId     String? @db.VarChar(36)
+  manufacturerId String? @db.VarChar(36)
   isActive       Boolean             @default(true)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
@@ -548,9 +548,9 @@ model SoftwareLicense {
 }
 
 model AssetRequestItem {
-  id               String           @id @default(cuid())
-  tenantId         String
-  requestId        String
+  id               String @id @default(cuid()) @db.VarChar(36)
+  tenantId         String @db.VarChar(36)
+  requestId        String @db.VarChar(36)
   itemType         AssetRequestType
   description      String           @db.VarChar(500)
   quantity         Int              @default(1)
@@ -560,17 +560,17 @@ model AssetRequestItem {
   updatedAt        DateTime         @updatedAt
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   request          AssetRequest     @relation(fields: [tenantId, requestId], references: [tenantId, id], onDelete: Cascade)
-  softwareLicenseId String?
+  softwareLicenseId String? @db.VarChar(36)
   softwareLicense  SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, requestId])
 }
 
 model LicenseAssignment {
-  id                   String          @id @default(cuid())
-  tenantId             String
-  softwareLicenseId    String
-  assignedToEmployeeId String?
+  id                   String @id @default(cuid()) @db.VarChar(36)
+  tenantId             String @db.VarChar(36)
+  softwareLicenseId    String @db.VarChar(36)
+  assignedToEmployeeId String? @db.VarChar(36)
   deviceIdentifier     String?         @db.VarChar(191)
   referenceNumber      String?         @db.VarChar(191)
   notes                String?         @db.Text
@@ -585,9 +585,9 @@ model LicenseAssignment {
 }
 
 model AssetTag {
-  id        String   @id @default(cuid())
-  tenantId  String
-  assetId   String
+  id        String @id @default(cuid()) @db.VarChar(36)
+  tenantId  String @db.VarChar(36)
+  assetId   String @db.VarChar(36)
   code      String   @db.VarChar(191)
   tagType   String   @default("QR") @db.VarChar(30)
   createdAt DateTime @default(now())
@@ -600,12 +600,12 @@ model AssetTag {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  actorUserId String?
+  id          String @id @default(cuid()) @db.VarChar(36)
+  tenantId    String @db.VarChar(36)
+  actorUserId String? @db.VarChar(36)
   action      String   @db.VarChar(100)
   entityType  String   @db.VarChar(100)
-  entityId    String?  @db.VarChar(191)
+  entityId    String? @db.VarChar(100)
   oldData     Json?
   newData     Json?
   ipAddress   String?  @db.VarChar(64)
@@ -620,7 +620,7 @@ model AuditLog {
 }
 
 model SubscriptionPlan {
-  id                String               @id @default(cuid())
+  id                String @id @default(cuid()) @db.VarChar(36)
   key               String               @unique @db.VarChar(60)
   name              String               @db.VarChar(100)
   description       String?              @db.Text
@@ -637,9 +637,9 @@ model SubscriptionPlan {
 }
 
 model TenantSubscription {
-  id                    String             @id @default(cuid())
-  tenantId              String             @unique
-  planId                String
+  id                    String @id @default(cuid()) @db.VarChar(36)
+  tenantId              String @unique @db.VarChar(36)
+  planId                String @db.VarChar(36)
   status                SubscriptionStatus @default(TRIALING)
   trialStartedAt        DateTime?
   trialEndsAt           DateTime?
@@ -657,11 +657,11 @@ model TenantSubscription {
 }
 
 model PlatformAuditLog {
-  id          String   @id @default(cuid())
-  actorUserId String?
+  id          String @id @default(cuid()) @db.VarChar(36)
+  actorUserId String? @db.VarChar(36)
   action      String   @db.VarChar(100)
   entityType  String   @db.VarChar(100)
-  entityId    String?  @db.VarChar(191)
+  entityId    String? @db.VarChar(100)
   reason      String   @db.Text
   oldData     Json?
   newData     Json?
