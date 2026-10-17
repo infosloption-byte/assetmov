@@ -53,7 +53,7 @@ Reusable `requirePermission`, `requireAnyPermission` and `requireLocationAccess`
 
 ## Platform authority versus company authority
 
-The currently wired registration flow creates a trial tenant and its initial **tenant owner**. It does **not** implement a complete Platform Super Admin system. Do not treat a tenant owner role as platform-wide authority.
+The registration flow creates a trial tenant and its initial **tenant owner**; it is now wired on the feature branch to attach the configured Trial subscription. The feature branch also drafts protected Platform Super Admin API routes for plan and tenant subscription administration, but the schema/migration, build and database-backed authorization tests have not yet been accepted. Do not treat a tenant owner role as platform-wide authority.
 
 Target policy:
 
@@ -64,4 +64,4 @@ Target policy:
 - Platform routes require explicit platform permissions. They must not silently bypass tenant policies; exceptional support access to customer data must be justified and audited.
 - Every tenant-owned route, background job, report, export and file operation must apply tenant scope, permission checks and relevant location scope.
 
-The implementation of a separate platform-admin scope, tenant user/role management UI, invitations and the associated security tests remains outstanding. Refer to [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md).
+The Platform Super Admin API draft is documented in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md). A platform-admin UI, Company Admin user/role management UI, invitations, quota enforcement, full trial-expiry enforcement and the associated database-backed security tests remain outstanding. Refer to [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md).
