@@ -73,9 +73,9 @@ The frontend runs at http://localhost:5176 and the API runs at http://localhost:
 - [Delivery roadmap](docs/ROADMAP.md)
 - [Task checklist](docs/TASKS.md)
 
-## Important verification note
+## Verification status
 
-The GitHub Actions runs observed during the last review reported `startup_failure` with no jobs, and I could not confirm a successful end-to-end CI run. The generated Prisma client, first migration, full frontend/backend build and database-backed acceptance tests must be run and verified before using real customer data. See [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for exact next checks.
+Local verification reported on 2026-10-17: Prisma Client generation, frontend/backend type checks, lint, all 29 backend unit tests, and the frontend production build/backend TypeScript compilation passed. The initial Prisma migration is not yet committed, and database-backed/API/browser acceptance tests remain outstanding. GitHub Actions has also reported `startup_failure` with no jobs; a successful CI run is still required. See [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the exact remaining checks. Do not use real customer data until the migration and database-backed acceptance suite have been reviewed and passed.
 
 ## SaaS principles
 
