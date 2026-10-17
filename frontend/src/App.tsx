@@ -281,6 +281,7 @@ function App() {
             csrfToken={csrfToken}
             permissions={activeWorkspaceContext?.permissions ?? []}
             allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
+            manageableLocationIds={activeWorkspaceContext?.locationScope.manageableLocationIds ?? []}
           />
         ) : activePage === "transfers" ? (
           <TransferPage
