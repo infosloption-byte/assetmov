@@ -33,6 +33,7 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 - Tenant-scoped asset queries, inventory-number uniqueness, initial registration transaction and audit events.
 - Separate permission check for financial/warranty fields.
 - Prisma model foundation for movements, requests, service, software licenses, asset tags and audit logs.
+- Subscription plan, tenant-subscription and separate platform-audit schema; protected platform plan/tenant APIs and idempotent plan seeding are source-committed but await schema/migration and CI verification.
 - Local MySQL Compose setup, environment validation, API health check, structured logs, and a CI workflow configuration.
 
 ## Current feature gaps
@@ -51,6 +52,10 @@ cp frontend/.env.example frontend/.env
 docker compose up -d mysql
 npm install
 npm run db:validate
+npm run db:migrate
+npm run db:generate
+npm run db:seed:plans
+npm run build
 npm run dev
 ```
 
@@ -60,6 +65,7 @@ Use PowerShell's `Copy-Item` instead of `cp` if preferred. Local MySQL uses host
 
 - [SaaS product requirements and administration boundaries](docs/SAAS_PRODUCT_REQUIREMENTS.md)
 - [Subscription plans, limits and enforcement guardrails](docs/SUBSCRIPTION_GUARDRAILS.md)
+- [Platform admin and subscription plan bootstrap](docs/PLATFORM_ADMIN_BOOTSTRAP.md)
 - [Legacy feature audit and process flows](docs/LEGACY_FEATURE_AUDIT.md)
 - [Architecture and SaaS security](docs/ARCHITECTURE.md)
 - [Authentication and workspace context](docs/AUTHENTICATION.md)
@@ -78,7 +84,9 @@ The GitHub Actions runs observed during the last review reported `startup_failur
 3. Platform permissions are separate from tenant roles. Company Admin must never be able to self-grant platform access.
 4. Tenant isolation and API-side authorization are mandatory for every read/write, search, export, upload/download, background job and report.
 5. Company-specific master data and custom fields are configuration, not global hard-coded values.
-6. Subscription plans limit only assets, active users, storage and trial duration; role permissions and platform-wide abuse protections remain separate. Important business actions are audited.
+6. Subscription plans limit only assets, active users, storage and trial duration; role permissions and platform-wide abuse protections remain separate.
 7. Asset movements remain transaction records, and imports must support validation previews, row-level errors and reconciliation.
+
+The platform API is an implementation foundation, not full quota enforcement. Trial expiry and asset/user/storage caps still need server-side enforcement across all relevant operations and successful database-backed tests before public launch.
 
 [SAAS_PRODUCT_REQUIREMENTS.md](docs/SAAS_PRODUCT_REQUIREMENTS.md) governs future design decisions. The old application is a reference for workflows and field requirements, not a source to copy legacy vulnerabilities, obsolete dependencies, database credentials, historic user accounts or customer records into AssetMov.
