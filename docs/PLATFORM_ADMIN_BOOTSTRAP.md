@@ -6,9 +6,9 @@ This is an implementation-stage guide for the separate AssetMov platform adminis
 
 After the first reviewed Prisma migration has been generated and applied, and the Prisma client has been generated, run:
 
-\`\`\`sh
+```sh
 npm run db:seed:plans
-\`\`\`
+```
 
 The seed is safe to rerun. It creates the proposed Trial, Starter, Growth, Business and inactive Enterprise plan records only when their keys do not already exist. It deliberately does not overwrite values changed later by a Platform Super Admin.
 
@@ -22,7 +22,7 @@ The proposed starting limits are:
 | Business | None | 10,000 | 100 | 100 GiB |
 | Enterprise | Configure before activation | Configure | Configure | Configure |
 
-These values are starting defaults from the product requirements, not final commercial commitments. Storage limits are stored and exchanged as byte counts. A \`null\` cap means unlimited; Enterprise starts inactive so it cannot accidentally be assigned before a platform operator configures it.
+These values are starting defaults from the product requirements, not final commercial commitments. Storage limits are stored and exchanged as byte counts. A `null` cap means unlimited; Enterprise starts inactive so it cannot accidentally be assigned before a platform operator configures it.
 
 ## Bootstrap the first Platform Super Admin
 
@@ -32,32 +32,32 @@ There is intentionally no public API or registration-field for self-promoting to
 2. Connect to the database through a trusted operator session, not through a public application endpoint.
 3. Promote only the exact intended account, then verify that exactly one row was affected:
 
-\`\`\`sql
-UPDATE \`User\`
-SET \`isPlatformAdmin\` = TRUE
-WHERE \`email\` = 'replace-with-the-approved-admin-email'
-  AND \`disabledAt\` IS NULL;
-\`\`\`
+```sql
+UPDATE `User`
+SET `isPlatformAdmin` = TRUE
+WHERE `email` = 'replace-with-the-approved-admin-email'
+  AND `disabledAt` IS NULL;
+```
 
-Replace the sample email before executing. Do not commit real admin emails, passwords, database dumps or credentials. Keep access to this database operation restricted and audited under your own operational controls. To revoke platform access, set \`isPlatformAdmin\` to \`FALSE\` using the same trusted process.
+Replace the sample email before executing. Do not commit real admin emails, passwords, database dumps or credentials. Keep access to this database operation restricted and audited under your own operational controls. To revoke platform access, set `isPlatformAdmin` to `FALSE` using the same trusted process.
 
 ## Platform API currently scaffolded
 
-All paths use the configured API base URL and require a signed-in session. Platform writes additionally require the session CSRF token in \`X-CSRF-Token\`. Mutations require an audit \`reason\`.
+All paths use the configured API base URL and require a signed-in session. Platform writes additionally require the session CSRF token in `X-CSRF-Token`. Mutations require an audit `reason`.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | \`/api/platform/plans\` | List plans, including inactive plans |
-| POST | \`/api/platform/plans\` | Create a plan |
-| PATCH | \`/api/platform/plans/:id\` | Edit plan limits or activation state |
-| GET | \`/api/platform/tenants\` | Search/paginate companies and view asset/active-user counts plus their plan |
-| PATCH | \`/api/platform/tenants/:tenantId/subscription\` | Assign a plan and start a trial, activate, or suspend a company |
+| GET | `/api/platform/plans` | List plans, including inactive plans |
+| POST | `/api/platform/plans` | Create a plan |
+| PATCH | `/api/platform/plans/:id` | Edit plan limits or activation state |
+| GET | `/api/platform/tenants` | Search/paginate companies and view asset/active-user counts plus their plan |
+| PATCH | `/api/platform/tenants/:tenantId/subscription` | Assign a plan and start a trial, activate, or suspend a company |
 
-The supported subscription-change modes are \`trial\`, \`activate\` and \`suspend\`. Trial timestamps are calculated by the server from the selected plan's configured trial duration. Tenant plan changes and plan creation/updates write to the separate platform audit log.
+The supported subscription-change modes are `trial`, `activate` and `suspend`. Trial timestamps are calculated by the server from the selected plan's configured trial duration. Tenant plan changes and plan creation/updates write to the separate platform audit log.
 
 Example plan JSON shape:
 
-\`\`\`json
+```json
 {
   "key": "starter",
   "name": "Starter",
@@ -69,9 +69,9 @@ Example plan JSON shape:
   "isActive": true,
   "reason": "Initial plan configuration"
 }
-\`\`\`
+```
 
-The field \`storageLimitBytes\` is a decimal string to preserve integer precision in JSON. Use \`null\` for an unlimited cap, not a browser-provided usage number.
+The field `storageLimitBytes` is a decimal string to preserve integer precision in JSON. Use `null` for an unlimited cap, not a browser-provided usage number.
 
 ## Current limitations — do not skip
 
