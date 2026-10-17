@@ -25,13 +25,16 @@ This document separates source code committed from build/test verification. A fe
 
 ### Locations and inventory
 - Location list/search and create endpoints and frontend screen.
+- Employee/custodian list/search/create/edit API and frontend screen, including home-location and audit updates.
 - Tenant-scoped asset list with search, status filter and pagination.
 - Asset detail view with lifecycle transactions and linked service history.
 - Asset create endpoint with tenant-scoped lookup validation, initial `REGISTERED` transaction, and audit event.
 - Asset metadata/financial update endpoint; financial fields require `asset.financial.update`.
+- Single assign/unassign endpoint and asset-profile UI, with same-location active-employee policy and custody transaction/audit events.
 - Asset lifecycle transition guard and unit tests.
 - Location-aware asset visibility/creation and audit history on asset writes.
 - Transfer dispatch and receiving-decision endpoints, with tenant/location scope checks, per-line accept/reject decisions, transactional asset state changes, audit history and concurrency guards.
+- Pure policy unit-test source covers lifecycle status, assignment eligibility, location hierarchy, transfer status, and password hashing; execution remains unverified.
 - Transfer list/detail/dispatch/receipt UI with asset selection, partial decisions and rejection reasons.
 
 ## Verification not yet confirmed
