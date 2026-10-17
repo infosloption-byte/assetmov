@@ -4,7 +4,7 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 
 ## Project status
 
-**Legacy discovery completed; foundation and first inventory screens committed.** This repository has the first identity, workspace-context, location, and asset-register slice. It is not yet a production-ready application.
+**Legacy discovery completed; core foundation and first operational workflows committed.** The repository now includes identity/workspace context, location and employee directories, asset registration/detail/edit, person-level assignment/return, and location transfer/receipt flows. It is not yet a production-ready application.
 
 - Legacy source: [asset-tracking](https://github.com/infosloption-byte/asset-tracking)
 - New application: [assetmov](https://github.com/infosloption-byte/assetmov)
@@ -26,7 +26,9 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 - Tenant membership validation via `X-Tenant-Id`, role permission resolution, and hierarchical location access.
 - Workspace context endpoint at `GET /api/workspace/context`.
 - Location list/search/create API and frontend screen.
+- Employee/custodian list/search/create/edit API and frontend screen with home-location scope.
 - Asset list/search/status filtering, detail/history, creation and metadata update API/UI.
+- Asset assign/return actions with eligible-custodian checks, transaction history and audit events.
 - Transfer dispatch and receipt-decision API/UI, including partial acceptance, rejection reasons, asset transaction history and audit events.
 - Tenant-scoped asset queries, inventory-number uniqueness, initial registration transaction and audit events.
 - Separate permission check for financial/warranty fields.
