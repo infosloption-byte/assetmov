@@ -55,6 +55,7 @@ const permissionDefinitions = [
   ["asset.update", "Edit asset details"],
   ["asset.financial.update", "Edit financial asset values"],
   ["asset.assign", "Assign and return assets"],
+  ["asset.transfer.read", "View incoming and outgoing asset transfers"],
   ["asset.transfer.dispatch", "Dispatch asset transfers"],
   ["asset.transfer.receive", "Receive or reject asset transfers"],
   ["asset.dispose", "Dispose or retire assets"],
