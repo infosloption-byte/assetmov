@@ -274,6 +274,7 @@ function App() {
             tenantId={workspaceContext?.tenant.id ?? null}
             csrfToken={csrfToken}
             permissions={workspaceContext?.permissions ?? []}
+            allLocationsAccess={workspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
           />
         ) : (
           <>
