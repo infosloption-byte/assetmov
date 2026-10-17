@@ -179,6 +179,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md); subscription enforcement details are in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). This checklist must be interpreted through its Platform Super Admin / Company Admin boundary. No company-owned feature is complete without tenant isolation, tenant-configurable data, server-side permissions, location scope where relevant and tests.
 
-## Suggested next pull request
+## Current implementation branch
 
-**Foundation PR:** monorepo scaffold, frontend app shell, backend health API, Prisma tenant-aware core schema, local MySQL setup, environment examples, CI baseline, and updated startup instructions. Do not implement workflow endpoints until tenant context and authorization scaffolding are in place.
+**Draft PR:** `feat/platform-subscription-foundation` adds the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
+
+This is not accepted work yet. Keep the related checklist items unchecked until the initial Prisma migration is reviewed and committed, schema/client generation/build/lint/tests pass, and DB-backed tests prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. The following slice should add server-side asset and active-user quota enforcement before tackling upload storage accounting and admin screens.
