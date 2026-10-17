@@ -76,3 +76,20 @@ The product target is a true multi-tenant SaaS, not a copy of the legacy single-
 - The existing tenant-aware schema and route checks are a foundation only; successful build, generated Prisma client, migrations, DB-backed integration tests and CI remain to be verified.
 
 Do not claim that platform/company administration or full SaaS security is complete until the outstanding tasks have been implemented and accepted against the product requirements.
+
+
+## Subscription guardrails — specified, not implemented
+
+The target plan matrix, lifecycle policy, usage quota rules, warning behavior, upgrade/downgrade handling and test requirements are documented in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). The proposed Trial, Starter, Growth, Business and Enterprise quantities are planning defaults only, not finalized commercial terms.
+
+Still outstanding:
+- Plan, plan-feature, typed-limit and tenant-subscription schema plus migration.
+- Separate tenant subscription/payment lifecycle from TenantStatus.
+- Platform Super Admin plan administration and version/effective-date controls.
+- Shared server-side entitlement and quota service.
+- Race-safe counters/reservations and periodic usage reconciliation.
+- Company Admin usage/plan view and warning notifications.
+- Trial, billing failure/grace, cancellation, downgrade and reactivation workflows.
+- Database-backed tests proving API, imports, uploads, exports and background jobs cannot bypass plan limits.
+
+Do not describe subscription-based blocking or limit enforcement as implemented until the checks are enforced server-side and verified in successful CI.
