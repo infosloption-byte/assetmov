@@ -359,3 +359,10 @@ button.primary-button { border: 0; font-family: inherit; }
   .asset-modal-heading-actions { gap: 5px; }
   .asset-modal-heading-actions .topbar-button { min-height: 30px; padding: 0 7px; font-size: 9px; }
 }
+
+.locations-table { min-width: 760px; }
+.location-name { color: #3d5543; font-size: 11px; }
+.locations-page .asset-page-heading p { max-width: 620px; }
+@media (max-width: 520px) {
+  .locations-page .asset-page-heading p { font-size: 10px; }
+}
