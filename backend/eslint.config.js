@@ -13,6 +13,10 @@ export default tseslint.config(
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      // Underscore-prefixed parameters are intentionally unused (e.g. Express's error-handler next argument).
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      // Express Request is extended through standard ambient declaration merging.
+      "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }],
     },
   },
 );
