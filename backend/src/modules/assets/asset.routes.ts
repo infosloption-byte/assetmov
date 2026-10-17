@@ -217,6 +217,22 @@ assetRouter.post(
       }
 
       const input = parsed.data;
+      const financialInputProvided = [
+        input.purchaseOrderNumber,
+        input.accountCode,
+        input.purchasedAt,
+        input.purchaseCost,
+        input.salvageValue,
+        input.warrantyStart,
+        input.warrantyEnd,
+        input.expectedLifeMonths,
+        input.depreciationMethod,
+      ].some((value) => value !== undefined);
+      if (financialInputProvided && !request.auth.permissions?.includes("asset.financial.update")) {
+        sendError(response, 403, "FINANCIAL_PERMISSION_REQUIRED", "You are not allowed to set asset financial or warranty fields.");
+        return;
+      }
+
       const assignedLocationId = input.currentLocationId || undefined;
 
       if (!assignedLocationId && !request.auth.allLocationsAccess) {
