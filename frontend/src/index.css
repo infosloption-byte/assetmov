@@ -447,3 +447,11 @@ button.primary-button { border: 0; font-family: inherit; }
   .transfer-line-card { grid-template-columns: minmax(0, 1fr); }
   .transfer-line-status { justify-self: start; }
 }
+
+/* Employee and custodian directory */
+.employees-table { min-width: 820px; }
+.employee-name { color: #3d5543; font-size: 11px; }
+.employee-page .asset-page-heading p { max-width: 650px; }
+@media (max-width: 520px) {
+  .employee-page .asset-page-heading p { font-size: 10px; }
+}
