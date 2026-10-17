@@ -455,3 +455,27 @@ button.primary-button { border: 0; font-family: inherit; }
 @media (max-width: 520px) {
   .employee-page .asset-page-heading p { font-size: 10px; }
 }
+
+/* Asset custody and assignment controls */
+.asset-custody-panel { margin-bottom: 18px; padding: 14px; border: 1px solid #e0e9de; border-radius: 9px; background: #fbfdf9; }
+.asset-custody-summary { display: flex; align-items: center; gap: 11px; }
+.asset-custody-icon { display: grid; place-items: center; flex: 0 0 35px; width: 35px; height: 35px; border-radius: 10px; background: #eaf3e8; color: #49734f; font-size: 17px; }
+.asset-custody-summary > div { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.asset-custody-label { color: #879589; font-size: 8px; letter-spacing: 1px; font-weight: 700; }
+.asset-custody-summary strong { color: #3b5140; font-size: 11px; overflow-wrap: anywhere; }
+.asset-custody-summary small { color: #909b91; font-size: 9px; }
+.asset-custody-form { margin-top: 14px; padding-top: 13px; border-top: 1px solid #e7eee4; }
+.asset-custody-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.asset-custody-form label { display: block; margin: 0 0 7px; color: #5f6f61; font-size: 9px; font-weight: 700; }
+.asset-custody-form select, .asset-custody-form input { width: 100%; min-height: 37px; border: 1px solid #dfe7dc; border-radius: 7px; outline: 0; padding: 0 10px; color: #3d5142; background: #fff; font-size: 10px; }
+.asset-custody-form select:focus, .asset-custody-form input:focus { border-color: #7ea487; box-shadow: 0 0 0 3px #477e5515; }
+.asset-custody-form > .primary-button { min-height: 36px; padding: 9px 12px; }
+.asset-custody-return-row { display: flex; align-items: center; gap: 10px; }
+.asset-custody-return-row input { flex: 1; min-width: 0; }
+.asset-custody-return-row .topbar-button { white-space: nowrap; min-height: 37px; }
+@media (max-width: 520px) {
+  .asset-custody-summary { flex-wrap: wrap; }
+  .asset-custody-summary > .asset-status-badge { margin-left: 46px; }
+  .asset-custody-form-fields { grid-template-columns: 1fr; }
+  .asset-custody-return-row { align-items: stretch; flex-direction: column; }
+}
