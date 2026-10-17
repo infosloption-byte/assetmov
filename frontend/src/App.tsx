@@ -113,6 +113,7 @@ function App() {
     }
 
     const controller = new AbortController();
+    setWorkspaceContext(null);
     setWorkspaceLoading(true);
     setWorkspaceError("");
 
@@ -207,7 +208,8 @@ function App() {
 
   const selectedMembership = user?.memberships.find((membership) => membership.tenant.id === activeTenantId)
     ?? user?.memberships[0];
-  const currentTenant = workspaceContext?.tenant ?? selectedMembership?.tenant;
+  const activeWorkspaceContext = workspaceContext?.tenant.id === activeTenantId ? workspaceContext : null;
+  const currentTenant = activeWorkspaceContext?.tenant ?? selectedMembership?.tenant;
   const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
   const displayedError = actionError || workspaceError;
@@ -255,7 +257,7 @@ function App() {
                     ))}
                   </select>
                 )}
-                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : workspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
+                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
                 <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
               </>
@@ -272,10 +274,10 @@ function App() {
 
         {activePage === "assets" ? (
           <AssetRegisterPage
-            tenantId={workspaceContext?.tenant.id ?? null}
+            tenantId={activeTenantId}
             csrfToken={csrfToken}
-            permissions={workspaceContext?.permissions ?? []}
-            allLocationsAccess={workspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
+            permissions={activeWorkspaceContext?.permissions ?? []}
+            allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
           />
         ) : activePage === "locations" ? (
           <LocationsPage
@@ -283,7 +285,7 @@ function App() {
             csrfToken={csrfToken}
             permissions={workspaceContext?.permissions ?? []}
             allLocationsAccess={workspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
-            manageableLocationIds={workspaceContext?.locationScope.manageableLocationIds ?? []}
+            manageableLocationIds={activeWorkspaceContext?.locationScope.manageableLocationIds ?? []}
           />
         ) : (
           <>
@@ -321,11 +323,11 @@ function App() {
             <Metric label="In maintenance" icon="⌁" detail="Service and repair queue" />
             <Metric label="Open requests" icon="◷" detail="Items needing a decision" />
           </div>
-          {workspaceContext && (
+          {activeWorkspaceContext && (
             <div className="workspace-access-summary">
-              <span><strong>{workspaceContext.membership.role.name}</strong> access loaded</span>
-              <span>{workspaceContext.permissions.length} permissions</span>
-              <span>{workspaceContext.locationScope.accessibleLocationIds.length} locations in scope</span>
+              <span><strong>{activeWorkspaceContext.membership.role.name}</strong> access loaded</span>
+              <span>{activeWorkspaceContext.permissions.length} permissions</span>
+              <span>{activeWorkspaceContext.locationScope.accessibleLocationIds.length} locations in scope</span>
             </div>
           )}
         </section>
