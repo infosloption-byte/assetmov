@@ -72,14 +72,15 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 - [ ] Single assignment and unassignment.
 - [ ] Bulk assignment with documented atomicity and per-item result.
-- [ ] Transfer/issue note and transfer line models.
-- [ ] Dispatch validation and in-transit reservation under DB transaction/locking.
-- [ ] Receiving queues scoped to destination and receiving permission.
-- [ ] Accept, partial accept, reject and discrepancy/reason policy.
+- [x] Transfer header and transfer-line schema for asset movements.
+- [x] Dispatch validation and in-transit reservation inside a database transaction, with conditional updates to prevent duplicate dispatch.
+- [x] Tenant/location-scoped incoming/outgoing transfer list and detail API/UI, gated by transfer permissions.
+- [x] Per-line accept/reject decisions and partial receiving; the API requires a rejection reason and returns rejected assets to origin in this first workflow.
 - [ ] GRN/receipt generation and printable document.
-- [ ] Prevent concurrent assignment/transfer of the same asset.
-- [ ] Movement timeline, actor attribution and audit records.
-- [ ] Transfer end-to-end test including rejection and race conditions.
+- [x] Conditional asset updates reject duplicate/concurrent dispatch, and transfer receipt updates lock the transfer header.
+- [ ] Verify movement concurrency with DB-backed integration tests.
+- [x] Transfer events record actor, locations, notes and audit data; asset detail renders lifecycle history.
+- [ ] Transfer end-to-end test including rejection and race conditions (unit tests cover the pure transfer-status summary only).
 
 ## F. Requests and approvals — P1
 
