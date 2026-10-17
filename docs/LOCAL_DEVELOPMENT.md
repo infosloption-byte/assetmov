@@ -31,6 +31,9 @@ Copy-Item frontend/.env.example frontend/.env
 docker compose up -d mysql
 npm install
 npm run db:validate
+npm run db:migrate
+npm run db:generate
+npm run db:seed:plans
 npm run build
 ```
 
