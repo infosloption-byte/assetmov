@@ -6,7 +6,7 @@
 - Node.js 22 or newer within the supported project range
 - npm
 
-AssetMov uses the repository root as an npm workspace. Run `npm install` and the root-level verification scripts from the **repository root** unless a step below explicitly says to use the backend folder. The Prisma schema uses JSON fields, which require MySQL 5.7 or newer. Check your exact database version in phpMyAdmin with `SELECT VERSION() AS version, @@version_comment AS distribution;`. Do not proceed with MySQL 5.0–5.6 without upgrading the database server or changing the data model and persistence implementation.
+AssetMov uses an npm-workspaces monorepo: the React frontend and Node.js/Express backend are separate packages in `frontend/` and `backend/`, each with its own `package.json` and scripts. The repository root provides optional convenience commands that orchestrate both packages. Install workspace dependencies once from the repository root; run each service directly from its own folder when you want them independent. The Prisma schema uses JSON fields, which require MySQL 5.7 or newer. Check your exact database version in phpMyAdmin with `SELECT VERSION() AS version, @@version_comment AS distribution;`. Do not proceed with MySQL 5.0–5.6 without upgrading the database server or changing the data model and persistence implementation.
 
 ## Prepare WAMP and environment files
 
@@ -46,6 +46,8 @@ npm install
 npm run db:validate
 ```
 
+The root install manages dependencies for both npm workspaces. Do not create separate lockfiles for `frontend/` or `backend/`.
+
 ## Create and apply the initial migration
 
 The repository needs an initial Prisma migration. If `assetmov` is a new, empty database, open PowerShell in the **backend** folder:
@@ -73,11 +75,15 @@ The plan seed inserts the proposed default plans only when their keys do not alr
 
 ## Run the application
 
-From the **repository root**, run both services together:
+### Run both services together (optional convenience command)
+
+From the **repository root**, run:
 
 ```powershell
 npm run dev
 ```
+
+This starts the frontend and backend as separate development processes. It does not combine their code or turn the backend into part of React.
 
 - Frontend: http://localhost:5176
 - Backend API: http://localhost:4000
@@ -85,16 +91,50 @@ npm run dev
 
 Vite is configured with `strictPort: true`, so it fails with a clear error if port `5176` is already in use instead of silently switching ports. Use `http://localhost:5176` consistently so it matches the backend's `FRONTEND_ORIGIN` CORS setting.
 
-## Run only one service
+### Run the frontend and backend independently
 
-From the repository root:
+Open **two PowerShell terminals**. Use each package's own folder and package script.
+
+Terminal 1 — React frontend:
 
 ```powershell
-npm run dev:frontend
-npm run dev:backend
+Set-Location C:\\wamp\\www\\html\\assetmov\\frontend
+npm run dev
 ```
 
-Run one of these commands in a separate terminal as needed. Stop the running process with `Ctrl+C`.
+Terminal 2 — Node.js/Express backend:
+
+```powershell
+Set-Location C:\\wamp\\www\\html\\assetmov\\backend
+npm run dev
+```
+
+Stop each service with `Ctrl+C` in its own terminal.
+
+## Run lint and type checks independently
+
+From the repository root, the workspace scripts verify both packages:
+
+```powershell
+npm run lint
+npm run typecheck
+```
+
+Or run a check for only one package in its own terminal:
+
+```powershell
+# Frontend only
+Set-Location C:\\wamp\\www\\html\\assetmov\\frontend
+npm run lint
+npm run typecheck
+```
+
+```powershell
+# Backend only
+Set-Location C:\\wamp\\www\\html\\assetmov\\backend
+npm run lint
+npm run typecheck
+```
 
 ## Troubleshooting
 
