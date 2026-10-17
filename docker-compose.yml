@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: assetmov-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: assetmov
+      MYSQL_USER: assetmov
+      MYSQL_PASSWORD: assetmov_dev_only_change_me
+      MYSQL_ROOT_PASSWORD: local_root_password_change_me
+    ports:
+      - "3307:3306"
+    volumes:
+      - assetmov_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  assetmov_mysql_data:
