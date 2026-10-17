@@ -11,7 +11,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Add Docker Compose for local MySQL and local startup instructions.
 - [ ] Add database reset and safe development seed scripts.
 - [x] Add the initial Prisma schema and migration command configuration.
-- [x] Generate the Prisma client locally (2026-10-17).\n- [ ] Run explicit schema validation, then generate, review and commit the first Prisma migration.
+- [x] Generate the Prisma client locally (2026-10-17).
+- [ ] Run explicit schema validation, then generate, review and commit the first Prisma migration.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
@@ -79,7 +80,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Controlled damage/disposal/archive/restore workflows with reasons.
 - [ ] Bulk import preview, duplicate checks, row-level errors and retry.
 - [x] Add unit tests for asset lifecycle policy, custody assignment policy, location-scope expansion, transfer status outcomes, subscription policy and password hashing (29 passed locally on 2026-10-17; CI verification remains outstanding).
-- [x] Execute existing backend unit tests locally (29 passed, 0 failed on 2026-10-17).\n- [ ] Add API/DB integration tests, cross-tenant tests and browser acceptance tests.
+- [x] Execute existing backend unit tests locally (29 passed, 0 failed on 2026-10-17).
+- [ ] Add API/DB integration tests, cross-tenant tests and browser acceptance tests.
 
 ## E. Movement, assignment and receipts — P0
 
