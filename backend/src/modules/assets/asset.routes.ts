@@ -157,6 +157,12 @@ assetRouter.get(
   requirePermission("asset.read"),
   async (request, response, next) => {
     try {
+      const assetId = request.params.id;
+      if (typeof assetId !== "string" || assetId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid asset ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       if (!tenantId || !request.auth?.membershipId) {
         sendError(response, 400, "TENANT_CONTEXT_REQUIRED", "Select a workspace before continuing.");
@@ -164,7 +170,7 @@ assetRouter.get(
       }
 
       const asset = await prisma.asset.findFirst({
-        where: { id: request.params.id, tenantId },
+        where: { id: assetId, tenantId },
         include: {
           ...assetInclude,
           transactions: {
@@ -447,6 +453,12 @@ assetRouter.patch(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const assetId = request.params.id;
+      if (typeof assetId !== "string" || assetId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid asset ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       const actorUserId = request.auth?.userId;
       if (!tenantId || !actorUserId || !request.auth?.membershipId) {
@@ -469,7 +481,7 @@ assetRouter.patch(
 
       const result = await prisma.$transaction(async (tx) => {
         const existing = await tx.asset.findFirst({
-          where: { id: request.params.id, tenantId },
+          where: { id: assetId, tenantId },
         });
         if (!existing) throw new Error("ASSET_NOT_FOUND");
 
@@ -636,6 +648,12 @@ assetRouter.post(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const assetId = request.params.id;
+      if (typeof assetId !== "string" || assetId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid asset ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       const actorUserId = request.auth?.userId;
       if (!tenantId || !actorUserId || !request.auth?.membershipId) {
@@ -652,7 +670,7 @@ assetRouter.post(
       const input = parsed.data;
       const result = await prisma.$transaction(async (tx) => {
         const asset = await tx.asset.findFirst({
-          where: { id: request.params.id, tenantId },
+          where: { id: assetId, tenantId },
         });
         if (!asset) throw new Error("ASSET_NOT_FOUND");
         if (!canManageAssetLocation(request, asset.currentLocationId)) {
@@ -777,6 +795,12 @@ assetRouter.post(
   requireCsrf,
   async (request, response, next) => {
     try {
+      const assetId = request.params.id;
+      if (typeof assetId !== "string" || assetId.length === 0) {
+        sendError(response, 400, "INVALID_ROUTE_PARAMETER", "A valid asset ID is required.");
+        return;
+      }
+
       const tenantId = request.auth?.tenantId;
       const actorUserId = request.auth?.userId;
       if (!tenantId || !actorUserId || !request.auth?.membershipId) {
@@ -792,7 +816,7 @@ assetRouter.post(
 
       const result = await prisma.$transaction(async (tx) => {
         const asset = await tx.asset.findFirst({
-          where: { id: request.params.id, tenantId },
+          where: { id: assetId, tenantId },
         });
         if (!asset) throw new Error("ASSET_NOT_FOUND");
         if (!canManageAssetLocation(request, asset.currentLocationId)) {
@@ -801,9 +825,11 @@ assetRouter.post(
         if (!canReturnAssetToStock(asset)) {
           throw new Error("ASSET_NOT_ASSIGNED");
         }
+        const assignedEmployeeId = asset.assignedEmployeeId;
+        if (!assignedEmployeeId) throw new Error("ASSET_NOT_ASSIGNED");
 
         const employee = await tx.employee.findFirst({
-          where: { id: asset.assignedEmployeeId, tenantId },
+          where: { id: assignedEmployeeId, tenantId },
           select: { id: true, employeeCode: true, firstName: true, lastName: true },
         });
 
