@@ -124,6 +124,7 @@ model Membership {
   role      Role           @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, userId])
+  @@unique([tenantId, id])
   @@index([userId, isActive])
   @@index([tenantId, roleId, isActive])
 }
