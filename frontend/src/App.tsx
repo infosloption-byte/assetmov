@@ -1,0 +1,118 @@
+import { useEffect, useState } from "react";
+
+type ApiHealth = "checking" | "online" | "offline";
+
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api")
+  .replace(/\/$/, "");
+
+const modules = [
+  { number: "01", title: "Asset register", description: "A single place for every asset, its details, value, warranty and history.", tag: "Core inventory" },
+  { number: "02", title: "Locations & people", description: "Organize branches, locations, employees and custodian responsibilities.", tag: "Organization" },
+  { number: "03", title: "Transfers & requests", description: "Track approvals, dispatches, receipts and every handover.", tag: "Workflows" },
+  { number: "04", title: "Service & lifecycle", description: "Manage repairs, maintenance, upgrades, damage and disposal.", tag: "Lifecycle" },
+  { number: "05", title: "Audit & reports", description: "Reconcile physical inventory and export permission-aware reports.", tag: "Visibility" },
+  { number: "06", title: "Software & tags", description: "Track software entitlements, allocations and scannable asset labels.", tag: "Additional assets" },
+];
+
+function App() {
+  const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${apiBaseUrl}/health`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("API not ready");
+        return response.json() as Promise<{ status?: string; database?: string }>;
+      })
+      .then((health) => setApiHealth(health.status === "ok" && health.database === "ok" ? "online" : "offline"))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setApiHealth("offline");
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <a className="brand" href="/" aria-label="AssetMov home">
+          <span className="brand-mark">A<span>.</span></span>
+          <span className="brand-copy"><strong>assetmov</strong><small>ASSET LIFECYCLE</small></span>
+        </a>
+        <div className="workspace-label">WORKSPACE</div>
+        <nav className="side-nav" aria-label="Main navigation">
+          <a className="nav-item active" href="#overview"><span className="nav-icon">▦</span> Overview</a>
+          <a className="nav-item" href="#modules"><span className="nav-icon">◫</span> Asset register <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules"><span className="nav-icon">⇄</span> Movements <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules"><span className="nav-icon">⌂</span> Locations <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules"><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules"><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="help-card"><div className="help-icon">✳</div><strong>Built for clarity.</strong><p>Know what you own, where it is, and what happened to it.</p></div>
+          <div className="sidebar-version"><span className="status-dot" /> Foundation preview <span>v0.1</span></div>
+        </div>
+      </aside>
+
+      <main className="main-area" id="overview">
+        <header className="topbar">
+          <div className="breadcrumb"><span>Workspace</span><b>/</b><strong>Overview</strong></div>
+          <div className="topbar-right">
+            <div className={`api-pill ${apiHealth}`}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
+            <div className="avatar" aria-label="No user signed in">AM</div>
+          </div>
+        </header>
+
+        <section className="welcome-section">
+          <div>
+            <div className="eyebrow"><span className="eyebrow-line" /> YOUR ASSET OPERATIONS, IN ONE VIEW</div>
+            <h1>Good systems make<br /><em>everything</em> easier to track.</h1>
+            <p className="welcome-copy">A clear view of your asset lifecycle is taking shape. Start with the foundation, then bring your inventory, people and processes together.</p>
+            <div className="welcome-actions">
+              <a className="primary-button" href="#modules">Explore the platform <span>↗</span></a>
+              <a className="text-button" href="https://github.com/infosloption-byte/assetmov" target="_blank" rel="noreferrer">View project <span>↗</span></a>
+            </div>
+          </div>
+          <div className="welcome-art" aria-hidden="true">
+            <div className="orbit orbit-one" /><div className="orbit orbit-two" />
+            <div className="art-card card-back"><span className="mini-square">↗</span><div className="art-line long" /><div className="art-line short" /><div className="art-line medium" /></div>
+            <div className="art-card card-front"><div className="card-heading"><span>ASSET LIFECYCLE</span><span className="card-menu">•••</span></div><div className="art-graphic"><span /><span /><span /><span /><span /><span /><span /></div><div className="graphic-footer"><span /><span /></div></div>
+            <div className="floating-check">✓</div>
+          </div>
+        </section>
+
+        <section className="stats-section" aria-label="Workspace metrics">
+          <div className="section-intro"><div><h2>Workspace snapshot</h2><p>Live metrics will appear when your organization and data are connected.</p></div><span className="preview-label">PREVIEW</span></div>
+          <div className="stats-grid">
+            <Metric label="Tracked assets" icon="◫" detail="Inventory at a glance" />
+            <Metric label="Assigned assets" icon="↗" detail="Custody and ownership" />
+            <Metric label="In maintenance" icon="⌁" detail="Service and repair queue" />
+            <Metric label="Open requests" icon="◷" detail="Items needing a decision" />
+          </div>
+        </section>
+
+        <section className="modules-section" id="modules">
+          <div className="section-intro"><div><h2>One platform. Every asset workflow.</h2><p>Modules are planned from the legacy process audit and will be delivered in tested stages.</p></div><span className="module-count">06 MODULE AREAS</span></div>
+          <div className="module-grid">
+            {modules.map((module) => (
+              <article className="module-card" key={module.number}>
+                <div className="module-card-top"><span className="module-number">{module.number}</span><span className="module-arrow">↗</span></div>
+                <span className="module-tag">{module.tag}</span><h3>{module.title}</h3><p>{module.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <footer className="page-footer"><span>© {new Date().getFullYear()} AssetMov</span><span>Inventory clarity, from acquisition to retirement.</span></footer>
+      </main>
+    </div>
+  );
+}
+
+function Metric({ label, icon, detail }: { label: string; icon: string; detail: string }) {
+  return <article className="stat-card"><div className="stat-card-top"><span className="stat-icon">{icon}</span><span className="stat-placeholder">—</span></div><strong>{label}</strong><p>{detail}</p></article>;
+}
+
+export default App;
