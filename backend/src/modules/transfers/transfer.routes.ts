@@ -67,6 +67,13 @@ const transferInclude = {
   },
 } as const;
 
+const transferListInclude = {
+  originLocation: { select: { id: true, name: true, code: true } },
+  destinationLocation: { select: { id: true, name: true, code: true } },
+  createdBy: { select: { id: true, fullName: true } },
+  _count: { select: { lines: true } },
+} as const;
+
 function sendError(
   response: import("express").Response,
   status: number,
@@ -147,7 +154,7 @@ transferRouter.get(
         prisma.assetTransfer.count({ where }),
         prisma.assetTransfer.findMany({
           where,
-          include: transferInclude,
+          include: transferListInclude,
           orderBy: [{ createdAt: "desc" }],
           skip: (page - 1) * pageSize,
           take: pageSize,
