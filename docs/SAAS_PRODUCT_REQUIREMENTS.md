@@ -130,6 +130,7 @@ Non-negotiable rules:
 - Do not represent Enterprise as an unsafe infinite bypass. Enterprise caps are configurable and still constrained by service capacity, security and platform policy.
 
 The current source tree has no complete subscription/plan enforcement system. Treat this as target behavior until schema, shared entitlement service, administration UI, billing flows and DB-backed acceptance tests are completed.
+
 ## 9. UX expectations
 
 - Company-facing screens must clearly show the active company/workspace when users belong to more than one tenant.
