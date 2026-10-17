@@ -105,7 +105,7 @@ Prefer explicit permission keys such as `asset.read`, `asset.create`, `asset.fin
 - **Software:** software type, entitlement/license, seat/assignment and expiry.
 - **Audit:** physical audit session, expected snapshot, scans/findings, reconciliation decision.
 - **Reporting:** permission-scoped report queries and export jobs.
-- **Platform SaaS (later milestone):** plan, subscription, entitlements, usage counters, billing events and tenant lifecycle.
+- **Platform SaaS (later milestone):** plan, subscription, asset/user/storage usage, billing events and tenant lifecycle.
 
 Every important action should write its business change and audit event in a single database transaction where possible.
 
@@ -163,7 +163,7 @@ Critical operations (asset movement, disposal, approvals, user/role changes, imp
 
 ## 10. SaaS billing and onboarding
 
-Separate core inventory from billing concerns. The platform should eventually support tenant signup/invitation, verified owner account, organization setup wizard, trial/subscription state, plan entitlements, usage limits, payment-provider webhooks with signature verification/idempotency, invoices and cancellation/export policy. Do not make billing a dependency for developing the core asset workflows.
+Separate core inventory from billing concerns. The platform should eventually support tenant signup/invitation, verified owner account, organization setup wizard, trial/subscription state, asset/user/storage limits, payment-provider webhooks with signature verification/idempotency, invoices and cancellation/export policy. Do not make billing a dependency for developing the core asset workflows.
 
 ## 11. Import and migration strategy
 
@@ -185,12 +185,12 @@ A milestone is not complete because a page renders. It needs domain unit tests, 
 
 AssetMov serves multiple independent customer companies. There are two separate authority scopes: **Platform Super Admin** and **Company Admin / tenant owner**. The first registered user becomes the initial admin of that one tenant, not a platform operator.
 
-- Platform administration is a separate protected area and permission scope for tenant lifecycle, plans/entitlements, subscription/support operations, platform staff and service health.
+- Platform administration is a separate protected area and permission scope for tenant lifecycle, plans and the four resource limits, subscription/support operations, platform staff and service health.
 - Company Admin manages only its own tenant: company profile/preferences, users/memberships, custom roles and their permission grants, location hierarchy and user/location scopes, categories/models/custom fields, numbering, suppliers/manufacturers and all company asset workflows.
 - The platform defines valid permission keys; company admins assemble tenant roles from the allowed catalogue. They cannot create arbitrary backend privilege keys or grant platform permissions.
 - Company-admin authority never makes tenant IDs trustworthy and does not relax tenant/location checks. Platform-admin access must use explicit platform policies and must be audited.
 - Role changes must prevent privilege escalation and lockout, including protecting the last tenant owner/admin and auditing role/scope changes.
-- Subscription entitlements are distinct from user permissions: a feature must be included in the tenant plan **and** permitted for the user **and** within location scope before its business rules run.
+- Subscription rules do not replace user permissions: the subscription must be valid, any relevant asset/user/storage limit must permit the operation, the user must have permission, and location scope must allow it where applicable. All application features remain available across plans.
 
 See [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) for detailed flows, tenant-configurable fields, module scope and acceptance criteria. All subsequent modules should satisfy that document before being considered complete.
 
