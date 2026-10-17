@@ -116,7 +116,7 @@ model Session {
   id             String    @id @default(cuid())
   userId         String
   tokenHash      String    @unique @db.Char(64)
-  csrfTokenHash  String    @db.Char(64)
+  csrfToken      String    @db.Char(43)
   expiresAt      DateTime
   lastSeenAt     DateTime?
   ipAddress      String?   @db.VarChar(64)
