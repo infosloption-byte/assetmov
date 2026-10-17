@@ -47,6 +47,7 @@ const assetCreateSchema = z.object({
 const listQuerySchema = z.object({
   q: z.string().trim().max(191).optional(),
   status: z.enum(assetStatuses).optional(),
+  locationId: z.string().trim().min(1).optional(),
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -94,10 +95,16 @@ assetRouter.get(
         return;
       }
 
-      const { q, status, page, pageSize } = parsed.data;
+      const { q, status, locationId, page, pageSize } = parsed.data;
+      if (locationId && !request.auth.allLocationsAccess && !(request.auth.accessibleLocationIds ?? []).includes(locationId)) {
+        sendError(response, 403, "LOCATION_ACCESS_DENIED", "You cannot list assets in that location.");
+        return;
+      }
+
       const where = {
         tenantId,
         ...(status ? { status } : {}),
+        ...(locationId ? { currentLocationId: locationId } : {}),
         ...(q ? {
           OR: [
             { inventoryNumber: { contains: q } },
@@ -106,7 +113,7 @@ assetRouter.get(
             { title: { contains: q } },
           ],
         } : {}),
-        ...(request.auth.allLocationsAccess
+        ...(locationId || request.auth.allLocationsAccess
           ? {}
           : { currentLocationId: { in: request.auth.accessibleLocationIds ?? [] } }),
       };
