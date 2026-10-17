@@ -211,7 +211,7 @@ model Location {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  parent    Location?  @relation("LocationTree", fields: [tenantId, parentId], references: [tenantId, id], onDelete: Restrict)
+  parent    Location?  @relation("LocationTree", fields: [parentId], references: [id], onDelete: Restrict)
   children  Location[] @relation("LocationTree")
   assets    Asset[]    @relation("CurrentAssetLocation")
   employees Employee[]   @relation("EmployeeHomeLocation")
@@ -239,7 +239,7 @@ model Employee {
   updatedAt      DateTime @updatedAt
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignedAssets Asset[]  @relation("AssetCustodian")
-  homeLocation   Location? @relation("EmployeeHomeLocation", fields: [tenantId, homeLocationId], references: [tenantId, id], onDelete: Restrict)
+  homeLocation   Location? @relation("EmployeeHomeLocation", fields: [homeLocationId], references: [id], onDelete: Restrict)
   sentTransactions AssetTransaction[] @relation("TransactionFromEmployee")
   receivedTransactions AssetTransaction[] @relation("TransactionToEmployee")
   licenseAssignments LicenseAssignment[] @relation("LicenseAssignee")
@@ -351,11 +351,11 @@ model Asset {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  model               AssetModel?     @relation(fields: [tenantId, modelId], references: [tenantId, id], onDelete: Restrict)
-  manufacturer        Manufacturer?    @relation(fields: [tenantId, manufacturerId], references: [tenantId, id], onDelete: Restrict)
-  supplier            Supplier?        @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict)
-  currentLocation     Location?       @relation("CurrentAssetLocation", fields: [tenantId, currentLocationId], references: [tenantId, id], onDelete: Restrict)
-  custodian            Employee?      @relation("AssetCustodian", fields: [tenantId, assignedEmployeeId], references: [tenantId, id], onDelete: Restrict)
+  model               AssetModel?     @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  manufacturer        Manufacturer?    @relation(fields: [manufacturerId], references: [id], onDelete: Restrict)
+  supplier            Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  currentLocation     Location?       @relation("CurrentAssetLocation", fields: [currentLocationId], references: [id], onDelete: Restrict)
+  custodian            Employee?      @relation("AssetCustodian", fields: [assignedEmployeeId], references: [id], onDelete: Restrict)
   transactions        AssetTransaction[]
   serviceRecords      ServiceRecord[]
   tags                AssetTag[]
@@ -384,10 +384,10 @@ model AssetTransaction {
   tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   asset          Asset           @relation(fields: [tenantId, assetId], references: [tenantId, id], onDelete: Restrict)
   actor          User?           @relation("TransactionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  fromLocation    Location?       @relation("TransactionFromLocation", fields: [tenantId, fromLocationId], references: [tenantId, id], onDelete: Restrict)
-  toLocation      Location?       @relation("TransactionToLocation", fields: [tenantId, toLocationId], references: [tenantId, id], onDelete: Restrict)
-  fromEmployee    Employee?       @relation("TransactionFromEmployee", fields: [tenantId, fromEmployeeId], references: [tenantId, id], onDelete: Restrict)
-  toEmployee      Employee?       @relation("TransactionToEmployee", fields: [tenantId, toEmployeeId], references: [tenantId, id], onDelete: Restrict)
+  fromLocation    Location?       @relation("TransactionFromLocation", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  toLocation      Location?       @relation("TransactionToLocation", fields: [toLocationId], references: [id], onDelete: Restrict)
+  fromEmployee    Employee?       @relation("TransactionFromEmployee", fields: [fromEmployeeId], references: [id], onDelete: Restrict)
+  toEmployee      Employee?       @relation("TransactionToEmployee", fields: [toEmployeeId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, assetId, occurredAt])
   @@index([tenantId, eventType, occurredAt])
@@ -455,8 +455,8 @@ model SoftwareLicense {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier       Supplier?           @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict)
-  manufacturer   Manufacturer?       @relation(fields: [tenantId, manufacturerId], references: [tenantId, id], onDelete: Restrict)
+  supplier       Supplier?           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  manufacturer   Manufacturer?       @relation(fields: [manufacturerId], references: [id], onDelete: Restrict)
   assignments    LicenseAssignment[]
   requestItems   AssetRequestItem[]
 
@@ -479,7 +479,7 @@ model AssetRequestItem {
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   request          AssetRequest     @relation(fields: [tenantId, requestId], references: [tenantId, id], onDelete: Cascade)
   softwareLicenseId String?
-  softwareLicense  SoftwareLicense? @relation(fields: [tenantId, softwareLicenseId], references: [tenantId, id], onDelete: Restrict)
+  softwareLicense  SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, requestId])
 }
@@ -496,7 +496,7 @@ model LicenseAssignment {
   unassignedAt         DateTime?
   tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   softwareLicense      SoftwareLicense @relation(fields: [tenantId, softwareLicenseId], references: [tenantId, id], onDelete: Cascade)
-  employee             Employee?       @relation("LicenseAssignee", fields: [tenantId, assignedToEmployeeId], references: [tenantId, id], onDelete: Restrict)
+  employee             Employee?       @relation("LicenseAssignee", fields: [assignedToEmployeeId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, softwareLicenseId, unassignedAt])
   @@index([tenantId, assignedToEmployeeId, unassignedAt])
