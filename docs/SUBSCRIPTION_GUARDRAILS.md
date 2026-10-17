@@ -1,6 +1,6 @@
 # AssetMov Subscription Plans and Limits
 
-**Status: proposed defaults — not implemented.** These values are a practical starting point for implementation, not final prices or a published commercial promise. Platform Super Admin must be able to edit them from platform settings.
+**Status: proposed defaults; initial platform API scaffold drafted, quotas not yet implemented or verified.** These values are a practical starting point for implementation, not final prices or a published commercial promise. The Platform Super Admin API is being introduced on `feat/platform-subscription-foundation`; it still needs schema/migration validation, passing CI and database-backed acceptance tests.
 
 The subscription system is deliberately simple: **only four plan dimensions matter: asset limit, user limit, storage limit and trial duration.** Location count, roles, custom fields, exports and other application modules are not separately limited by subscription plans. Application permissions and platform-wide security protections still apply independently.
 
@@ -104,4 +104,4 @@ Do not trust plan IDs, usage counts, file sizes, subscription states or trial ti
 - All UI and API paths report the same limits, and failed/retried requests do not double-count usage.
 - The subscription guardrails are accepted only after successful schema/migration validation and DB-backed API tests in CI.
 
-This document defines target behavior. Subscription schema, plan administration, counters, trial enforcement and billing flows are not currently confirmed as implemented.
+This document defines target behavior. The feature branch now contains source scaffolding for plan/subscription records, plan administration APIs and trial assignment at signup. Server-enforced asset/user/storage caps, actual uploaded-file usage tracking, trial-expiry blocking, Company Admin usage UI, billing and the acceptance tests are still outstanding.
