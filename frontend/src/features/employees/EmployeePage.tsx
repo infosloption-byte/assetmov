@@ -48,6 +48,7 @@ function EmployeePage({
 }: EmployeePageProps) {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationsError, setLocationsError] = useState("");
   const [error, setError] = useState("");
@@ -122,12 +123,13 @@ function EmployeePage({
   useEffect(() => {
     if (!tenantId || !canReadLocations) {
       setLocations([]);
-      setLocationsLoadingFalse();
+      setLocationsLoading(false);
       setLocationsError(canReadLocations ? "" : "Your role does not have permission to view locations.");
       return;
     }
 
     const controller = new AbortController();
+    setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
         const response = await fetch(apiBaseUrl + "/locations", {
@@ -145,18 +147,14 @@ function EmployeePage({
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") return;
         setLocationsError(loadError instanceof Error ? loadError.message : "Could not load locations.");
+      } finally {
+        if (!controller.signal.aborted) setLocationsLoading(false);
       }
     }
 
     void loadLocationOptions();
     return () => controller.abort();
   }, [tenantId, canReadLocations]);
-
-  const [locationsLoading, setLocationsLoading] = useState(false);
-
-  function setLocationsLoadingFalse() {
-    setLocationsLoading(false);
-  }
 
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
