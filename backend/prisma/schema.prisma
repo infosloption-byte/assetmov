@@ -609,7 +609,7 @@ model AuditLog {
   oldData     Json?
   newData     Json?
   ipAddress   String?  @db.VarChar(64)
-  requestId   String?  @db.VarChar(191)
+  requestId         String? @db.VarChar(191)
   createdAt   DateTime @default(now())
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
