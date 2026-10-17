@@ -15,7 +15,7 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",
-    "test": "tsx --test tests/asset-lifecycle.test.ts tests/location-scope.test.ts tests/password.test.ts"
+    "test": "tsx --test tests/asset-lifecycle.test.ts tests/location-scope.test.ts tests/password.test.ts tests/transfer-status.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
