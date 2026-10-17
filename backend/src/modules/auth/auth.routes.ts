@@ -344,7 +344,6 @@ authRouter.get("/me", requireSession, async (request, response, next) => {
 
 authRouter.get("/csrf", requireSession, async (request, response, next) => {
   try {
-    const csrfToken = randomBytes(32).toString("base64url");
     response.status(200).json({ csrfToken: request.auth!.csrfToken });
   } catch (error) {
     next(error);
