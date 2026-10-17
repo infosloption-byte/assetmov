@@ -1,3 +1,4 @@
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
@@ -5,6 +6,8 @@ import helmet from "helmet";
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
 
 export const app = express();
 
@@ -15,6 +18,28 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: "1mb" }));
+app.use(cookieParser());
+
+app.use("/api", (request, response, next) => {
+  const origin = request.get("origin");
+  if (origin && origin !== env.FRONTEND_ORIGIN) {
+    response.status(403).json({
+      error: { code: "ORIGIN_NOT_ALLOWED", message: "This request origin is not allowed." },
+    });
+    return;
+  }
+
+  const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+  const hasSessionCookie = typeof request.cookies?.[SESSION_COOKIE_NAME] === "string";
+  if (mutatingMethods.has(request.method) && hasSessionCookie && origin !== env.FRONTEND_ORIGIN) {
+    response.status(403).json({
+      error: { code: "ORIGIN_REQUIRED", message: "A trusted browser origin is required for this action." },
+    });
+    return;
+  }
+
+  next();
+});
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -36,6 +61,8 @@ app.get("/api/health", async (_request, response, next) => {
     next(error);
   }
 });
+
+app.use("/api/auth", authRouter);
 
 app.use((_request, response) => {
   response.status(404).json({
