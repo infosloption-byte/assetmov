@@ -125,7 +125,7 @@ model Membership {
 
   @@unique([tenantId, userId])
   @@index([userId, isActive])
-  @@index([tenantId, role, isActive])
+  @@index([tenantId, roleId, isActive])
 }
 
 model Role {
@@ -352,15 +352,17 @@ model AssetRequest {
   tenantId       String
   requestedById  String
   requestType    AssetRequestType
-  status         String           @default("PENDING") @db.VarChar(60)
+  status         RequestStatus    @default(PENDING)
   businessReason String?          @db.Text
-  items          Json
   decidedById    String?
   decidedAt      DateTime?
   decisionReason String?          @db.Text
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy    User              @relation("RequestSubmitter", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy      User?             @relation("RequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  items          AssetRequestItem[]
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, requestedById, createdAt])
@@ -405,7 +407,10 @@ model SoftwareLicense {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier       Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  manufacturer   Manufacturer?       @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
   assignments    LicenseAssignment[]
+  requestItems   AssetRequestItem[]
 
   @@unique([tenantId, name])
   @@index([tenantId, licenseEnd, isActive])
@@ -424,8 +429,8 @@ model AssetRequestItem {
   updatedAt        DateTime         @updatedAt
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   request          AssetRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  softwareLicense  SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: SetNull)
   softwareLicenseId String?
+  softwareLicense  SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, requestId])
 }
