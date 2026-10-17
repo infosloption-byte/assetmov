@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
+import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 
 type ApiHealth = "checking" | "online" | "offline";
 
@@ -36,6 +37,7 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
+  const [activePage, setActivePage] = useState<"overview" | "assets">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -177,6 +179,7 @@ function App() {
       setActiveTenantId(null);
       setWorkspaceContext(null);
       setWorkspaceError("");
+      setActivePage("overview");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
     }
@@ -217,12 +220,12 @@ function App() {
         </a>
         <div className="workspace-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Main navigation">
-          <a className="nav-item active" href="#overview"><span className="nav-icon">▦</span> Overview</a>
-          <a className="nav-item" href="#modules"><span className="nav-icon">◫</span> Asset register <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules"><span className="nav-icon">⇄</span> Movements <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules"><span className="nav-icon">⌂</span> Locations <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules"><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules"><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
+          <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
+          <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
+          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">⇄</span> Movements <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">⌂</span> Locations <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon">✳</div><strong>Built for clarity.</strong><p>Know what you own, where it is, and what happened to it.</p></div>
@@ -232,7 +235,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>Overview</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -266,6 +269,14 @@ function App() {
 
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
 
+        {activePage === "assets" ? (
+          <AssetRegisterPage
+            tenantId={workspaceContext?.tenant.id ?? null}
+            csrfToken={csrfToken}
+            permissions={workspaceContext?.permissions ?? []}
+          />
+        ) : (
+          <>
         <section className="welcome-section">
           <div>
             <div className="eyebrow"><span className="eyebrow-line" /> YOUR ASSET OPERATIONS, IN ONE VIEW</div>
@@ -321,6 +332,8 @@ function App() {
           </div>
         </section>
 
+          </>
+        )}
         <footer className="page-footer"><span>© {new Date().getFullYear()} AssetMov</span><span>Inventory clarity, from acquisition to retirement.</span></footer>
       </main>
     </div>
