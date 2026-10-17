@@ -12,14 +12,16 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Add database reset and safe development seed scripts.
 - [x] Add the initial Prisma schema and migration command configuration.
 - [x] Generate the Prisma client locally (2026-10-17).
-- [ ] Run explicit schema validation, then generate, review and commit the first Prisma migration.
+- [x] Validate the Prisma schema locally with `npm run db:validate` (2026-10-17).
+- [x] Generate and apply the initial migration to the local development database (2026-10-17; `20261017170733_initial_assetmov`).
+- [ ] Review the generated migration SQL and commit the migration directory; then verify a clean environment can apply it.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
 
 ## B. Identity, SaaS and authorization — P0
 
-- [x] Tenant, user, session, membership, role and permission schema (schema validation remains).
+- [x] Tenant, user, session, membership, role and permission schema (Prisma schema validation passed locally on 2026-10-17).
 - [x] Organization registration, trial tenant creation and initial owner membership.
 - [ ] Add email verification and abuse protections before public launch.
 - [x] Login/logout, session issuance/expiry, session restoration and CSRF-protected logout.
@@ -185,4 +187,4 @@ The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_P
 
 **Draft PR:** `feat/platform-subscription-foundation` adds the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
 
-This is not accepted work yet. Keep the related checklist items unchecked until the initial Prisma migration is reviewed and committed, schema/client generation/build/lint/tests pass, and DB-backed tests prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation now has a serialized cap check and pure policy tests, but the tests have not run and active-user/storage limits plus trial enforcement across the other write paths remain outstanding.
+This is not accepted work yet. Local schema validation, initial migration creation/application, client generation, type checks, lint, 29 unit tests and builds passed on 2026-10-17. The generated migration must still be reviewed and committed; DB-backed tests must prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation has a serialized cap check, but active-user/storage limits plus trial enforcement across other write paths remain outstanding.
