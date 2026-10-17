@@ -160,12 +160,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       return;
     }
 
+    const selectedTenantId = tenantId;
     const controller = new AbortController();
     async function loadLocations() {
       try {
         const response = await fetch(apiBaseUrl + "/locations", {
           credentials: "include",
-          headers: { "X-Tenant-Id": tenantId },
+          headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => ({})) as {
