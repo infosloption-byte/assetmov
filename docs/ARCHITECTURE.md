@@ -193,3 +193,32 @@ AssetMov serves multiple independent customer companies. There are two separate 
 - Subscription entitlements are distinct from user permissions: a feature must be included in the tenant plan **and** permitted for the user **and** within location scope before its business rules run.
 
 See [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) for detailed flows, tenant-configurable fields, module scope and acceptance criteria. All subsequent modules should satisfy that document before being considered complete.
+
+
+## 14. Subscription plans, entitlement evaluation and quota safety
+
+The plan and tenant subscription design must follow [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). In request middleware/domain services, use a shared policy service rather than duplicating plan checks across route handlers.
+
+Recommended evaluation sequence for a tenant-owned operation:
+1. Establish a valid session and actor.
+2. Resolve an active tenant membership and trusted tenant context.
+3. Resolve tenant/subscription lifecycle state and effective plan version.
+4. Confirm the requested feature is included and its relevant quota can accommodate the operation.
+5. Check the user's permission and applicable location scope.
+6. Validate domain invariants and references.
+7. Reserve/consume quota and write business state atomically, with audit entries and idempotency where needed.
+
+The exact order may be adjusted to avoid leaking resource existence, but no gate may be skipped. Platform routes use separate platform authorization. Company routes must never trust a browser-provided plan, tenant, quota, usage count or feature flag.
+
+Architecture requirements:
+- Keep tenant lifecycle, subscription/payment lifecycle, plan version, feature entitlements, persistent-resource limits and period-based usage distinct.
+- Represent plans using data such as Plan, PlanFeature and PlanLimit; subscriptions, billing/provider events, usage counters/events and temporary quota reservations should be separate records where appropriate.
+- Use one shared entitlement/quota service for API endpoints, asynchronous jobs, import/export workers, uploads and scheduled processing.
+- Use transaction-safe counter increments, conditional writes, reservations or equivalent coordination to prevent concurrent requests consuming the same last slot. Failed work must release reservations; retry must be idempotent.
+- Treat the database as authoritative. A cache can assist display/performance but cannot authorize writes. Reconcile counters against eligible source records and alert on drift.
+- Apply resource limits to net-new consumption. Do not silently delete or make existing customer data inaccessible merely because a limit is reached or the company downgrades.
+- Version plan changes and record effective dates, actor/source, prior/new values and tenant-specific override reasons. Avoid retroactively changing existing subscriptions accidentally.
+- Feature-gate errors, quota errors, permission errors and abuse rate-limit errors must be distinguishable, safe and actionable.
+- Enforce configured usage quotas and security/abuse throttles independently.
+- Payment webhooks require signature validation, idempotency, safe ordering and audit history; never store card details or log payment secrets.
+- Tests must cover hard-limit boundaries, concurrent consumption, plan change, trial/payment grace, over-limit downgrades, tenant isolation and all background/bulk paths.
