@@ -37,9 +37,19 @@ This document separates source code committed from build/test verification. A fe
 - Pure policy unit-test source covers lifecycle status, assignment eligibility, location hierarchy, transfer status, and password hashing; execution remains unverified.
 - Transfer list/detail/dispatch/receipt UI with asset selection, partial decisions and rejection reasons.
 
+## SaaS platform API foundation — drafted, not yet accepted
+
+The current feature branch adds a subscription-plan model, a tenant-subscription model, and a separate platform audit log. It also adds protected Platform Super Admin APIs to list/create/update plans, search companies with asset/active-user counts, assign a plan, start a server-timed trial, activate a company, or suspend a company. New company registration now assigns the configured active Trial plan. A safe, idempotent plan seed command provides the proposed defaults without overwriting plan values after an administrator edits them.
+
+These changes are source-committed on `feat/platform-subscription-foundation`; they must not be treated as accepted until the schema is validated, the initial Prisma migration is reviewed/applied, client generation/build/lint/tests pass, and database-backed route tests pass. The first Platform Super Admin must be provisioned out-of-band; there is no self-promotion registration option. Setup notes are in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md).
+
+Single-asset creation now has an initial quota/trial check: it locks the tenant subscription row, checks status and the stored trial end time, counts retained tenant assets, and returns a structured PLAN_LIMIT_REACHED error when the cap is reached. Pure policy tests for cap and trial boundaries are committed to the backend test script but have not been executed.
+
+Not included or not yet verified: Platform Admin or Company Admin UI, company usage screen, active-user quota enforcement, uploaded-file storage tracking, quota enforcement on future bulk/import paths, trial-expiry blocking across the other mutating workflows, payment integration, or DB-backed concurrency tests.
+
 ## Verification not yet confirmed
 
-The GitHub Actions runs visible during the current review report `startup_failure` and have zero jobs, so there is no successful CI result to rely on. I have not confirmed a complete local `npm install`, Prisma schema validation, generated-client build, database migration, or end-to-end browser run from this environment.
+The GitHub Actions runs visible during the last review reported `startup_failure` with no jobs, so there is no successful CI result to rely on. I have not confirmed a complete local `npm install`, Prisma schema validation, generated-client build, database migration, or end-to-end browser run from this environment.
 
 Before treating this as a validated foundation:
 1. Run installation from the repository root using Node.js 22.
@@ -71,20 +81,23 @@ The legacy feature inventory and process flows remain in [LEGACY_FEATURE_AUDIT.m
 The product target is a true multi-tenant SaaS, not a copy of the legacy single-company application. [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) is the product source of truth.
 
 - **Implemented partially:** tenant creation, first owner membership, tenant-scoped roles/permissions schema and selected tenant context.
-- **Not yet implemented/verified:** separate Platform Super Admin authorization and administration UI; complete Company Admin self-service for users, custom roles and permission grants; invitations; tenant preferences; category/model/custom-field configuration; plans and server-enforced entitlements; full cross-tenant authorization regression suite.
+- **Partially drafted on the feature branch, not yet verified:** separate Platform Super Admin API authorization, plan CRUD, tenant listing and subscription assignment.
+- **Still outstanding:** Platform Super Admin and Company Admin UI; Company Admin self-service for users, custom roles and permission grants; invitations; tenant preferences; category/model/custom-field configuration; full server-enforced resource quotas/trial expiry; full cross-tenant authorization regression suite.
 - The first registration role is a tenant owner, not a Platform Super Admin.
 - The existing tenant-aware schema and route checks are a foundation only; successful build, generated Prisma client, migrations, DB-backed integration tests and CI remain to be verified.
 
 Do not claim that platform/company administration or full SaaS security is complete until the outstanding tasks have been implemented and accepted against the product requirements.
 
 
-## Subscription guardrails — specified, not implemented
+## Subscription guardrails — initial scaffold drafted; enforcement not implemented
 
 The simplified subscription rules are documented in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). The only plan dimensions are asset limit, active-user limit, storage allowance and trial duration. Proposed values remain planning defaults, not finalized commercial terms.
 
+The feature branch includes source for the schema, platform plan/tenant subscription APIs, audit records, a safe defaults seed and Trial assignment at signup. It is not accepted until schema/migration, build/CI and database-backed tests pass.
+
 Still outstanding:
-- Plan/subscription schema and migration.
-- Platform Super Admin plan controls and tenant plan assignment.
+- Review and apply the initial migration containing plan/subscription/platform audit tables.
+- Platform and Company Admin screens.
 - Company Admin usage view.
 - Server-side asset, active-user and storage enforcement with concurrency protection.
 - Server-side trial expiry.

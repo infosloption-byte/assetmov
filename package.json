@@ -16,7 +16,10 @@
     "db:validate": "npm run db:validate --workspace @assetmov/backend",
     "test": "npm test --workspace @assetmov/backend",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,css,html,prisma,md,yml,yaml}\"",
-    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx,css}\" \"backend/src/**/*.ts\" \"backend/prisma/**/*.prisma\""
+    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx,css}\" \"backend/src/**/*.ts\" \"backend/prisma/**/*.prisma\"",
+    "db:seed:plans": "npm run db:seed:plans --workspace @assetmov/backend",
+    "db:migrate": "npm run db:migrate --workspace @assetmov/backend",
+    "db:generate": "npm run db:generate --workspace @assetmov/backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

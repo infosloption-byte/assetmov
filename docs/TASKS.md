@@ -28,7 +28,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
 - [ ] Add tenant admin UI for member/role assignment and permission editing.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
-- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role.
+- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is drafted on `feat/platform-subscription-foundation`; remain unchecked until verified, and the UI is still outstanding.)
 - [ ] Implement tenant/company administration for company profile, settings, users and memberships.
 - [ ] Add tenant admin UI to create/update/deactivate custom roles and assign permission-catalogue actions.
 - [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
@@ -148,10 +148,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## K. SaaS readiness and operations — P1/P2
 
-- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration.
+- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration. (Schema/API source is drafted on `feat/platform-subscription-foundation`; remain unchecked until migration, build and DB tests pass.)
 - [ ] Add dedicated Platform Super Admin plan management and tenant plan assignment screens.
 - [ ] Add Company Admin plan/usage view showing asset count, active users, storage usage and trial/renewal information.
-- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior.
+- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior. (Single-asset creation now has a tenant-subscription row lock and quota/trial policy check on `feat/platform-subscription-foundation`; keep this unchecked until tests pass and every asset-creating path is covered.)
 - [ ] Enforce active-user caps across invitations, membership creation and reactivation.
 - [ ] Enforce storage caps during uploads, including concurrent upload reservations and cleanup on failure.
 - [ ] Enforce trial expiry using server-side timestamps and the configured trial policy.
@@ -179,6 +179,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md); subscription enforcement details are in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). This checklist must be interpreted through its Platform Super Admin / Company Admin boundary. No company-owned feature is complete without tenant isolation, tenant-configurable data, server-side permissions, location scope where relevant and tests.
 
-## Suggested next pull request
+## Current implementation branch
 
-**Foundation PR:** monorepo scaffold, frontend app shell, backend health API, Prisma tenant-aware core schema, local MySQL setup, environment examples, CI baseline, and updated startup instructions. Do not implement workflow endpoints until tenant context and authorization scaffolding are in place.
+**Draft PR:** `feat/platform-subscription-foundation` adds the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
+
+This is not accepted work yet. Keep the related checklist items unchecked until the initial Prisma migration is reviewed and committed, schema/client generation/build/lint/tests pass, and DB-backed tests prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation now has a serialized cap check and pure policy tests, but the tests have not run and active-user/storage limits plus trial enforcement across the other write paths remain outstanding.

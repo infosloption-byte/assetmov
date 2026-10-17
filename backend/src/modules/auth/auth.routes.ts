@@ -174,6 +174,23 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         },
       });
 
+      const trialPlan = await tx.subscriptionPlan.findFirst({
+        where: { key: "trial", isActive: true },
+      });
+      if (!trialPlan || trialPlan.trialDurationDays < 1) {
+        throw new Error("TRIAL_PLAN_NOT_CONFIGURED");
+      }
+
+      await tx.tenantSubscription.create({
+        data: {
+          tenantId: tenant.id,
+          planId: trialPlan.id,
+          status: "TRIALING",
+          trialStartedAt: now,
+          trialEndsAt: new Date(now.getTime() + trialPlan.trialDurationDays * 24 * 60 * 60 * 1000),
+        },
+      });
+
       const permissions = await Promise.all(
         permissionDefinitions.map(([key, description]) =>
           tx.permission.upsert({
@@ -265,6 +282,10 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
       csrfToken,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "TRIAL_PLAN_NOT_CONFIGURED") {
+      sendError(response, 503, "TRIAL_PLAN_NOT_CONFIGURED", "Company registration is not available until the Trial plan is configured.");
+      return;
+    }
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
       sendError(response, 409, "ALREADY_EXISTS", "An account or organization using that value already exists.");
       return;
