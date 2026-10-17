@@ -98,14 +98,14 @@ Open **two PowerShell terminals**. Use each package's own folder and package scr
 Terminal 1 — React frontend:
 
 ```powershell
-Set-Location C:\\wamp\\www\\html\\assetmov\\frontend
+Set-Location ./frontend
 npm run dev
 ```
 
 Terminal 2 — Node.js/Express backend:
 
 ```powershell
-Set-Location C:\\wamp\\www\\html\\assetmov\\backend
+Set-Location ./backend
 npm run dev
 ```
 
@@ -124,14 +124,14 @@ Or run a check for only one package in its own terminal:
 
 ```powershell
 # Frontend only
-Set-Location C:\\wamp\\www\\html\\assetmov\\frontend
+Set-Location ./frontend
 npm run lint
 npm run typecheck
 ```
 
 ```powershell
 # Backend only
-Set-Location C:\\wamp\\www\\html\\assetmov\\backend
+Set-Location ./backend
 npm run lint
 npm run typecheck
 ```
