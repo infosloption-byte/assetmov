@@ -8,6 +8,7 @@ import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
+import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 
 export const app = express();
 
@@ -63,6 +64,7 @@ app.get("/api/health", async (_request, response, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/workspace", workspaceRouter);
 
 app.use((_request, response) => {
   response.status(404).json({
