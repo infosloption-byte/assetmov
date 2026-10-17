@@ -78,6 +78,7 @@ model Tenant {
   memberships       Membership[]
   roles             Role[]
   requestItems      AssetRequestItem[]
+  membershipLocations MembershipLocation[]
   locations         Location[]
   employees         Employee[]
   categories        AssetCategory[]
@@ -133,17 +134,34 @@ model Membership {
   tenantId  String
   userId    String
   roleId    String
-  isActive  Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role           @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict)
+  isActive            Boolean               @default(true)
+  allLocationsAccess  Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                Role                  @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict)
+  locationAssignments MembershipLocation[]  @relation("MembershipLocationAccess")
 
   @@unique([tenantId, userId])
   @@unique([tenantId, id])
   @@index([userId, isActive])
   @@index([tenantId, roleId, isActive])
+}
+
+model MembershipLocation {
+  id           String     @id @default(cuid())
+  tenantId     String
+  membershipId String
+  locationId   String
+  canManage    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership   Membership @relation("MembershipLocationAccess", fields: [tenantId, membershipId], references: [tenantId, id], onDelete: Cascade)
+  location     Location   @relation("LocationMembershipAccess", fields: [tenantId, locationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, membershipId, locationId])
+  @@index([tenantId, locationId])
 }
 
 model Role {
@@ -199,6 +217,7 @@ model Location {
   employees Employee[]   @relation("EmployeeHomeLocation")
   sentTransactions AssetTransaction[] @relation("TransactionFromLocation")
   receivedTransactions AssetTransaction[] @relation("TransactionToLocation")
+  membershipAssignments MembershipLocation[] @relation("LocationMembershipAccess")
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
