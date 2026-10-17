@@ -4,6 +4,25 @@ import type { AuthMode, AuthUser } from "./features/auth/types";
 
 type ApiHealth = "checking" | "online" | "offline";
 
+interface WorkspaceContext {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  };
+  membership: {
+    id: string;
+    role: { id: string; key: string; name: string };
+    allLocationsAccess: boolean;
+  };
+  permissions: string[];
+  locationScope: {
+    accessibleLocationIds: string[];
+    manageableLocationIds: string[];
+  };
+}
+
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
 const modules = [
@@ -21,7 +40,11 @@ function App() {
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext | null>(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [workspaceError, setWorkspaceError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,6 +78,7 @@ function App() {
         if (!payload.user) return;
 
         setUser(payload.user);
+        setActiveTenantId(payload.user.memberships[0]?.tenant.id ?? null);
 
         const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", {
           credentials: "include",
@@ -76,6 +100,56 @@ function App() {
     void restoreSession();
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!user || !activeTenantId) {
+      setWorkspaceContext(null);
+      setWorkspaceLoading(false);
+      setWorkspaceError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
+
+    async function loadWorkspaceContext() {
+      try {
+        const response = await fetch(apiBaseUrl + "/workspace/context", {
+          credentials: "include",
+          headers: { "X-Tenant-Id": activeTenantId },
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({})) as {
+          tenant?: WorkspaceContext["tenant"];
+          membership?: WorkspaceContext["membership"];
+          permissions?: string[];
+          locationScope?: WorkspaceContext["locationScope"];
+          error?: { message?: string };
+        };
+
+        if (!response.ok || !payload.tenant || !payload.membership || !payload.locationScope) {
+          throw new Error(payload.error?.message ?? "Could not load this workspace context.");
+        }
+
+        setWorkspaceContext({
+          tenant: payload.tenant,
+          membership: payload.membership,
+          permissions: payload.permissions ?? [],
+          locationScope: payload.locationScope,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setWorkspaceContext(null);
+        setWorkspaceError(error instanceof Error ? error.message : "Could not load workspace context.");
+      } finally {
+        if (!controller.signal.aborted) setWorkspaceLoading(false);
+      }
+    }
+
+    void loadWorkspaceContext();
+    return () => controller.abort();
+  }, [user, activeTenantId]);
 
   async function handleLogout() {
     setActionError("");
@@ -100,6 +174,9 @@ function App() {
 
       setUser(null);
       setCsrfToken(null);
+      setActiveTenantId(null);
+      setWorkspaceContext(null);
+      setWorkspaceError("");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
     }
@@ -114,16 +191,22 @@ function App() {
         onAuthenticated={(authenticatedUser, token) => {
           setUser(authenticatedUser);
           setCsrfToken(token);
+          setActiveTenantId(authenticatedUser.memberships[0]?.tenant.id ?? null);
+          setWorkspaceContext(null);
           setAuthMode(null);
           setActionError("");
+          setWorkspaceError("");
         }}
       />
     );
   }
 
-  const currentTenant = user?.memberships[0]?.tenant;
+  const selectedMembership = user?.memberships.find((membership) => membership.tenant.id === activeTenantId)
+    ?? user?.memberships[0];
+  const currentTenant = workspaceContext?.tenant ?? selectedMembership?.tenant;
   const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
+  const displayedError = actionError || workspaceError;
 
   return (
     <div className="app-shell">
@@ -143,7 +226,7 @@ function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon">✳</div><strong>Built for clarity.</strong><p>Know what you own, where it is, and what happened to it.</p></div>
-          <div className="sidebar-version"><span className="status-dot" /> Foundation preview <span>v0.2</span></div>
+          <div className="sidebar-version"><span className="status-dot" /> Foundation preview <span>v0.3</span></div>
         </div>
       </aside>
 
@@ -156,7 +239,19 @@ function App() {
               <span className="session-loading">Checking session…</span>
             ) : user ? (
               <>
-                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{currentTenant?.name ?? "No active workspace"}</small></div>
+                {user.memberships.length > 1 && (
+                  <select
+                    className="workspace-select"
+                    aria-label="Active workspace"
+                    value={activeTenantId ?? ""}
+                    onChange={(event) => setActiveTenantId(event.currentTarget.value || null)}
+                  >
+                    {user.memberships.map((membership) => (
+                      <option key={membership.tenant.id} value={membership.tenant.id}>{membership.tenant.name}</option>
+                    ))}
+                  </select>
+                )}
+                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : workspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
                 <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
               </>
@@ -169,7 +264,7 @@ function App() {
           </div>
         </header>
 
-        {actionError && <div className="action-error" role="alert">{actionError}</div>}
+        {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
 
         <section className="welcome-section">
           <div>
@@ -205,6 +300,13 @@ function App() {
             <Metric label="In maintenance" icon="⌁" detail="Service and repair queue" />
             <Metric label="Open requests" icon="◷" detail="Items needing a decision" />
           </div>
+          {workspaceContext && (
+            <div className="workspace-access-summary">
+              <span><strong>{workspaceContext.membership.role.name}</strong> access loaded</span>
+              <span>{workspaceContext.permissions.length} permissions</span>
+              <span>{workspaceContext.locationScope.accessibleLocationIds.length} locations in scope</span>
+            </div>
+          )}
         </section>
 
         <section className="modules-section" id="modules">
