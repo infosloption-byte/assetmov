@@ -11,6 +11,7 @@ import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
 import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 import { assetRouter } from "./modules/assets/asset.routes.js";
 import { locationRouter } from "./modules/locations/location.routes.js";
+import { transferRouter } from "./modules/transfers/transfer.routes.js";
 
 export const app = express();
 
@@ -69,6 +70,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
+app.use("/api/transfers", transferRouter);
 
 app.use((_request, response) => {
   response.status(404).json({
