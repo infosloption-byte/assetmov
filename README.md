@@ -34,32 +34,30 @@ A modern, multi-tenant SaaS asset lifecycle and inventory platform rebuilt from 
 - Separate permission check for financial/warranty fields.
 - Prisma model foundation for movements, requests, service, software licenses, asset tags and audit logs.
 - Subscription plan, tenant-subscription and separate platform-audit schema; protected platform plan/tenant APIs and idempotent plan seeding are source-committed but await schema/migration and CI verification.
-- Local MySQL Compose setup, environment validation, API health check, structured logs, and a CI workflow configuration.
+- WAMP-based local MySQL setup guidance, environment validation, API health check, structured logs, and a CI workflow configuration.
 
 ## Current feature gaps
 
 Printable GRN/receipt documents, assignment/unassignment, request approval, maintenance workflows, software seat management, barcode printing, physical audits, reports/exports, imports, employee/custodian management, password reset/email verification, SaaS billing, and production operations remain to be implemented. The transfer code still needs DB-backed integration and concurrency tests. Dashboard metrics are still placeholders.
 
-## Start locally
+## Start locally (Windows + WampServer)
 
-See [Local Development](docs/LOCAL_DEVELOPMENT.md).
+See [Local Development](docs/LOCAL_DEVELOPMENT.md) for the full WAMP configuration and folder-specific commands, including the initial Prisma migration.
 
-From the repository root:
+Start WampServer and create an empty local `assetmov` database in phpMyAdmin. Then run these commands from the repository root in PowerShell. Run the `Copy-Item` commands only if the local `.env` files do not already exist:
 
-```sh
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-docker compose up -d mysql
+```powershell
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
 npm install
 npm run db:validate
-npm run db:migrate
 npm run db:generate
 npm run db:seed:plans
 npm run build
 npm run dev
 ```
 
-Use PowerShell's `Copy-Item` instead of `cp` if preferred. Local MySQL uses host port 3307; the Compose credentials are disposable development defaults and must not be reused for a shared or production database.
+The frontend runs at http://localhost:5176 and the API runs at http://localhost:4000. Update `backend/.env` so `DATABASE_URL` matches your WAMP MySQL username, password and port. The example blank-password URL is intended for local development only.
 
 ## Product and engineering documents
 
