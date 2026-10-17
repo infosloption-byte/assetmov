@@ -75,7 +75,7 @@ The frontend runs at http://localhost:5176 and the API runs at http://localhost:
 
 ## Verification status
 
-Local verification reported on 2026-10-17: Prisma Client generation, frontend/backend type checks, lint, all 29 backend unit tests, and the frontend production build/backend TypeScript compilation passed. The initial Prisma migration is not yet committed, and database-backed/API/browser acceptance tests remain outstanding. GitHub Actions has also reported `startup_failure` with no jobs; a successful CI run is still required. See [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the exact remaining checks. Do not use real customer data until the migration and database-backed acceptance suite have been reviewed and passed.
+Local verification reported on 2026-10-17: Prisma schema validation, Prisma Client generation, frontend/backend type checks, lint, all 29 backend unit tests, and the frontend production build/backend TypeScript compilation passed. The initial migration `20261017170733_initial_assetmov_schema` was created and applied to the local development database, but its SQL still needs review and the migration directory is not yet committed to `main`. Database-backed/API/browser acceptance tests remain outstanding. GitHub Actions has also reported `startup_failure` with no jobs; a successful CI run is still required. See [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the exact remaining checks. Do not use real customer data until the migration and database-backed acceptance suite have been reviewed and passed.
 
 ## SaaS principles
 
