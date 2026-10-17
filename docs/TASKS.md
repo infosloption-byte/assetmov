@@ -151,7 +151,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration. (Schema/API source is drafted on `feat/platform-subscription-foundation`; remain unchecked until migration, build and DB tests pass.)
 - [ ] Add dedicated Platform Super Admin plan management and tenant plan assignment screens.
 - [ ] Add Company Admin plan/usage view showing asset count, active users, storage usage and trial/renewal information.
-- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior.
+- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior. (Single-asset creation now has a tenant-subscription row lock and quota/trial policy check on `feat/platform-subscription-foundation`; keep this unchecked until tests pass and every asset-creating path is covered.)
 - [ ] Enforce active-user caps across invitations, membership creation and reactivation.
 - [ ] Enforce storage caps during uploads, including concurrent upload reservations and cleanup on failure.
 - [ ] Enforce trial expiry using server-side timestamps and the configured trial policy.
@@ -183,4 +183,4 @@ The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_P
 
 **Draft PR:** `feat/platform-subscription-foundation` adds the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
 
-This is not accepted work yet. Keep the related checklist items unchecked until the initial Prisma migration is reviewed and committed, schema/client generation/build/lint/tests pass, and DB-backed tests prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. The following slice should add server-side asset and active-user quota enforcement before tackling upload storage accounting and admin screens.
+This is not accepted work yet. Keep the related checklist items unchecked until the initial Prisma migration is reviewed and committed, schema/client generation/build/lint/tests pass, and DB-backed tests prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation now has a serialized cap check and pure policy tests, but the tests have not run and active-user/storage limits plus trial enforcement across the other write paths remain outstanding.
