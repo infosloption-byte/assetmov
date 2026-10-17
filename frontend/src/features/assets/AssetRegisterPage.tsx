@@ -27,6 +27,8 @@ interface AssetSummary {
   purchaseOrderNumber?: string | null;
   currentLocationId: string | null;
   currentLocation: LocationSummary | null;
+  assignedEmployeeId?: string | null;
+  custodian?: { id: string; employeeCode: string; firstName: string; lastName: string } | null;
   model?: { id: string; name: string; category?: { name: string } } | null;
   manufacturer?: { id: string; name: string } | null;
   supplier?: { id: string; name: string } | null;
@@ -54,6 +56,7 @@ interface AssetPageProps {
   csrfToken: string | null;
   permissions: string[];
   allLocationsAccess: boolean;
+  manageableLocationIds: string[];
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -74,7 +77,7 @@ function statusLabel(status: AssetStatus): string {
   return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAccess }: AssetPageProps) {
+function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAccess, manageableLocationIds }: AssetPageProps) {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,10 +96,20 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [editingAsset, setEditingAsset] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const [eligibleEmployees, setEligibleEmployees] = useState<Array<{ id: string; employeeCode: string; firstName: string; lastName: string }>>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [employeesError, setEmployeesError] = useState("");
+  const [assignmentEmployeeId, setAssignmentEmployeeId] = useState("");
+  const [assignmentNote, setAssignmentNote] = useState("");
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
+  const [assignmentError, setAssignmentError] = useState("");
+  const [assignmentSuccess, setAssignmentSuccess] = useState("");
 
   const canCreate = permissions.includes("asset.create");
   const canReadLocations = permissions.includes("location.read");
   const canEditFinancial = permissions.includes("asset.financial.update");
+  const canAssignAssets = permissions.includes("asset.assign");
+  const canReadEmployees = permissions.includes("employee.read");
 
   const loadAssets = useCallback(async (signal?: AbortSignal) => {
     if (!tenantId) {
@@ -178,6 +191,12 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     setDetailError("");
     setEditingAsset(false);
     setEditError("");
+    setAssignmentError("");
+    setAssignmentSuccess("");
+    setEmployeesError("");
+    setEligibleEmployees([]);
+    setAssignmentEmployeeId("");
+    setAssignmentNote("");
     setSelectedAsset(null);
 
     try {
@@ -187,11 +206,122 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       });
       const payload = await response.json().catch(() => ({})) as { data?: AssetSummary; error?: { message?: string } };
       if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Could not load asset details.");
-      setSelectedAsset(payload.data);
+      const asset = payload.data;
+      setSelectedAsset(asset);
+
+      const canManageAssetLocation = allLocationsAccess ||
+        Boolean(asset.currentLocationId && manageableLocationIds.includes(asset.currentLocationId));
+      if (
+        canAssignAssets &&
+        canReadEmployees &&
+        canManageAssetLocation &&
+        asset.status === "AVAILABLE" &&
+        asset.currentLocationId
+      ) {
+        setEmployeesLoading(true);
+        try {
+          const params = new URLSearchParams({
+            locationId: asset.currentLocationId,
+            page: "1",
+            pageSize: "100",
+          });
+          const employeeResponse = await fetch(apiBaseUrl + "/employees?" + params.toString(), {
+            credentials: "include",
+            headers: { "X-Tenant-Id": tenantId },
+          });
+          const employeePayload = await employeeResponse.json().catch(() => ({})) as {
+            data?: Array<{ id: string; employeeCode: string; firstName: string; lastName: string; isActive: boolean }>;
+            error?: { message?: string };
+          };
+          if (!employeeResponse.ok) throw new Error(employeePayload.error?.message ?? "Could not load eligible custodians.");
+          const options = (employeePayload.data ?? []).filter((employee) => employee.isActive);
+          setEligibleEmployees(options);
+          setAssignmentEmployeeId(options[0]?.id ?? "");
+          setEmployeesError("");
+        } catch (employeeLoadError) {
+          setEmployeesError(employeeLoadError instanceof Error ? employeeLoadError.message : "Could not load eligible custodians.");
+        } finally {
+          setEmployeesLoading(false);
+        }
+      }
     } catch (detailLoadError) {
       setDetailError(detailLoadError instanceof Error ? detailLoadError.message : "Could not load asset details.");
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function assignSelectedAsset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !selectedAsset || assignmentBusy || !assignmentEmployeeId) {
+      if (!csrfToken) setAssignmentError("Your security token is missing. Sign in again and retry.");
+      else if (!assignmentEmployeeId) setAssignmentError("Select an eligible employee before assigning this asset.");
+      return;
+    }
+
+    setAssignmentBusy(true);
+    setAssignmentError("");
+    setAssignmentSuccess("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/" + encodeURIComponent(selectedAsset.id) + "/assign", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": tenantId,
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify({
+          employeeId: assignmentEmployeeId,
+          notes: assignmentNote.trim() || undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as { data?: AssetSummary; error?: { message?: string } };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Could not assign the asset.");
+      const selectedId = selectedAsset.id;
+      await loadAssets();
+      await openAsset(selectedId);
+      setAssignmentSuccess("Asset assigned successfully.");
+    } catch (assignError) {
+      setAssignmentError(assignError instanceof Error ? assignError.message : "Could not assign the asset.");
+    } finally {
+      setAssignmentBusy(false);
+    }
+  }
+
+  async function unassignSelectedAsset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !selectedAsset || assignmentBusy) {
+      if (!csrfToken) setAssignmentError("Your security token is missing. Sign in again and retry.");
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const notes = String(formData.get("returnNotes") ?? "").trim();
+    setAssignmentBusy(true);
+    setAssignmentError("");
+    setAssignmentSuccess("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/" + encodeURIComponent(selectedAsset.id) + "/unassign", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": tenantId,
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify({ notes: notes || undefined }),
+      });
+      const payload = await response.json().catch(() => ({})) as { data?: AssetSummary; error?: { message?: string } };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Could not return this asset to stock.");
+      const selectedId = selectedAsset.id;
+      await loadAssets();
+      await openAsset(selectedId);
+      setAssignmentSuccess("Asset returned to available stock.");
+    } catch (unassignError) {
+      setAssignmentError(unassignError instanceof Error ? unassignError.message : "Could not return this asset to stock.");
+    } finally {
+      setAssignmentBusy(false);
     }
   }
 
@@ -457,7 +587,49 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                 <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => { setEditingAsset(false); setEditError(""); }}>Cancel</button><button className="primary-button" type="submit" disabled={editSaving}>{editSaving ? "Saving…" : "Save changes"} {!editSaving && <span>↗</span>}</button></div>
               </form>
             ) : selectedAsset ? (
-              <>
+                            <>
+                <div className="asset-custody-panel">
+                  <div className="asset-custody-summary">
+                    <span className="asset-custody-icon">♙</span>
+                    <div>
+                      <span className="asset-custody-label">CURRENT CUSTODY</span>
+                      <strong>{selectedAsset.custodian ? selectedAsset.custodian.firstName + " " + selectedAsset.custodian.lastName : "Available for assignment"}</strong>
+                      <small>{selectedAsset.custodian ? selectedAsset.custodian.employeeCode : "No employee assigned"}</small>
+                    </div>
+                    <span className={"asset-status-badge " + selectedAsset.status.toLowerCase().replaceAll("_", "-")}>{statusLabel(selectedAsset.status)}</span>
+                  </div>
+                  {canAssignAssets && (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId))) && selectedAsset.status === "AVAILABLE" && (
+                    <form className="asset-custody-form" onSubmit={(event) => void assignSelectedAsset(event)}>
+                      <div className="asset-custody-form-fields">
+                        <div>
+                          <label htmlFor="assignEmployee">Assign to employee</label>
+                          <select id="assignEmployee" value={assignmentEmployeeId} onChange={(event) => setAssignmentEmployeeId(event.currentTarget.value)} disabled={employeesLoading || !canReadEmployees || eligibleEmployees.length === 0}>
+                            <option value="">{employeesLoading ? "Loading eligible employees…" : !canReadEmployees ? "Employee read permission required" : "Select an employee"}</option>
+                            {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="assignmentNote">Assignment note</label>
+                          <input id="assignmentNote" value={assignmentNote} onChange={(event) => setAssignmentNote(event.currentTarget.value)} maxLength={4000} placeholder="Optional handover note" />
+                        </div>
+                      </div>
+                      {employeesError && <div className="asset-inline-hint" role="status">{employeesError}</div>}
+                      {canReadEmployees && !employeesLoading && !employeesError && eligibleEmployees.length === 0 && <div className="asset-inline-hint" role="status">No active employees are assigned to this location yet. Add an employee with the same home location first.</div>}
+                      <button className="primary-button" type="submit" disabled={assignmentBusy || employeesLoading || !canReadEmployees || !assignmentEmployeeId}>{assignmentBusy ? "Assigning…" : "Assign asset"} {!assignmentBusy && <span>↗</span>}</button>
+                    </form>
+                  )}
+                  {canAssignAssets && (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId))) && selectedAsset.status === "ASSIGNED" && selectedAsset.assignedEmployeeId && (
+                    <form className="asset-custody-form" onSubmit={(event) => void unassignSelectedAsset(event)}>
+                      <label htmlFor="returnNotes">Return note</label>
+                      <div className="asset-custody-return-row">
+                        <input id="returnNotes" name="returnNotes" maxLength={4000} placeholder="Optional return/condition note" />
+                        <button className="topbar-button ghost" type="submit" disabled={assignmentBusy}>{assignmentBusy ? "Returning…" : "Return to stock"}</button>
+                      </div>
+                    </form>
+                  )}
+                  {assignmentError && <div className="asset-inline-error" role="alert">{assignmentError}</div>}
+                  {assignmentSuccess && <div className="asset-success" role="status">{assignmentSuccess}</div>}
+                </div>
                 <div className="asset-detail-grid">
                   <Detail label="Status"><span className={"asset-status-badge " + selectedAsset.status.toLowerCase().replaceAll("_", "-")}>{statusLabel(selectedAsset.status)}</span></Detail>
                   <Detail label="Serial number">{selectedAsset.serialNumber || "—"}</Detail>
