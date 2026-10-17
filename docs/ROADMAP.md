@@ -107,8 +107,14 @@ The roadmap combines reusable legacy capabilities with SaaS foundations missing 
 ## Phase 9 — Notifications, operations and SaaS launch (P1/P2)
 
 - Email notifications and in-app notification centre.
-- Subscription plans, feature entitlements, tenant lifecycle, billing provider and webhook idempotency.
-- Usage limits and soft/hard limits; upgrade/downgrade/cancel flows.
+- Data-driven, versioned subscription plans and feature entitlements configured by Platform Super Admin.
+- Resource and period limits for assets, users, locations, roles, custom fields, file storage, imports, exports and API usage as appropriate.
+- Shared server-side feature/quota enforcement across UI/API, bulk actions, files, reports, exports and background jobs.
+- Usage dashboard and warning thresholds, concurrency-safe quota accounting and reconciliation.
+- Subscription lifecycle and billing provider, signed/idempotent webhooks, trials, payment grace, suspension/reactivation, upgrade/downgrade/cancel flows.
+- Safe over-limit behavior preserving data after downgrade; documented export and retention policy.
+- Full entitlement/quota tests for boundary values, concurrent consumption, tenant isolation and billing transitions.
+- See [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md) for proposed default plan limits.
 - Security review, dependency scanning, backups and restore drill, observability, rate limits, retention policy and incident playbooks.
 - Production deployment, managed secrets, monitoring, runbooks and user help content.
 
