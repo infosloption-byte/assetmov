@@ -71,7 +71,7 @@ function EmployeePage({
   const visibleLocations = locations.filter((location) =>
     allLocationsAccess || accessibleLocationIds.includes(location.id),
   );
-  const manageableLocations = locations.filter((location) =>
+  const manageableLocations = visibleLocations.filter((location) =>
     allLocationsAccess || manageableLocationIds.includes(location.id),
   );
 
@@ -128,13 +128,14 @@ function EmployeePage({
       return;
     }
 
+    const selectedTenantId = tenantId;
     const controller = new AbortController();
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
         const response = await fetch(apiBaseUrl + "/locations", {
           credentials: "include",
-          headers: { "X-Tenant-Id": tenantId },
+          headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => ({})) as {
