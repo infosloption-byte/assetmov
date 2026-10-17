@@ -34,7 +34,7 @@ This document separates source code committed from build/test verification. A fe
 - Asset lifecycle transition guard and unit tests.
 - Location-aware asset visibility/creation and audit history on asset writes.
 - Transfer dispatch and receiving-decision endpoints, with tenant/location scope checks, per-line accept/reject decisions, transactional asset state changes, audit history and concurrency guards.
-- Pure policy unit-test source covers lifecycle status, assignment eligibility, location hierarchy, transfer status, and password hashing; execution remains unverified.
+- Pure policy unit tests cover lifecycle status, assignment eligibility, location hierarchy, transfer status, subscription limits and password hashing; local execution passed on 2026-10-17 (29 passed, 0 failed).
 - Transfer list/detail/dispatch/receipt UI with asset selection, partial decisions and rejection reasons.
 
 ## SaaS platform API foundation — drafted, not yet accepted
@@ -47,17 +47,29 @@ Single-asset creation now has an initial quota/trial check: it locks the tenant 
 
 Not included or not yet verified: Platform Admin or Company Admin UI, company usage screen, active-user quota enforcement, uploaded-file storage tracking, quota enforcement on future bulk/import paths, trial-expiry blocking across the other mutating workflows, payment integration, or DB-backed concurrency tests.
 
-## Verification not yet confirmed
+## Verification status
 
-The GitHub Actions runs visible during the last review reported `startup_failure` with no jobs, so there is no successful CI result to rely on. I have not confirmed a complete local `npm install`, Prisma schema validation, generated-client build, database migration, or end-to-end browser run from this environment.
+### Locally verified on 2026-10-17
 
-Before treating this as a validated foundation:
-1. Run installation from the repository root using Node.js 22.
-2. Start local MySQL and copy both `.env.example` files.
-3. Run `npm run db:validate`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
-4. Generate and commit the first reviewed Prisma migration.
-5. Exercise register/login/logout, workspace context, location create/list, asset create/list/detail/update, CSRF rejection, permission denial, and cross-tenant isolation against disposable MySQL.
-6. Fix every failure and obtain a successful CI run before moving data from a real customer.
+The developer ran the following commands from the repository root against the current `main` source:
+
+- `npm run db:generate` — passed; Prisma Client 7.10.1 generated.
+- `npm run typecheck` — passed for both frontend and backend.
+- `npm run lint` — passed for both frontend and backend.
+- `npm test` — 29 tests passed, 0 failed.
+- `npm run build` — frontend production build and backend TypeScript compilation passed.
+
+These are developer-reported local results. They do not establish database migration, API integration, browser acceptance, production-readiness, or successful GitHub Actions.
+
+### Still outstanding before accepting the foundation
+
+- Run `npm run db:validate` and confirm the schema validates in the local environment.
+- Review/apply and commit the initial Prisma migration. As of this review, `backend/prisma/migrations/` is not present on `main`.
+- Against a disposable MySQL database, exercise register/login/logout, workspace context, location create/list, asset create/list/detail/update, CSRF rejection, permission denial, subscription/trial behavior, and cross-tenant isolation.
+- Add database-backed transfer/assignment concurrency tests and route integration tests.
+- Resolve the observed GitHub Actions `startup_failure`/zero-job state and obtain a successful CI run before accepting this as a validated foundation.
+
+Do not reset or drop an existing database to make migration commands pass. If the local database contains tables or valuable data, back it up and inspect its state before attempting to create/apply the initial migration.
 
 ## Outstanding major modules
 
