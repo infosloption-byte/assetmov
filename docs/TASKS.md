@@ -15,9 +15,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Validate the Prisma schema locally with `npm run db:validate` (2026-10-17).
 - [x] Generate and apply the initial migration to the local development database (2026-10-17; `20261017170733_initial_assetmov`).
 - [x] Commit both generated migration directories, `migration_lock.toml`, and the root npm lockfile to `main` (commit `8989ffc`); local migration status reports two migrations up to date.
-- [ ] Review the migration SQL and verify a clean disposable MySQL database can apply both committed migrations from scratch.
+- [ ] Review the migration SQL and verify a clean disposable MySQL database can apply both committed migrations from scratch. CI configuration now includes this replay, but a successful workflow run is not confirmed.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
+- [ ] Run the new opt-in MySQL API acceptance suite successfully in local test DB and CI; the suite source now covers registration, session lifecycle, CSRF, workspace isolation, location APIs, and asset APIs.
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
 
 ## B. Identity, SaaS and authorization — P0
@@ -84,7 +85,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [ ] Bulk import preview, duplicate checks, row-level errors and retry.
 - [x] Add unit tests for asset lifecycle policy, custody assignment policy, location-scope expansion, transfer status outcomes, subscription policy and password hashing (29 passed locally on 2026-10-17; CI verification remains outstanding).
 - [x] Execute existing backend unit tests locally (29 passed, 0 failed on 2026-10-17).
-- [ ] Add API/DB integration tests, cross-tenant tests and browser acceptance tests.
+- [ ] Run and extend the new API/DB integration suite, add transfer/assignment concurrency tests, broader cross-tenant IDOR coverage, and browser acceptance tests. The opt-in suite has been added but is not yet verified by a successful run.
 
 ## E. Movement, assignment and receipts — P0
 
