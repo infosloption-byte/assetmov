@@ -190,3 +190,9 @@ The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_P
 **Current source:** `main` contains the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
 
 This is not accepted work yet. Local schema validation, migration creation/application and status, client generation, type checks, lint, 29 unit tests and builds passed on 2026-10-17. Both migration directories, migration lock and root lockfile were committed to `main` in commit `8989ffc`; DB-backed tests must still prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation has a serialized cap check, but active-user/storage limits plus trial enforcement across other write paths remain outstanding.
+
+## Asset master data increment — 2026-10-18
+- [ ] Verify the new company-scoped category list/create/edit and model list/create APIs and their added MySQL acceptance assertions locally.
+- [ ] Build Company Admin category and model screens, including dynamic custom-field editor.
+- [ ] Add update/archive endpoints with protection for historical assets, and enforce field-schema validation during asset registration/edit.
+- [ ] Finish secure password onboarding/reset when token persistence and trusted message delivery can be implemented together.
