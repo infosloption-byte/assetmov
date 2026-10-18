@@ -39,7 +39,7 @@ This document separates source code committed from build/test verification. A fe
 
 ## SaaS platform API foundation — drafted, not yet accepted
 
-The current feature branch adds a subscription-plan model, a tenant-subscription model, and a separate platform audit log. It also adds protected Platform Super Admin APIs to list/create/update plans, search companies with asset/active-user counts, assign a plan, start a server-timed trial, activate a company, or suspend a company. New company registration now assigns the configured active Trial plan. A safe, idempotent plan seed command provides the proposed defaults without overwriting plan values after an administrator edits them.
+The current `main` branch includes a subscription-plan model, a tenant-subscription model, and a separate platform audit log. It also includes protected Platform Super Admin APIs to list/create/update plans, search companies with asset/active-user counts, assign a plan, start a server-timed trial, activate a company, or suspend a company. New company registration now assigns the configured active Trial plan. A safe, idempotent plan seed command provides the proposed defaults without overwriting plan values after an administrator edits them.
 
 The plan/subscription schema and API foundation are present on `main`. Local schema validation, migration application, client generation, type checks, lint, unit tests and builds have passed; this is still not accepted as production-ready until database-backed route tests and cross-tenant authorization tests pass. The first Platform Super Admin must be provisioned out-of-band; there is no self-promotion registration option. Setup notes are in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md).
 
