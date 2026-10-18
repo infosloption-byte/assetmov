@@ -137,7 +137,9 @@ test("registration, session security, tenant isolation, locations and assets wor
           password,
         }),
       });
-      assert.equal(response.status, 201, `Registration failed: ${await response.text()}`);
+      if (response.status !== 201) {
+        assert.fail(`Registration failed (${response.status}): ${await response.text()}`);
+      }
       const body = await response.json() as RegistrationResponse;
       const tenant = body.user.memberships[0]?.tenant;
       assert.ok(tenant?.id, "Registration should return the new workspace.");
@@ -219,7 +221,9 @@ test("registration, session security, tenant isolation, locations and assets wor
         type: "HEAD_OFFICE",
       }),
     });
-    assert.equal(locationResponse.status, 201, `Location creation failed: ${await locationResponse.text()}`);
+    if (locationResponse.status !== 201) {
+      assert.fail(`Location creation failed (${locationResponse.status}): ${await locationResponse.text()}`);
+    }
     const createdLocation = (await locationResponse.json()) as LocationResponse;
     assert.ok(createdLocation.data.id);
     locationIds.push(createdLocation.data.id);
@@ -256,7 +260,9 @@ test("registration, session security, tenant isolation, locations and assets wor
         currentLocationId: createdLocation.data.id,
       }),
     });
-    assert.equal(assetResponse.status, 201, `Asset creation failed: ${await assetResponse.text()}`);
+    if (assetResponse.status !== 201) {
+      assert.fail(`Asset creation failed (${assetResponse.status}): ${await assetResponse.text()}`);
+    }
     const createdAsset = await assetResponse.json() as AssetResponse;
     assert.ok(createdAsset.data.id);
 
