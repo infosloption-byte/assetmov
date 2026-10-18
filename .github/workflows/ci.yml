@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "develop", "feature/**"]
+    branches: ["main", "develop", "feature/**", "feat/**"]
   pull_request:
   workflow_dispatch:
 
@@ -11,12 +11,13 @@ permissions:
 
 jobs:
   validate:
-    name: Lint, typecheck, tests and build
+    name: Lint, typecheck, unit tests, database acceptance and build
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
-      DATABASE_URL: mysql://assetmov:assetmov_dev_only_change_me@127.0.0.1:3307/assetmov
+      DATABASE_URL: mysql://assetmov:assetmov_dev_only_change_me@127.0.0.1:3307/assetmov_test
       FRONTEND_ORIGIN: http://localhost:5176
+      ASSETMOV_RUN_DB_INTEGRATION_TESTS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,12 +26,47 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Install workspace dependencies
-        run: npm install
+      - name: Install locked workspace dependencies
+        run: npm ci
+
+      # The initial migration set was generated against WAMP/MySQL with
+      # case-insensitive table-name behavior. Match it here while testing.
+      # A separate production-portability check on case-sensitive MySQL remains
+      # required before deploying to a default Linux MySQL installation.
+      - name: Start disposable MySQL
+        shell: bash
+        run: |
+          docker run --detach --name assetmov-mysql \
+            --env MYSQL_ROOT_PASSWORD=root \
+            --env MYSQL_DATABASE=assetmov_test \
+            --env MYSQL_USER=assetmov \
+            --env MYSQL_PASSWORD=assetmov_dev_only_change_me \
+            --publish 3307:3306 \
+            mysql:8.0 --lower_case_table_names=1
+
+          for attempt in {1..60}; do
+            if docker exec assetmov-mysql mysqladmin ping --host=127.0.0.1 --user=root --password=root --silent 2>/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs assetmov-mysql
+          exit 1
 
       - name: Validate database schema
         run: npm run db:validate
+
+      - name: Apply committed migrations
+        run: npm run db:deploy
+
+      - name: Confirm database migration status
+        run: npm --workspace @assetmov/backend exec prisma migrate status
+
+      - name: Seed default subscription plans
+        run: npm run db:seed:plans
 
       - name: Run lint
         run: npm run lint
@@ -40,6 +76,9 @@ jobs:
 
       - name: Run backend unit tests
         run: npm test
+
+      - name: Run database-backed API acceptance tests
+        run: npm run test:integration
 
       - name: Build frontend and backend
         run: npm run build
