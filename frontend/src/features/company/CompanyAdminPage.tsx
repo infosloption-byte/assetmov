@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type Role = { id: string; key: string; name: string; description: string | null; isSystem: boolean; memberCount: number; permissionKeys: string[] };
 type Permission = { key: string; description: string | null };
-type Member = { id: string; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string } };
+type Location = { id: string; name: string; code: string };
+type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string } };
 type Usage = { activeUsers: number; maxActiveUsers: number | null };
 type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[]; currentUserId: string | null; isOwner: boolean; allLocationsAccess: boolean };
 
@@ -12,6 +13,10 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [roles, setRoles] = useState<Role[]>([]);
   const [catalog, setCatalog] = useState<Permission[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [editingScope, setEditingScope] = useState<Member | null>(null);
+  const [scopeAll, setScopeAll] = useState(false);
+  const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage>({ activeUsers: 0, maxActiveUsers: null });
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [roleFormOpen, setRoleFormOpen] = useState(false);
@@ -48,15 +53,17 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         canRoles ? call<{ data: Role[] }>("/roles") : Promise.resolve({ data: [] as Role[] }),
         canRoles ? call<{ data: Permission[] }>("/roles/permissions") : Promise.resolve({ data: [] as Permission[] }),
         canMembers ? call<{ data: Member[]; usage: Usage }>("/members") : Promise.resolve({ data: [] as Member[], usage: { activeUsers: 0, maxActiveUsers: null } }),
+        canMembers && permissions.includes("location.read") ? call<{ data: Location[] }>("/locations") : Promise.resolve({ data: [] as Location[] }),
       ]);
       setRoles(results[0].data);
       setCatalog(results[1].data);
       setMembers(results[2].data);
       setUsage(results[2].usage);
+      setLocations(results[3].data);
       setError("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load administration data."); }
     finally { setLoading(false); }
-  }, [tenantId, canRoles, canMembers, call]);
+  }, [tenantId, canRoles, canMembers, call, permissions]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -120,8 +127,8 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
         <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => setUserFormOpen(true)}>Add user ＋</button>
       </div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-        {loading ? <tr><td colSpan={4}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
+      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
+        {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
           <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div></td><td>
             {canRoles ? <select aria-label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId} onChange={event => {
               const nextRole = event.currentTarget.value;
@@ -130,6 +137,10 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
               {roles.map(role => <option key={role.id} value={role.id} disabled={!assignableRoles.some(item => item.id === role.id)}>{role.name}</option>)}
             </select> : member.role.name}
           </td><td>{member.isActive ? "Active" : "Inactive"}</td>
+          <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId || (!allLocationsAccess && locations.length === 0)} onClick={() => {
+            setEditingScope(member); setScopeAll(member.allLocationsAccess);
+            setScopeIds(member.locationAssignments.map(item => item.locationId));
+          }}>{member.allLocationsAccess ? "All locations" : member.locationAssignments.length + " locations"} · Edit</button></td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId} onClick={() => {
             if (window.confirm(member.isActive ? "Deactivate this user?" : "Activate this user?")) void run(() => call("/members/" + member.id + "/status", "PATCH", { isActive: !member.isActive, reason: "Company administrator changed membership status" }), "Member status updated.");
           }}>{member.isActive ? "Deactivate" : "Activate"}</button></td>
@@ -142,6 +153,25 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
       </tbody></table></div>
     </>}
+    {editingScope && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="scopeTitle">
+      <div className="asset-modal-heading"><h2 id="scopeTitle">Location access: {editingScope.user.fullName}</h2><button className="modal-close" type="button" onClick={() => setEditingScope(null)}>×</button></div>
+      <form className="asset-create-form" onSubmit={event => {
+        event.preventDefault();
+        void (async () => {
+          const ok = await run(() => call("/members/" + editingScope.id + "/location-access", "PATCH", {
+            allLocationsAccess: scopeAll, locationIds: scopeAll ? [] : scopeIds,
+            reason: "Company administrator updated user location access",
+          }), "Location access updated.");
+          if (ok) setEditingScope(null);
+        })();
+      }}>
+        {allLocationsAccess && <label><input type="checkbox" checked={scopeAll} onChange={event => setScopeAll(event.target.checked)} /> All locations</label>}
+        {!scopeAll && <fieldset className="company-permissions"><legend>Accessible locations</legend>
+          {locations.map(location => <label key={location.id}><input type="checkbox" checked={scopeIds.includes(location.id)} onChange={event => setScopeIds(previous => event.target.checked ? [...previous, location.id] : previous.filter(id => id !== location.id))} />{location.name} ({location.code})</label>)}
+        </fieldset>}
+        <p className="asset-inline-hint">Only locations you are allowed to manage may be granted. Child locations inherit access.</p>
+        <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingScope(null)}>Cancel</button><button className="primary-button" disabled={busy} type="submit">Save access</button></div>
+      </form></section></div>}
     {userFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="newUserTitle">
       <div className="asset-modal-heading"><h2 id="newUserTitle">Add company user</h2><button className="modal-close" type="button" onClick={() => setUserFormOpen(false)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void submitUser(event)}>
