@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -318,10 +319,7 @@ function EmployeePage({
                 <div><label htmlFor="employeePhone">Phone</label><input id="employeePhone" name="phone" maxLength={50} placeholder="Optional" /></div>
               </div>
               <label htmlFor="employeeHomeLocation">Home location {!allLocationsAccess && <span>*</span>}</label>
-              <select id="employeeHomeLocation" name="homeLocationId" defaultValue="" required={!allLocationsAccess}>
-                <option value="">No home location</option>
-                {manageableLocations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-              </select>
+              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
               {!allLocationsAccess && manageableLocations.length === 0 && <p className="asset-inline-hint">You need a manageable location to add an employee. Ask an administrator to grant location access.</p>}
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="primary-button" type="submit" disabled={creating || locationsLoading || (!allLocationsAccess && manageableLocations.length === 0)}>{creating ? "Saving…" : "Save employee"} {!creating && <span>↗</span>}</button></div>
@@ -346,10 +344,7 @@ function EmployeePage({
                 <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} defaultValue={editingEmployee.phone ?? ""} /></div>
               </div>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
-              <select id="editEmployeeHomeLocation" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess}>
-                <option value="">No home location</option>
-                {manageableLocations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-              </select>
+              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
               {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setEditingEmployee(null)}>Cancel</button><button className="primary-button" type="submit" disabled={savingEdit || locationsLoading}>{savingEdit ? "Saving…" : "Save changes"} {!savingEdit && <span>↗</span>}</button></div>
             </form>
