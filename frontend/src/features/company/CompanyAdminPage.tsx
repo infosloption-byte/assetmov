@@ -15,6 +15,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [members, setMembers] = useState<Member[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [editingScope, setEditingScope] = useState<Member | null>(null);
+  const [editingProfile, setEditingProfile] = useState<Member | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage>({ activeUsers: 0, maxActiveUsers: null });
@@ -129,7 +130,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       </div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
-          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div></td><td>
+          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div><button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button></td><td>
             {canRoles ? <select aria-label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId} onChange={event => {
               const nextRole = event.currentTarget.value;
               if (window.confirm("Change this user's role?")) void run(() => call("/members/" + member.id + "/role", "PATCH", { roleId: nextRole }), "Role updated.");
@@ -153,6 +154,22 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
       </tbody></table></div>
     </>}
+    {editingProfile && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <div className="asset-modal-heading"><h2 id="profileTitle">Edit user profile</h2><button className="modal-close" type="button" onClick={() => setEditingProfile(null)}>×</button></div>
+      <form className="asset-create-form" onSubmit={event => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        void (async () => {
+          const ok = await run(() => call("/members/" + editingProfile.id + "/profile", "PATCH", {
+            fullName: String(data.get("fullName") ?? "").trim(),
+          }), "User profile updated.");
+          if (ok) setEditingProfile(null);
+        })();
+      }}>
+        <label>Full name<input name="fullName" required minLength={2} maxLength={191} defaultValue={editingProfile.user.fullName} /></label>
+        <p className="asset-inline-hint">Email is an account identity and cannot be changed here.</p>
+        <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingProfile(null)}>Cancel</button><button className="primary-button" type="submit" disabled={busy}>Save profile</button></div>
+      </form></section></div>}
     {editingScope && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="scopeTitle">
       <div className="asset-modal-heading"><h2 id="scopeTitle">Location access: {editingScope.user.fullName}</h2><button className="modal-close" type="button" onClick={() => setEditingScope(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => {
