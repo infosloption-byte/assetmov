@@ -18,7 +18,8 @@
     "test": "tsx --test tests/asset-lifecycle.test.ts tests/assignment-policy.test.ts tests/location-scope.test.ts tests/password.test.ts tests/transfer-status.test.ts tests/subscription-policy.test.ts",
     "db:seed:plans": "tsx prisma/seed.ts",
     "db:deploy": "prisma migrate deploy",
-    "test:integration": "node --import tsx --test tests/integration/api-acceptance.test.ts"
+    "test:integration": "node --import tsx --test tests/integration/api-acceptance.test.ts",
+    "db:status": "prisma migrate status"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
