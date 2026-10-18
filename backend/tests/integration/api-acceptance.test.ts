@@ -111,6 +111,7 @@ test("registration, session security, tenant isolation, locations and assets wor
   const tenantSlugs: [string, string] = [`it-${suffix}-a`, `it-${suffix}-b`];
   const emails: [string, string] = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
   const password = "AssetMov-Test-Password-2026!";
+  const managedEmail = `it.managed.${suffix}@example.test`;
   let server: Server | undefined;
   let baseUrl = "";
   let createdPlanId: string | undefined;
@@ -321,6 +322,56 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(memberList.usage.activeUsers, 1);
     const ownerMembership = memberList.data.find((member) => member.user.id === ownerA.userId);
     assert.ok(ownerMembership?.isActive);
+
+    const createRole = await fetch(`${baseUrl}/api/roles`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({
+        key: `IT_VIEWER_${suffix.toUpperCase()}`,
+        name: "Integration Viewer", permissionKeys: ["asset.read", "location.read"],
+      }),
+    });
+    if (createRole.status !== 201) assert.fail(`Role creation failed: ${createRole.status} ${await createRole.text()}`);
+    const customRole = await createRole.json() as { data: { id: string } };
+    const createMember = await fetch(`${baseUrl}/api/members`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({
+        email: managedEmail, fullName: "Integration Managed User",
+        initialPassword: password, roleId: customRole.data.id, allLocationsAccess: true,
+      }),
+    });
+    if (createMember.status !== 201) assert.fail(`User creation failed: ${createMember.status} ${await createMember.text()}`);
+    const managed = await createMember.json() as { data: { id: string } };
+    const managedLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST", headers: requestHeaders({ json: true, origin: true }),
+      body: JSON.stringify({ email: managedEmail, password }),
+    });
+    assert.equal(managedLogin.status, 200);
+    const managedCookie = sessionCookie(managedLogin);
+    const managedContext = await fetch(`${baseUrl}/api/workspace/context`, {
+      headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(managedContext.status, 200);
+    const managedBody = await managedContext.json() as WorkspaceResponse;
+    assert.ok(managedBody.permissions.includes("asset.read"));
+    assert.ok(!managedBody.permissions.includes("members.manage"));
+    const deniedRoleCreation = await fetch(`${baseUrl}/api/roles`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id,
+        csrfToken: (await managedLogin.json() as LoginResponse).csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ key: "DENIED_ROLE", name: "Denied", permissionKeys: ["asset.create"] }),
+    });
+    assert.equal(deniedRoleCreation.status, 403);
+    const deniedCrossTenantRole = await fetch(`${baseUrl}/api/members/${managed.data.id}/role`, {
+      method: "PATCH",
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ roleId: customRole.data.id }),
+    });
+    assert.equal(deniedCrossTenantRole.status, 404);
 
     const crossTenantMembers = await fetch(`${baseUrl}/api/members`, {
       headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
@@ -579,7 +630,7 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
         await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
       }
-      await prisma.user.deleteMany({ where: { email: { in: emails } } });
+      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail] } } });
     } finally {
       if (server) {
         await new Promise<void>((resolve, reject) => {
