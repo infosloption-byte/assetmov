@@ -410,6 +410,53 @@ authRouter.post("/change-password", requireSession, requireCsrf, async (request,
   }
 });
 
+authRouter.get("/sessions", requireSession, async (request, response, next) => {
+  try {
+    const now = new Date();
+    const sessions = await prisma.session.findMany({
+      where: { userId: request.auth!.userId, expiresAt: { gt: now } },
+      select: { id: true, createdAt: true, lastSeenAt: true, expiresAt: true, ipAddress: true, userAgent: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    response.status(200).json({ data: sessions.map((session) => ({
+      ...session,
+      isCurrent: session.id === request.auth!.sessionId,
+    })) });
+  } catch (error) { next(error); }
+});
+
+authRouter.delete("/sessions/others", requireSession, requireCsrf, async (request, response, next) => {
+  try {
+    const result = await prisma.session.deleteMany({
+      where: { userId: request.auth!.userId, id: { not: request.auth!.sessionId } },
+    });
+    response.status(200).json({ revoked: result.count });
+  } catch (error) { next(error); }
+});
+
+authRouter.delete("/sessions/:id", requireSession, requireCsrf, async (request, response, next) => {
+  try {
+    const sessionId = request.params.id;
+    if (typeof sessionId !== "string" || !sessionId || sessionId.length > 36) {
+      sendError(response, 400, "VALIDATION_ERROR", "A valid session ID is required.");
+      return;
+    }
+    if (sessionId === request.auth!.sessionId) {
+      sendError(response, 409, "CURRENT_SESSION", "Use Sign out to end this session.");
+      return;
+    }
+    const result = await prisma.session.deleteMany({
+      where: { id: sessionId, userId: request.auth!.userId },
+    });
+    if (!result.count) {
+      sendError(response, 404, "SESSION_NOT_FOUND", "The session was not found.");
+      return;
+    }
+    response.status(200).json({ revoked: result.count });
+  } catch (error) { next(error); }
+});
+
 authRouter.post("/logout", requireSession, requireCsrf, async (request, response, next) => {
   try {
     await prisma.session.deleteMany({ where: { id: request.auth!.sessionId } });
