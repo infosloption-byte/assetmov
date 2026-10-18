@@ -431,6 +431,62 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.ok(tenantListBody.data.some((tenant) =>
       tenant.id === ownerB.tenant.id && tenant.subscription?.planId === createdPlanId));
 
+    // Real MySQL quota enforcement: the fifth asset must not persist on a four-asset plan.
+    const registerLimitedAsset = (index: number) => fetch(`${baseUrl}/api/assets`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true,
+      }),
+      body: JSON.stringify({
+        inventoryNumber: `IT-LIMIT-${suffix}-${index}`,
+        title: `Subscription limit test asset ${index}`,
+      }),
+    });
+    for (let index = 0; index < 4; index += 1) {
+      const allowed = await registerLimitedAsset(index);
+      assert.equal(allowed.status, 201, `Asset ${index + 1} should fit the plan cap: ${await allowed.text()}`);
+    }
+    const blockedByCap = await registerLimitedAsset(4);
+    assert.equal(blockedByCap.status, 409);
+    const capBody = await blockedByCap.json() as {
+      error: { code: string; current: number; maximum: number; limit: string };
+    };
+    assert.equal(capBody.error.code, "PLAN_LIMIT_REACHED");
+    assert.equal(capBody.error.current, 4);
+    assert.equal(capBody.error.maximum, 4);
+    assert.equal(capBody.error.limit, "assets");
+    assert.equal(await prisma.asset.count({ where: { tenantId: ownerB.tenant.id } }), 4);
+
+    // Trial expiry and suspension are checked by the API, not just by UI controls.
+    await prisma.tenantSubscription.update({
+      where: { tenantId: ownerA.tenant.id },
+      data: { trialEndsAt: new Date(Date.now() - 60_000) },
+    });
+    const attemptOwnerAAsset = (tag: string) => fetch(`${baseUrl}/api/assets`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true,
+      }),
+      body: JSON.stringify({
+        inventoryNumber: `IT-BLOCK-${suffix}-${tag}`,
+        title: "Should not be created",
+      }),
+    });
+    const expiredTrial = await attemptOwnerAAsset("expired");
+    assert.equal(expiredTrial.status, 403);
+    assert.equal((await expiredTrial.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+
+    await prisma.tenantSubscription.update({
+      where: { tenantId: ownerA.tenant.id },
+      data: { status: "SUSPENDED" },
+    });
+    const suspended = await attemptOwnerAAsset("suspended");
+    assert.equal(suspended.status, 403);
+    assert.equal((await suspended.json() as ErrorResponse).error?.code, "SUBSCRIPTION_INACTIVE");
+    assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 1);
+
     const auditActions = await prisma.platformAuditLog.findMany({
       where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
       select: { action: true, reason: true },
