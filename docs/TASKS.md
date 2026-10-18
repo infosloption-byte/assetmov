@@ -31,7 +31,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Secure session cookie, CSRF middleware and authentication/API rate limits.
 - [ ] Review throttling/lockout policy against production abuse scenarios.
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
-- [ ] Add tenant admin UI for member/role assignment and permission editing.
+- [ ] Add tenant admin UI for member/role assignment and permission editing.\n- [ ] Verify newly committed tenant member list and activation/deactivation APIs locally against MySQL; quota checks, owner safeguards, audit and session revocation have initial code and smoke assertions, but not yet a passing local run.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
 - [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is on `main`; keep the platform-admin area unchecked until database-backed authorization tests pass. The UI is still outstanding.)
 - [ ] Implement tenant/company administration for company profile, settings, users and memberships.
