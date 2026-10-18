@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type Role = { id: string; key: string; name: string; description: string | null; isSystem: boolean; memberCount: number; permissionKeys: string[] };
@@ -22,6 +23,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
+  const [newUserRoleId, setNewUserRoleId] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -100,7 +102,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       fullName: String(data.get("fullName") ?? "").trim(),
       email: String(data.get("email") ?? "").trim(),
       initialPassword: String(data.get("initialPassword") ?? ""),
-      roleId: String(data.get("roleId") ?? ""),
+      roleId: newUserRoleId,
       allLocationsAccess: data.get("allLocationsAccess") === "on",
     }), "Company user created.");
     if (ok) setUserFormOpen(false);
@@ -126,17 +128,18 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     {tab === "users" && canMembers && tenantId && <>
       <div className="asset-register-toolbar">
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
-        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => setUserFormOpen(true)}>Add user ＋</button>
+        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setUserFormOpen(true); }}>Add user ＋</button>
       </div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
           <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div><button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button></td><td>
-            {canRoles ? <select aria-label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId} onChange={event => {
-              const nextRole = event.currentTarget.value;
-              if (window.confirm("Change this user's role?")) void run(() => call("/members/" + member.id + "/role", "PATCH", { roleId: nextRole }), "Role updated.");
-            }}>
-              {roles.map(role => <option key={role.id} value={role.id} disabled={!assignableRoles.some(item => item.id === role.id)}>{role.name}</option>)}
-            </select> : member.role.name}
+            {canRoles ? <ThemeSelect label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId}
+              options={roles.map(role => ({ value: role.id, label: role.name, disabled: !assignableRoles.some(item => item.id === role.id) }))}
+              onChange={nextRole => {
+                if (nextRole !== member.role.id && window.confirm("Change this user's role?")) {
+                  void run(() => call("/members/" + member.id + "/role", "PATCH", { roleId: nextRole }), "Role updated.");
+                }
+              }} /> : member.role.name}
           </td><td>{member.isActive ? "Active" : "Inactive"}</td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId || (!allLocationsAccess && locations.length === 0)} onClick={() => {
             setEditingScope(member); setScopeAll(member.allLocationsAccess);
@@ -196,9 +199,9 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         <label>Email<input name="email" type="email" required maxLength={191} /></label>
         <label>Initial password<input name="initialPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password" /></label>
         <p className="asset-inline-hint">Development onboarding: arrange secure delivery of the initial password. One-time password setup is planned before launch.</p>
-        <label>Role<select name="roleId" required>{assignableRoles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
+        <label>Role</label><ThemeSelect label="New user role" value={newUserRoleId} onChange={setNewUserRoleId} options={assignableRoles.map(role => ({ value: role.id, label: role.name }))}/>
         {allLocationsAccess && <label><input type="checkbox" name="allLocationsAccess" /> Access all company locations</label>}
-        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy} type="submit">Create user</button></div>
+        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId} type="submit">Create user</button></div>
       </form></section></div>}
     {roleFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="roleFormTitle">
       <div className="asset-modal-heading"><h2 id="roleFormTitle">{selectedRole ? "Edit role" : "Create role"}</h2><button className="modal-close" type="button" onClick={() => setRoleFormOpen(false)}>×</button></div>
