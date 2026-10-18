@@ -14,6 +14,11 @@ const createSchema = z.object({
   roleId: z.string().trim().min(1).max(36),
   allLocationsAccess: z.boolean().default(false),
 }).strict();
+const scopeSchema = z.object({
+  allLocationsAccess: z.boolean(),
+  locationIds: z.array(z.string().trim().min(1).max(36)).max(500),
+  reason: z.string().trim().min(8).max(1000),
+}).strict();
 const roleChangeSchema = z.object({ roleId: z.string().trim().min(1).max(36) }).strict();
 const updateSchema = z.object({
   isActive: z.boolean(),
@@ -30,6 +35,7 @@ memberRouter.get("/", async (request, response, next) => {
         where: { tenantId },
         select: {
           id: true, isActive: true, allLocationsAccess: true, createdAt: true,
+          locationAssignments: { select: { locationId: true, canManage: true } },
           role: { select: { id: true, key: true, name: true } },
           user: { select: { id: true, email: true, fullName: true, disabledAt: true } },
         },
@@ -154,6 +160,57 @@ memberRouter.patch("/:id/role", requireCsrf, async (request, response, next) => 
     const code = error instanceof Error ? error.message : "";
     if (["MEMBER_NOT_FOUND","ROLE_NOT_FOUND","LAST_OWNER_REQUIRED","ROLE_ASSIGNMENT_DENIED","CANNOT_CHANGE_OWN_ROLE"].includes(code)) {
       response.status(code === "MEMBER_NOT_FOUND" ? 404 : code === "ROLE_NOT_FOUND" ? 400 : 403).json({ error: { code } }); return;
+    }
+    next(error);
+  }
+});
+
+memberRouter.patch("/:id/location-access", requireCsrf, async (request, response, next) => {
+  const parsed = scopeSchema.safeParse(request.body);
+  const memberId = request.params.id;
+  if (!parsed.success || typeof memberId !== "string" || !memberId) {
+    response.status(400).json({ error: { code: "VALIDATION_ERROR" } }); return;
+  }
+  const tenantId = request.auth!.tenantId!;
+  const { allLocationsAccess, reason } = parsed.data;
+  const locationIds = [...new Set(parsed.data.locationIds)];
+  if (allLocationsAccess && (!request.auth!.allLocationsAccess || locationIds.length > 0)) {
+    response.status(403).json({ error: { code: "LOCATION_GRANT_DENIED" } }); return;
+  }
+  if (!allLocationsAccess && locationIds.some((id) => !request.auth!.manageableLocationIds?.includes(id))
+    && !request.auth!.allLocationsAccess) {
+    response.status(403).json({ error: { code: "LOCATION_GRANT_DENIED" } }); return;
+  }
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM Tenant WHERE id = ${tenantId} FOR UPDATE`;
+      const member = await tx.membership.findFirst({ where: { id: memberId, tenantId }, include: { role: true, locationAssignments: true } });
+      if (!member) throw new Error("MEMBER_NOT_FOUND");
+      if (member.role.isSystem && request.auth!.roleKey !== "TENANT_OWNER") throw new Error("SYSTEM_MEMBER_DENIED");
+      if (member.userId === request.auth!.userId) throw new Error("CANNOT_EDIT_OWN_SCOPE");
+      const valid = await tx.location.count({ where: { tenantId, id: { in: locationIds }, isActive: true } });
+      if (valid !== locationIds.length) throw new Error("INVALID_LOCATION_SCOPE");
+      await tx.membershipLocation.deleteMany({ where: { tenantId, membershipId: member.id } });
+      if (!allLocationsAccess && locationIds.length) {
+        await tx.membershipLocation.createMany({ data: locationIds.map((locationId) => ({
+          tenantId, membershipId: member.id, locationId, canManage: false,
+        })) });
+      }
+      const result = await tx.membership.update({ where: { id: member.id }, data: { allLocationsAccess },
+        include: { locationAssignments: { select: { locationId: true, canManage: true } } } });
+      await tx.auditLog.create({ data: {
+        tenantId, actorUserId: request.auth!.userId, action: "member.location_access_changed",
+        entityType: "Membership", entityId: member.id,
+        oldData: { allLocationsAccess: member.allLocationsAccess, locationIds: member.locationAssignments.map((item) => item.locationId) },
+        newData: { allLocationsAccess, locationIds, reason },
+      } });
+      return result;
+    });
+    response.json({ data: updated });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (["MEMBER_NOT_FOUND","SYSTEM_MEMBER_DENIED","CANNOT_EDIT_OWN_SCOPE","INVALID_LOCATION_SCOPE"].includes(code)) {
+      response.status(code === "MEMBER_NOT_FOUND" ? 404 : code === "INVALID_LOCATION_SCOPE" ? 400 : 403).json({ error: { code } }); return;
     }
     next(error);
   }
