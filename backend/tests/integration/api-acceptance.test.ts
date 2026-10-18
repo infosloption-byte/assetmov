@@ -634,6 +634,14 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     assert.equal(revokedPlatform.status, 403, "Existing sessions must lose platform access immediately.");
 
+    const passwordChange = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ currentPassword: "incorrect-current-password", newPassword: "Replacement-Test-Password-2026!" }),
+    });
+    assert.equal(passwordChange.status, 403);
+    assert.equal((await passwordChange.json() as ErrorResponse).error?.code, "CURRENT_PASSWORD_INVALID");
+
     const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
       method: "POST",
       headers: requestHeaders({ json: true, origin: true }),
