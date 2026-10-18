@@ -22,6 +22,9 @@ Company administrators define tenant-specific roles by selecting from the applic
 | POST | /api/members | members.manage | Directly create a new company user and membership |
 | PATCH | /api/members/:id/role | members.manage | Assign an existing tenant role |
 | PATCH | /api/members/:id/status | members.manage | Activate/deactivate membership |
+| PATCH | /api/members/:id/profile | members.manage | Edit member full name (shared-identity safeguard) |
+| PATCH | /api/members/:id/location-access | members.manage | Edit tenant-specific location grants |
+| POST | /api/auth/change-password | Signed-in account + current password | Change password and revoke other sessions |
 
 Mutations require authenticated sessions, valid CSRF tokens and origin restrictions. None of these endpoints grant platform-admin privileges. Company administrators cannot change their own role or disable themselves, and the final active company owner is protected.
 
@@ -29,4 +32,4 @@ Mutations require authenticated sessions, valid CSRF tokens and origin restricti
 
 This first version requires the administrator to provide the user's initial password. Before public deployment, replace this with an expiring, single-use password-setup link or enforce secure first-login password rotation. Never distribute initial passwords in email or store them in logs. Existing email addresses are intentionally rejected rather than silently linked to a different company.
 
-The user-management React screens, location-grant editor, dedicated first-login onboarding, self-service password changes, password resets, richer profile edits, custom-role deletion, and database-backed concurrency/limit boundary tests remain outstanding. The source was committed but has not yet been run locally by the developer. Do not treat the administration module as production-ready.
+Basic React user/role screens, location-grant editing, display-name changes and the authenticated password-change API are implemented but require browser/local acceptance. First-login password setup, reset-by-email, email address changes, session management UI, custom-role deletion and concurrency/limit boundary tests remain outstanding. The source was committed but has not yet been run locally by the developer. Do not treat the administration module as production-ready.
