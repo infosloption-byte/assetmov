@@ -15,6 +15,7 @@ import { transferRouter } from "./modules/transfers/transfer.routes.js";
 import { employeeRouter } from "./modules/employees/employee.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
 import { memberRouter } from "./modules/members/member.routes.js";
+import { roleRouter } from "./modules/roles/role.routes.js";
 
 export const app = express();
 
@@ -72,6 +73,7 @@ app.get("/api/health", async (_request, response, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api/platform", platformRouter);
 app.use("/api/members", memberRouter);
+app.use("/api/roles", roleRouter);
 app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
