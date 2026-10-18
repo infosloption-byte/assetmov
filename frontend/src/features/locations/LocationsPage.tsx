@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -198,13 +199,13 @@ function LocationsPage({
               <input id="locationName" name="name" minLength={2} maxLength={191} required placeholder="e.g. Colombo Head Office" />
               <div className="asset-form-two-col">
                 <div><label htmlFor="locationCode">Location code <span>*</span></label><input id="locationCode" name="code" maxLength={100} pattern="[a-zA-Z0-9][a-zA-Z0-9._/-]*" required placeholder="e.g. CMB-HQ" /></div>
-                <div><label htmlFor="locationType">Location type <span>*</span></label><select id="locationType" name="type" defaultValue="BRANCH" required><option value="HEAD_OFFICE">Head office</option><option value="REGION">Region</option><option value="BRANCH">Branch</option><option value="DEPARTMENT">Department</option><option value="ROOM">Room</option><option value="WAREHOUSE">Warehouse</option></select></div>
+                <div><label htmlFor="locationType">Location type <span>*</span></label><ThemeSelect label="Location type" name="type" defaultValue="BRANCH" required options={[{value:"HEAD_OFFICE",label:"Head office"},{value:"REGION",label:"Region"},{value:"BRANCH",label:"Branch"},{value:"DEPARTMENT",label:"Department"},{value:"ROOM",label:"Room"},{value:"WAREHOUSE",label:"Warehouse"}]}/></div>
               </div>
               <label htmlFor="parentId">Parent location</label>
-              <select id="parentId" name="parentId" defaultValue="" required={!allLocationsAccess}>
-                <option value="">No parent (root location)</option>
-                {parentChoices.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-              </select>
+              <ThemeSelect label="Parent location" name="parentId" defaultValue="" required={!allLocationsAccess}
+                options={[{value:"", label:"No parent (root location)"}, ...parentChoices.map(location => ({
+                  value:location.id, label:location.name + " (" + location.code + ")",
+                }))]}/>
               {!allLocationsAccess && parentChoices.length === 0 && <p className="asset-inline-hint">Your role can create locations only below a location you manage. Ask an administrator to grant a manageable location scope.</p>}
               <label htmlFor="locationAddress">Address / description</label>
               <textarea id="locationAddress" name="address" rows={3} maxLength={500} placeholder="Optional address" />
