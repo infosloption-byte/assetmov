@@ -7,6 +7,7 @@ import TransferPage from "./features/transfers/TransferPage";
 import EmployeePage from "./features/employees/EmployeePage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
 import MasterDataPage from "./features/master-data/MasterDataPage";
+import ThemeSelect from "./components/ThemeSelect";
 
 type ApiHealth = "checking" | "online" | "offline";
 type AccountSession = { id: string; createdAt: string; lastSeenAt: string | null; expiresAt: string; ipAddress: string | null; userAgent: string | null; isCurrent: boolean };
@@ -311,16 +312,11 @@ function App() {
             ) : user ? (
               <>
                 {user.memberships.length > 1 && (
-                  <select
-                    className="workspace-select"
-                    aria-label="Active workspace"
-                    value={activeTenantId ?? ""}
-                    onChange={(event) => setActiveTenantId(event.currentTarget.value || null)}
-                  >
-                    {user.memberships.map((membership) => (
-                      <option key={membership.tenant.id} value={membership.tenant.id}>{membership.tenant.name}</option>
-                    ))}
-                  </select>
+                  <ThemeSelect className="workspace-select" label="Active workspace" value={activeTenantId ?? ""}
+                    onChange={value => setActiveTenantId(value || null)}
+                    options={user.memberships.map(membership => ({
+                      value: membership.tenant.id, label: membership.tenant.name,
+                    }))}/>
                 )}
                 <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
