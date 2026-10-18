@@ -345,6 +345,29 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     if (createMember.status !== 201) assert.fail(`User creation failed: ${createMember.status} ${await createMember.text()}`);
     const managed = await createMember.json() as { data: { id: string } };
+    const scopeDenied = await fetch(`${baseUrl}/api/members/${managed.data.id}/location-access`, {
+      method: "PATCH",
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ allLocationsAccess: true, locationIds: [], reason: "Cross tenant access should fail" }),
+    });
+    assert.equal(scopeDenied.status, 404);
+    const editScope = await fetch(`${baseUrl}/api/members/${managed.data.id}/location-access`, {
+      method: "PATCH",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({
+        allLocationsAccess: false, locationIds: [createdLocation.data.id],
+        reason: "Grant a restricted location to this user",
+      }),
+    });
+    assert.equal(editScope.status, 200);
+    const scopedMember = await prisma.membership.findUniqueOrThrow({
+      where: { id: managed.data.id }, include: { locationAssignments: true },
+    });
+    assert.equal(scopedMember.allLocationsAccess, false);
+    assert.deepEqual(scopedMember.locationAssignments.map((item) => item.locationId), [createdLocation.data.id]);
+
     const managedLogin = await fetch(`${baseUrl}/api/auth/login`, {
       method: "POST", headers: requestHeaders({ json: true, origin: true }),
       body: JSON.stringify({ email: managedEmail, password }),
