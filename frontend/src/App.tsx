@@ -8,6 +8,7 @@ import EmployeePage from "./features/employees/EmployeePage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
 
 type ApiHealth = "checking" | "online" | "offline";
+type AccountSession = { id: string; createdAt: string; lastSeenAt: string | null; expiresAt: string; ipAddress: string | null; userAgent: string | null; isCurrent: boolean };
 
 interface WorkspaceContext {
   tenant: {
@@ -51,6 +52,10 @@ function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [actionError, setActionError] = useState("");
   const [passwordDialog, setPasswordDialog] = useState(false);
+  const [sessionsDialog, setSessionsDialog] = useState(false);
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
@@ -186,6 +191,31 @@ function App() {
     } finally { setPasswordBusy(false); }
   }
 
+  async function loadSessions() {
+    setSessionsBusy(true); setSessionsError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/auth/sessions", { credentials: "include" });
+      const payload = await response.json().catch(() => ({})) as { data?: AccountSession[]; error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not load sessions.");
+      setSessions(payload.data ?? []);
+    } catch (error) { setSessionsError(error instanceof Error ? error.message : "Could not load sessions."); }
+    finally { setSessionsBusy(false); }
+  }
+
+  async function revokeSession(id?: string) {
+    if (!csrfToken || sessionsBusy) return;
+    setSessionsBusy(true); setSessionsError("");
+    try {
+      const response = await fetch(apiBaseUrl + (id ? "/auth/sessions/" + encodeURIComponent(id) : "/auth/sessions/others"), {
+        method: "DELETE", credentials: "include", headers: { "X-CSRF-Token": csrfToken },
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not revoke session.");
+      setSessions(previous => previous.filter(item => item.isCurrent || (id !== undefined && item.id !== id)));
+    } catch (error) { setSessionsError(error instanceof Error ? error.message : "Could not revoke session."); }
+    finally { setSessionsBusy(false); }
+  }
+
   async function handleLogout() {
     setActionError("");
     try {
@@ -293,6 +323,7 @@ function App() {
                 <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
                 <button className="topbar-button ghost" type="button" onClick={() => { setPasswordError(""); setPasswordDialog(true); }}>Password</button>
+                <button className="topbar-button ghost" type="button" onClick={() => { setSessionsDialog(true); void loadSessions(); }}>Sessions</button>
                 <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
               </>
             ) : (
@@ -304,6 +335,22 @@ function App() {
           </div>
         </header>
 
+        {sessionsDialog && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="sessionsTitle">
+          <div className="asset-modal-heading"><h2 id="sessionsTitle">Signed-in sessions</h2><button className="modal-close" type="button" onClick={() => setSessionsDialog(false)}>×</button></div>
+          <p className="asset-inline-hint">Review devices with access to your account. Session IP and browser details may be approximate.</p>
+          {sessionsError && <div className="asset-inline-error" role="alert">{sessionsError}</div>}
+          <div className="account-sessions-list">
+            {sessionsBusy && sessions.length === 0 && <p>Loading sessions…</p>}
+            {sessions.map(session => <div className="account-session" key={session.id}>
+              <div><strong>{session.isCurrent ? "Current session" : "Other session"}</strong>
+                <small>{session.userAgent?.slice(0, 95) ?? "Unknown browser"}</small>
+                <small>Last used: {new Date(session.lastSeenAt ?? session.createdAt).toLocaleString()}</small>
+              </div>
+              {!session.isCurrent && <button type="button" className="topbar-button ghost" disabled={sessionsBusy} onClick={() => void revokeSession(session.id)}>Revoke</button>}
+            </div>)}
+          </div>
+          <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setSessionsDialog(false)}>Close</button><button type="button" className="primary-button" disabled={sessionsBusy || !sessions.some(item => !item.isCurrent)} onClick={() => void revokeSession()}>Sign out other sessions</button></div>
+        </section></div>}
         {passwordDialog && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="passwordDialogTitle">
           <div className="asset-modal-heading"><h2 id="passwordDialogTitle">Change password</h2><button className="modal-close" type="button" onClick={() => setPasswordDialog(false)}>×</button></div>
           <form className="asset-create-form" onSubmit={event => void changeOwnPassword(event)}>
