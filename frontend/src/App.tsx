@@ -5,6 +5,7 @@ import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 import LocationsPage from "./features/locations/LocationsPage";
 import TransferPage from "./features/transfers/TransferPage";
 import EmployeePage from "./features/employees/EmployeePage";
+import CompanyAdminPage from "./features/company/CompanyAdminPage";
 
 type ApiHealth = "checking" | "online" | "offline";
 
@@ -40,7 +41,7 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees">("overview");
+  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -231,6 +232,7 @@ function App() {
           <button className={"nav-item " + (activePage === "transfers" ? "active" : "")} type="button" onClick={() => setActivePage("transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</button>
           <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
           <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
+          {(activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
         </nav>
@@ -242,7 +244,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -276,7 +278,9 @@ function App() {
 
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
 
-        {activePage === "assets" ? (
+        {activePage === "company" ? (
+          <CompanyAdminPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} currentUserId={user?.id ?? null} isOwner={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER"} allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? false} />
+        ) : activePage === "assets" ? (
           <AssetRegisterPage
             tenantId={activeTenantId}
             csrfToken={csrfToken}
