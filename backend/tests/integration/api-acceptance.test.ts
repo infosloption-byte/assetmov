@@ -109,7 +109,6 @@ test("registration, session security, tenant isolation, locations and assets wor
   const tenantSlugs = [`it-${suffix}-a`, `it-${suffix}-b`];
   const emails = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
   const password = "AssetMov-Test-Password-2026!";
-  const locationIds: string[] = [];
   let server: Server | undefined;
   let baseUrl = "";
 
@@ -226,7 +225,6 @@ test("registration, session security, tenant isolation, locations and assets wor
     }
     const createdLocation = (await locationResponse.json()) as LocationResponse;
     assert.ok(createdLocation.data.id);
-    locationIds.push(createdLocation.data.id);
 
     const locationList = await fetch(`${baseUrl}/api/locations?q=${encodeURIComponent(suffix)}`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
