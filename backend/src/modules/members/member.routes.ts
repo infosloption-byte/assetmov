@@ -120,6 +120,49 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
   }
 });
 
+const profileSchema = z.object({ fullName: z.string().trim().min(2).max(191) }).strict();
+
+memberRouter.patch("/:id/profile", requireCsrf, async (request, response, next) => {
+  const parsed = profileSchema.safeParse(request.body);
+  const memberId = request.params.id;
+  if (!parsed.success || typeof memberId !== "string" || !memberId) {
+    response.status(400).json({ error: { code: "VALIDATION_ERROR" } }); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const result = await prisma.$transaction(async (tx) => {
+      const member = await tx.membership.findFirst({
+        where: { id: memberId, tenantId },
+        include: { user: { select: { id: true, fullName: true, memberships: { select: { tenantId: true } } } } },
+      });
+      if (!member) throw new Error("MEMBER_NOT_FOUND");
+      // Identity profile data is shared across tenants. Do not allow one tenant
+      // administrator to modify a shared user's identity.
+      if (member.user.memberships.length > 1 && member.userId !== request.auth!.userId) {
+        throw new Error("SHARED_PROFILE_RESTRICTED");
+      }
+      const user = await tx.user.update({
+        where: { id: member.userId },
+        data: { fullName: parsed.data.fullName },
+        select: { id: true, fullName: true, email: true },
+      });
+      await tx.auditLog.create({ data: {
+        tenantId, actorUserId: request.auth!.userId,
+        action: "member.profile_updated", entityType: "Membership", entityId: member.id,
+        oldData: { fullName: member.user.fullName }, newData: { fullName: user.fullName },
+      } });
+      return user;
+    });
+    response.json({ data: result });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "MEMBER_NOT_FOUND" || code === "SHARED_PROFILE_RESTRICTED") {
+      response.status(code === "MEMBER_NOT_FOUND" ? 404 : 403).json({ error: { code } }); return;
+    }
+    next(error);
+  }
+});
+
 memberRouter.patch("/:id/role", requireCsrf, async (request, response, next) => {
   const parsed = roleChangeSchema.safeParse(request.body);
   const memberId = request.params.id;
