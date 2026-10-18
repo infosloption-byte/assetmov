@@ -199,7 +199,7 @@ This is not accepted work yet. Local schema validation, migration creation/appli
 
 ## Themed UI and asset master-data screens — 2026-10-18
 - [ ] Verify Categories & Models React screen, category create/edit, model creation and custom field definitions against local API.
-- [ ] Continue migrating legacy native select controls in existing asset, location, employee and transfer forms to shared ThemeSelect. Company role selectors and workspace chooser already migrated.
-- [ ] Replace remaining browser-native confirmation prompts with themed, accessible confirmation dialogs; standardize inline errors and notifications.
+- [ ] Verify migration of existing asset, location, employee and transfer dropdowns, company role selectors and workspace chooser to ThemeSelect; all were updated in source and need browser keyboard/accessibility acceptance.
+- [ ] Finish themed notification/confirmation migration: Company user management confirmations now use a themed dialog, but other notification patterns and full accessibility checks remain.
 - [ ] Add model edit/deactivate endpoints, historical-schema compatibility and server validation of asset custom-field values.
 - [ ] Add keyboard and screen reader interaction tests for custom dropdown and dialogs.
