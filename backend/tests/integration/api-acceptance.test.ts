@@ -113,6 +113,7 @@ test("registration, session security, tenant isolation, locations and assets wor
   const password = "AssetMov-Test-Password-2026!";
   let server: Server | undefined;
   let baseUrl = "";
+  let createdPlanId: string | undefined;
 
   try {
     await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`;
@@ -308,6 +309,148 @@ test("registration, session security, tenant isolation, locations and assets wor
       "TENANT_ACCESS_DENIED",
     );
 
+    // Platform administration must be independent of a company's owner role.
+    const deniedPlatform = await fetch(`${baseUrl}/api/platform/plans`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(deniedPlatform.status, 403);
+    assert.equal((await deniedPlatform.json() as ErrorResponse).error?.code, "PLATFORM_ACCESS_DENIED");
+
+    const deniedTenantList = await fetch(`${baseUrl}/api/platform/tenants`, {
+      headers: requestHeaders({ cookie: ownerB.cookie }),
+    });
+    assert.equal(deniedTenantList.status, 403);
+
+    // Controlled test-only bootstrap: never expose platform promotion through signup or tenant APIs.
+    await prisma.user.update({ where: { id: ownerA.userId }, data: { isPlatformAdmin: true } });
+
+    const platformPlans = await fetch(`${baseUrl}/api/platform/plans`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(platformPlans.status, 200);
+    const plansBody = await platformPlans.json() as { data: Array<{ id: string; key: string }> };
+    assert.ok(plansBody.data.some((plan) => plan.key === "trial"));
+
+    const noCsrfPlan = await fetch(`${baseUrl}/api/platform/plans`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, json: true, origin: true }),
+      body: JSON.stringify({}),
+    });
+    assert.equal(noCsrfPlan.status, 403);
+    assert.equal((await noCsrfPlan.json() as ErrorResponse).error?.code, "CSRF_INVALID");
+
+    const planKey = `it-${suffix}`;
+    const newPlan = await fetch(`${baseUrl}/api/platform/plans`, {
+      method: "POST",
+      headers: requestHeaders({
+        cookie: ownerA.cookie, csrfToken: ownerA.csrfToken, json: true, origin: true,
+      }),
+      body: JSON.stringify({
+        key: planKey,
+        name: "Integration Limited Plan",
+        description: "Temporary DB integration plan",
+        maxAssets: 3,
+        maxActiveUsers: 2,
+        storageLimitBytes: "1048576",
+        trialDurationDays: 7,
+        isActive: true,
+        reason: "Integration test creates a temporary plan",
+      }),
+    });
+    if (newPlan.status !== 201) {
+      assert.fail(`Plan creation failed (${newPlan.status}): ${await newPlan.text()}`);
+    }
+    const planBody = await newPlan.json() as {
+      data: { id: string; key: string; storageLimitBytes: string; maxAssets: number };
+    };
+    createdPlanId = planBody.data.id;
+    assert.equal(planBody.data.key, planKey);
+    assert.equal(planBody.data.storageLimitBytes, "1048576");
+
+    const updatedPlan = await fetch(`${baseUrl}/api/platform/plans/${createdPlanId}`, {
+      method: "PATCH",
+      headers: requestHeaders({
+        cookie: ownerA.cookie, csrfToken: ownerA.csrfToken, json: true, origin: true,
+      }),
+      body: JSON.stringify({
+        maxAssets: 4,
+        reason: "Integration test checks audited plan update",
+      }),
+    });
+    assert.equal(updatedPlan.status, 200);
+    assert.equal((await updatedPlan.json() as { data: { maxAssets: number } }).data.maxAssets, 4);
+
+    const deniedSubscription = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/subscription`,
+      {
+        method: "PATCH",
+        headers: requestHeaders({
+          cookie: ownerB.cookie, csrfToken: ownerB.csrfToken, json: true, origin: true,
+        }),
+        body: JSON.stringify({
+          planId: createdPlanId, mode: "activate",
+          reason: "Company owner must not modify platform subscriptions",
+        }),
+      },
+    );
+    assert.equal(deniedSubscription.status, 403);
+    assert.equal((await deniedSubscription.json() as ErrorResponse).error?.code, "PLATFORM_ACCESS_DENIED");
+
+    const assignSubscription = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/subscription`,
+      {
+        method: "PATCH",
+        headers: requestHeaders({
+          cookie: ownerA.cookie, csrfToken: ownerA.csrfToken, json: true, origin: true,
+        }),
+        body: JSON.stringify({
+          planId: createdPlanId, mode: "activate",
+          reason: "Integration test activates a second company",
+        }),
+      },
+    );
+    if (assignSubscription.status !== 200) {
+      assert.fail(`Subscription assignment failed (${assignSubscription.status}): ${await assignSubscription.text()}`);
+    }
+    const assignedBody = await assignSubscription.json() as {
+      data: { planId: string; status: string };
+    };
+    assert.equal(assignedBody.data.planId, createdPlanId);
+    assert.equal(assignedBody.data.status, "ACTIVE");
+    const updatedTenant = await prisma.tenant.findUniqueOrThrow({ where: { id: ownerB.tenant.id } });
+    assert.equal(updatedTenant.status, "ACTIVE");
+
+    const platformTenants = await fetch(
+      `${baseUrl}/api/platform/tenants?q=${encodeURIComponent(tenantSlugs[1])}`,
+      { headers: requestHeaders({ cookie: ownerA.cookie }) },
+    );
+    assert.equal(platformTenants.status, 200);
+    const tenantListBody = await platformTenants.json() as {
+      data: Array<{ id: string; subscription: { planId: string } | null }>;
+    };
+    assert.ok(tenantListBody.data.some((tenant) =>
+      tenant.id === ownerB.tenant.id && tenant.subscription?.planId === createdPlanId));
+
+    const auditActions = await prisma.platformAuditLog.findMany({
+      where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
+      select: { action: true, reason: true },
+    });
+    assert.ok(auditActions.some((entry) => entry.action === "subscription_plan.created" && entry.reason.length >= 8));
+    assert.ok(auditActions.some((entry) => entry.action === "subscription_plan.updated"));
+
+    const subscriptionAudit = await prisma.platformAuditLog.findFirst({
+      where: { actorUserId: ownerA.userId, action: "tenant.subscription_changed" },
+      orderBy: { createdAt: "desc" },
+    });
+    assert.ok(subscriptionAudit, "Subscription assignment must be audited.");
+    assert.equal(subscriptionAudit.reason, "Integration test activates a second company");
+
+    await prisma.user.update({ where: { id: ownerA.userId }, data: { isPlatformAdmin: false } });
+    const revokedPlatform = await fetch(`${baseUrl}/api/platform/plans`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(revokedPlatform.status, 403, "Existing sessions must lose platform access immediately.");
+
     const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
       method: "POST",
       headers: requestHeaders({ json: true, origin: true }),
@@ -339,6 +482,10 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.asset.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.location.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
+      }
+      if (createdPlanId) {
+        await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
+        await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
       }
       await prisma.user.deleteMany({ where: { email: { in: emails } } });
     } finally {
