@@ -187,6 +187,40 @@ test("registration, session security, tenant isolation, locations and assets wor
     const meBody = await me.json() as { user: { id: string } };
     assert.equal(meBody.user.id, ownerA.userId);
 
+    const otherLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: requestHeaders({ json: true, origin: true }),
+      body: JSON.stringify({ email: ownerA.email, password: ownerA.password }),
+    });
+    assert.equal(otherLogin.status, 200);
+    const otherCookie = sessionCookie(otherLogin);
+    const sessionsResponse = await fetch(`${baseUrl}/api/auth/sessions`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(sessionsResponse.status, 200);
+    const sessionData = await sessionsResponse.json() as { data: Array<{ id: string; isCurrent: boolean }> };
+    assert.ok(sessionData.data.some(item => item.isCurrent));
+    assert.ok(sessionData.data.some(item => !item.isCurrent));
+
+    const noCsrfRevocation = await fetch(`${baseUrl}/api/auth/sessions/others`, {
+      method: "DELETE",
+      headers: requestHeaders({ cookie: ownerA.cookie, origin: true }),
+    });
+    assert.equal(noCsrfRevocation.status, 403);
+    const revokeOtherSessions = await fetch(`${baseUrl}/api/auth/sessions/others`, {
+      method: "DELETE",
+      headers: requestHeaders({ cookie: ownerA.cookie, csrfToken: ownerA.csrfToken, origin: true }),
+    });
+    assert.equal(revokeOtherSessions.status, 200);
+    const revokedMe = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: requestHeaders({ cookie: otherCookie }),
+    });
+    assert.equal(revokedMe.status, 401);
+    const currentStillValid = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(currentStillValid.status, 200);
+
     const ownContext = await fetch(`${baseUrl}/api/workspace/context`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
     });
