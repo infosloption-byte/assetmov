@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -541,17 +542,11 @@ function TransferPage({
               <div className="asset-form-two-col">
                 <div>
                   <label htmlFor="transferOrigin">Origin location <span>*</span></label>
-                  <select id="transferOrigin" value={originLocationId} onChange={(event) => setOriginLocationId(event.currentTarget.value)} required>
-                    <option value="">Choose origin</option>
-                    {originOptions.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-                  </select>
+                  <ThemeSelect label="Transfer origin" value={originLocationId} onChange={setOriginLocationId} required options={[{value:"",label:"Choose origin"}, ...originOptions.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
                 </div>
                 <div>
                   <label htmlFor="transferDestination">Destination location <span>*</span></label>
-                  <select id="transferDestination" value={destinationLocationId} onChange={(event) => setDestinationLocationId(event.currentTarget.value)} required>
-                    <option value="">Choose destination</option>
-                    {destinationOptions.filter((location) => location.id !== originLocationId).map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-                  </select>
+                  <ThemeSelect label="Transfer destination" value={destinationLocationId} onChange={setDestinationLocationId} required options={[{value:"",label:"Choose destination"}, ...destinationOptions.filter(location => location.id !== originLocationId).map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
                 </div>
               </div>
               <div className="transfer-asset-picker">
