@@ -124,6 +124,11 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.ok(address && typeof address !== "string", "Expected an ephemeral TCP address.");
     baseUrl = `http://127.0.0.1:${address.port}`;
 
+    const healthResponse = await fetch(`${baseUrl}/api/health`);
+    assert.equal(healthResponse.status, 200);
+    const healthBody = await healthResponse.json() as { status: string; service: string; database: string };
+    assert.deepEqual(healthBody, { status: "ok", service: "assetmov-api", database: "ok" });
+
     const register = async (index: 0 | 1): Promise<ApiSession> => {
       const response = await fetch(`${baseUrl}/api/auth/register`, {
         method: "POST",
@@ -155,6 +160,18 @@ test("registration, session security, tenant isolation, locations and assets wor
 
     const ownerA = await register(0);
     const ownerB = await register(1);
+
+    const ownerSubscription = await prisma.tenantSubscription.findUnique({
+      where: { tenantId: ownerA.tenant.id },
+      include: { plan: true },
+    });
+    assert.ok(ownerSubscription, "Company registration should create a tenant subscription.");
+    assert.equal(ownerSubscription.status, "TRIALING");
+    assert.equal(ownerSubscription.plan.key, "trial");
+    assert.ok(
+      ownerSubscription.trialEndsAt && ownerSubscription.trialEndsAt.getTime() > Date.now(),
+      "The registered trial must have a future end time.",
+    );
 
     const me = await fetch(`${baseUrl}/api/auth/me`, {
       headers: requestHeaders({ cookie: ownerA.cookie }),
