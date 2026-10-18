@@ -33,3 +33,9 @@ Mutations require authenticated sessions, valid CSRF tokens and origin restricti
 This first version requires the administrator to provide the user's initial password. Before public deployment, replace this with an expiring, single-use password-setup link or enforce secure first-login password rotation. Never distribute initial passwords in email or store them in logs. Existing email addresses are intentionally rejected rather than silently linked to a different company.
 
 Basic React user/role screens, location-grant editing, display-name changes and the authenticated password-change API are implemented but require browser/local acceptance. First-login password setup, reset-by-email, email address changes, session management UI, custom-role deletion and concurrency/limit boundary tests remain outstanding. The source was committed but has not yet been run locally by the developer. Do not treat the administration module as production-ready.
+
+## Session management
+
+Committed: list own active sessions, revoke another session, or revoke other sessions together. The account header includes a Sessions dialog. API revocation requires CSRF and checks session ownership. Database tests were added but need a developer run.
+
+Password recovery and first-login setup are not implemented. They require dedicated token storage and a trusted delivery channel before release.
