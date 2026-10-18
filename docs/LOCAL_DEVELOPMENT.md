@@ -136,6 +136,33 @@ npm run lint
 npm run typecheck
 ```
 
+## Opt-in database-backed API acceptance tests
+
+The integration suite uses a **separate disposable database named `assetmov_test`**. The test process refuses to run unless `ASSETMOV_RUN_DB_INTEGRATION_TESTS=1` and `DATABASE_URL` points to a local `assetmov_test` database. Never point it at a production database or your normal development database.
+
+1. In phpMyAdmin, create a new, empty database called `assetmov_test`.
+2. From the repository root, switch to the backend and configure this PowerShell terminal to use that test database. Replace the username/password if your WAMP setup differs.
+
+```powershell
+Set-Location .\backend
+$env:DATABASE_URL = "mysql://root:@127.0.0.1:3306/assetmov_test"
+$env:NODE_ENV = "test"
+npm run db:deploy
+npm run db:seed:plans
+$env:ASSETMOV_RUN_DB_INTEGRATION_TESTS = "1"
+npm run test:integration
+```
+
+The acceptance test checks database readiness, company registration and session restoration, login/logout, CSRF rejection, workspace isolation, location creation/listing, and asset creation/list/detail. Test records are created with unique identifiers and cleaned up after execution.
+
+After the test finishes, remove the opt-in flag from this terminal:
+
+```powershell
+Remove-Item Env:ASSETMOV_RUN_DB_INTEGRATION_TESTS
+```
+
+The automated GitHub Actions workflow runs the same suite against a disposable MySQL database. The initial migration history was generated against WAMP's case-insensitive table-name behavior; portability against a default case-sensitive Linux MySQL installation remains a separate deployment-readiness check.
+
 ## Troubleshooting
 
 - If MySQL connection fails, confirm WAMP's MySQL service is running and check the database name, port and credentials in `backend/.env`.
