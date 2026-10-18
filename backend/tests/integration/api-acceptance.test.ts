@@ -310,6 +310,42 @@ test("registration, session security, tenant isolation, locations and assets wor
     );
 
     // Platform administration must be independent of a company's owner role.
+    const ownMembers = await fetch(`${baseUrl}/api/members`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(ownMembers.status, 200);
+    const memberList = await ownMembers.json() as {
+      data: Array<{ id: string; user: { id: string }; isActive: boolean }>;
+      usage: { activeUsers: number; maxActiveUsers: number | null };
+    };
+    assert.equal(memberList.usage.activeUsers, 1);
+    const ownerMembership = memberList.data.find((member) => member.user.id === ownerA.userId);
+    assert.ok(ownerMembership?.isActive);
+
+    const crossTenantMembers = await fetch(`${baseUrl}/api/members`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(crossTenantMembers.status, 403);
+
+    const refuseSelfDeactivation = await fetch(
+      `${baseUrl}/api/members/${ownerMembership.id}/status`,
+      {
+        method: "PATCH",
+        headers: requestHeaders({
+          cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+          csrfToken: ownerA.csrfToken, json: true, origin: true,
+        }),
+        body: JSON.stringify({
+          isActive: false, reason: "Integration must preserve the company owner",
+        }),
+      },
+    );
+    assert.equal(refuseSelfDeactivation.status, 409);
+    assert.equal(
+      (await refuseSelfDeactivation.json() as ErrorResponse).error?.code,
+      "CANNOT_DEACTIVATE_SELF",
+    );
+
     const deniedPlatform = await fetch(`${baseUrl}/api/platform/plans`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
     });
