@@ -14,7 +14,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Generate the Prisma client locally (2026-10-17).
 - [x] Validate the Prisma schema locally with `npm run db:validate` (2026-10-17).
 - [x] Generate and apply the initial migration to the local development database (2026-10-17; `20261017170733_initial_assetmov`).
-- [ ] Review the generated migration SQL and commit the migration directory; then verify a clean environment can apply it.
+- [x] Commit both generated migration directories, `migration_lock.toml`, and the root npm lockfile to `main` (commit `8989ffc`); local migration status reports two migrations up to date.
+- [ ] Review the migration SQL and verify a clean disposable MySQL database can apply both committed migrations from scratch.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
@@ -31,7 +32,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
 - [ ] Add tenant admin UI for member/role assignment and permission editing.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
-- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is drafted on `feat/platform-subscription-foundation`; remain unchecked until verified, and the UI is still outstanding.)
+- [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is on `main`; keep the platform-admin area unchecked until database-backed authorization tests pass. The UI is still outstanding.)
 - [ ] Implement tenant/company administration for company profile, settings, users and memberships.
 - [ ] Add tenant admin UI to create/update/deactivate custom roles and assign permission-catalogue actions.
 - [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
@@ -152,10 +153,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## K. SaaS readiness and operations — P1/P2
 
-- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration. (Schema/API source is drafted on `feat/platform-subscription-foundation`; remain unchecked until migration, build and DB tests pass.)
+- [ ] Add simple subscription/plan schema: asset limit, active-user limit, storage limit and trial duration. (Schema/API source is on `main`; database-backed verification and full quota enforcement remain outstanding.)
 - [ ] Add dedicated Platform Super Admin plan management and tenant plan assignment screens.
 - [ ] Add Company Admin plan/usage view showing asset count, active users, storage usage and trial/renewal information.
-- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior. (Single-asset creation now has a tenant-subscription row lock and quota/trial policy check on `feat/platform-subscription-foundation`; keep this unchecked until tests pass and every asset-creating path is covered.)
+- [ ] Enforce asset caps across API, bulk actions and imports with concurrency-safe behavior. (Single-asset creation has a tenant-subscription row lock and quota/trial policy check on `main`; keep this unchecked until database-backed tests pass and every asset-creating path is covered.)
 - [ ] Enforce active-user caps across invitations, membership creation and reactivation.
 - [ ] Enforce storage caps during uploads, including concurrent upload reservations and cleanup on failure.
 - [ ] Enforce trial expiry using server-side timestamps and the configured trial policy.
@@ -185,6 +186,6 @@ The authoritative SaaS requirements are in [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_P
 
 ## Current implementation branch
 
-**Draft PR:** `feat/platform-subscription-foundation` adds the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
+**Current source:** `main` contains the plan/subscription schema, protected Platform Super Admin plan and tenant-subscription APIs, platform audit records, safe proposed-plan seeding and Trial assignment during registration.
 
-This is not accepted work yet. Local schema validation, initial migration creation/application, client generation, type checks, lint, 29 unit tests and builds passed on 2026-10-17. The generated migration must still be reviewed and committed; DB-backed tests must prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation has a serialized cap check, but active-user/storage limits plus trial enforcement across other write paths remain outstanding.
+This is not accepted work yet. Local schema validation, migration creation/application and status, client generation, type checks, lint, 29 unit tests and builds passed on 2026-10-17. Both migration directories, migration lock and root lockfile were committed to `main` in commit `8989ffc`; DB-backed tests must still prove platform-vs-company authorization, trial dates, tenant assignment and audit behavior. Single-asset creation has a serialized cap check, but active-user/storage limits plus trial enforcement across other write paths remain outstanding.
