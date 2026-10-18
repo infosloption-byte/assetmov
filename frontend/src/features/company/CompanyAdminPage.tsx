@@ -24,6 +24,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [newUserRoleId, setNewUserRoleId] = useState("");
+  const [confirmation, setConfirmation] = useState<{ title: string; message: string; execute: () => Promise<unknown>; success: string } | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -136,9 +137,11 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
             {canRoles ? <ThemeSelect label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId}
               options={roles.map(role => ({ value: role.id, label: role.name, disabled: !assignableRoles.some(item => item.id === role.id) }))}
               onChange={nextRole => {
-                if (nextRole !== member.role.id && window.confirm("Change this user's role?")) {
-                  void run(() => call("/members/" + member.id + "/role", "PATCH", { roleId: nextRole }), "Role updated.");
-                }
+                if (nextRole !== member.role.id) setConfirmation({
+                  title: "Change role", message: "Change this user's company permissions?",
+                  execute: () => call("/members/" + member.id + "/role", "PATCH", { roleId: nextRole }),
+                  success: "Role updated.",
+                });
               }} /> : member.role.name}
           </td><td>{member.isActive ? "Active" : "Inactive"}</td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId || (!allLocationsAccess && locations.length === 0)} onClick={() => {
@@ -146,7 +149,12 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
             setScopeIds(member.locationAssignments.map(item => item.locationId));
           }}>{member.allLocationsAccess ? "All locations" : member.locationAssignments.length + " locations"} · Edit</button></td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId} onClick={() => {
-            if (window.confirm(member.isActive ? "Deactivate this user?" : "Activate this user?")) void run(() => call("/members/" + member.id + "/status", "PATCH", { isActive: !member.isActive, reason: "Company administrator changed membership status" }), "Member status updated.");
+            setConfirmation({
+              title: member.isActive ? "Deactivate user" : "Activate user",
+              message: member.isActive ? "This user will lose workspace access until reactivated." : "This user will regain workspace access according to their role.",
+              execute: () => call("/members/" + member.id + "/status", "PATCH", { isActive: !member.isActive, reason: "Company administrator changed membership status" }),
+              success: "Member status updated.",
+            });
           }}>{member.isActive ? "Deactivate" : "Activate"}</button></td>
         </tr>)}
       </tbody></table></div>
@@ -157,6 +165,15 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
       </tbody></table></div>
     </>}
+    {confirmation && <div className="modal-backdrop"><section className="asset-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <div className="asset-modal-heading"><h2 id="confirmTitle">{confirmation.title}</h2><button className="modal-close" type="button" onClick={() => setConfirmation(null)}>×</button></div>
+      <p id="confirmMessage">{confirmation.message}</p>
+      <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setConfirmation(null)}>Cancel</button>
+        <button type="button" className="primary-button" disabled={busy} onClick={() => {
+          const item = confirmation;
+          void (async () => { const ok = await run(item.execute, item.success); if (ok) setConfirmation(null); })();
+        }}>Confirm</button></div>
+    </section></div>}
     {editingProfile && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
       <div className="asset-modal-heading"><h2 id="profileTitle">Edit user profile</h2><button className="modal-close" type="button" onClick={() => setEditingProfile(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => {
