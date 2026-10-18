@@ -1,6 +1,6 @@
 # AssetMov Implementation Status
 
-**Last review:** 2026-10-17  
+**Last review:** 2026-10-18  
 **Repository:** [infosloption-byte/assetmov](https://github.com/infosloption-byte/assetmov)
 
 This document separates source code committed from build/test verification. A feature is not considered fully accepted until install, migration, automated tests, and workflow-level acceptance checks have run.
@@ -41,9 +41,9 @@ This document separates source code committed from build/test verification. A fe
 
 The current feature branch adds a subscription-plan model, a tenant-subscription model, and a separate platform audit log. It also adds protected Platform Super Admin APIs to list/create/update plans, search companies with asset/active-user counts, assign a plan, start a server-timed trial, activate a company, or suspend a company. New company registration now assigns the configured active Trial plan. A safe, idempotent plan seed command provides the proposed defaults without overwriting plan values after an administrator edits them.
 
-These changes are source-committed on `feat/platform-subscription-foundation`; they must not be treated as accepted until the schema is validated, the initial Prisma migration is reviewed/applied, client generation/build/lint/tests pass, and database-backed route tests pass. The first Platform Super Admin must be provisioned out-of-band; there is no self-promotion registration option. Setup notes are in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md).
+The plan/subscription schema and API foundation are present on `main`. Local schema validation, migration application, client generation, type checks, lint, unit tests and builds have passed; this is still not accepted as production-ready until database-backed route tests and cross-tenant authorization tests pass. The first Platform Super Admin must be provisioned out-of-band; there is no self-promotion registration option. Setup notes are in [PLATFORM_ADMIN_BOOTSTRAP.md](PLATFORM_ADMIN_BOOTSTRAP.md).
 
-Single-asset creation now has an initial quota/trial check: it locks the tenant subscription row, checks status and the stored trial end time, counts retained tenant assets, and returns a structured PLAN_LIMIT_REACHED error when the cap is reached. Pure policy tests for cap and trial boundaries are committed to the backend test script but have not been executed.
+Single-asset creation now has an initial quota/trial check: it locks the tenant subscription row, checks status and the stored trial end time, counts retained tenant assets, and returns a structured PLAN_LIMIT_REACHED error when the cap is reached. Pure policy tests for cap and trial boundaries ran locally as part of the 29-test suite and passed; database-backed boundary and concurrency tests remain outstanding.
 
 Not included or not yet verified: Platform Admin or Company Admin UI, company usage screen, active-user quota enforcement, uploaded-file storage tracking, quota enforcement on future bulk/import paths, trial-expiry blocking across the other mutating workflows, payment integration, or DB-backed concurrency tests.
 
@@ -59,13 +59,14 @@ The developer ran the following commands from the repository root against the cu
 - `npm test` — 29 tests passed, 0 failed.
 - `npm run build` — frontend production build and backend TypeScript compilation passed.
 
-These are developer-reported local results. The developer has also confirmed local schema validation and successful creation/application of the initial migration. This does not establish API integration, browser acceptance, production-readiness, or successful GitHub Actions. The generated migration SQL has not yet been reviewed or committed.
+These are developer-reported local results. The developer also confirmed schema validation and successful application of the committed migration history to local MySQL. The local database reports two migrations and is up to date. This does not establish API integration, browser acceptance, production-readiness, or successful GitHub Actions.
 
 ### Still outstanding before accepting the foundation
 
 - [x] Run `npm run db:validate`; the Prisma schema validated locally on 2026-10-17.
-- [x] Generate and apply the initial migration to the local `assetmov` MySQL database on 2026-10-17 (`20261017170733_initial_assetmov_schema`); Prisma reported that the database is in sync.
-- [ ] Review the generated `migration.sql`, commit the migration directory to Git, and ensure other environments can reproduce the schema from the committed migration. The migration is not yet present on `main`.
+- [x] Generate and apply both migrations to the local `assetmov` MySQL database on 2026-10-17; `npx prisma migrate status` reports 2 migrations and the database is up to date.
+- [x] Commit both migration directories, `migration_lock.toml`, and the root `package-lock.json` to `main` in commit `8989ffc`.
+- [ ] Review the migration SQL and verify a clean, disposable MySQL database can reproduce the schema by applying both committed migrations from scratch.
 - Against a disposable MySQL database, exercise register/login/logout, workspace context, location create/list, asset create/list/detail/update, CSRF rejection, permission denial, subscription/trial behavior, and cross-tenant isolation.
 - Add database-backed transfer/assignment concurrency tests and route integration tests.
 - Resolve the observed GitHub Actions `startup_failure`/zero-job state and obtain a successful CI run before accepting this as a validated foundation.
@@ -94,7 +95,7 @@ The legacy feature inventory and process flows remain in [LEGACY_FEATURE_AUDIT.m
 The product target is a true multi-tenant SaaS, not a copy of the legacy single-company application. [SAAS_PRODUCT_REQUIREMENTS.md](SAAS_PRODUCT_REQUIREMENTS.md) is the product source of truth.
 
 - **Implemented partially:** tenant creation, first owner membership, tenant-scoped roles/permissions schema and selected tenant context.
-- **Partially drafted on the feature branch, not yet verified:** separate Platform Super Admin API authorization, plan CRUD, tenant listing and subscription assignment.
+- **Partially drafted on `main`, not yet verified:** separate Platform Super Admin API authorization, plan CRUD, tenant listing and subscription assignment.
 - **Still outstanding:** Platform Super Admin and Company Admin UI; Company Admin self-service for users, custom roles and permission grants; invitations; tenant preferences; category/model/custom-field configuration; full server-enforced resource quotas/trial expiry; full cross-tenant authorization regression suite.
 - The first registration role is a tenant owner, not a Platform Super Admin.
 - The existing tenant-aware schema and route checks are a foundation only; successful build, generated Prisma client, migrations, DB-backed integration tests and CI remain to be verified.
@@ -106,10 +107,10 @@ Do not claim that platform/company administration or full SaaS security is compl
 
 The simplified subscription rules are documented in [SUBSCRIPTION_GUARDRAILS.md](SUBSCRIPTION_GUARDRAILS.md). The only plan dimensions are asset limit, active-user limit, storage allowance and trial duration. Proposed values remain planning defaults, not finalized commercial terms.
 
-The feature branch includes source for the schema, platform plan/tenant subscription APIs, audit records, a safe defaults seed and Trial assignment at signup. It is not accepted until schema/migration, build/CI and database-backed tests pass.
+The main branch includes source for the schema, platform plan/tenant subscription APIs, audit records, safe defaults seed and Trial assignment at signup. Local schema/migration and build checks have passed; database-backed tests and successful CI remain required.
 
 Still outstanding:
-- Review and apply the initial migration containing plan/subscription/platform audit tables.
+- Verify the committed plan/subscription/platform audit migrations apply successfully on a clean disposable MySQL database.
 - Platform and Company Admin screens.
 - Company Admin usage view.
 - Server-side asset, active-user and storage enforcement with concurrency protection.
