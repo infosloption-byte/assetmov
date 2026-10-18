@@ -16,6 +16,7 @@ import { employeeRouter } from "./modules/employees/employee.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
 import { memberRouter } from "./modules/members/member.routes.js";
 import { roleRouter } from "./modules/roles/role.routes.js";
+import { masterDataRouter } from "./modules/master-data/master-data.routes.js";
 
 export const app = express();
 
@@ -74,6 +75,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/platform", platformRouter);
 app.use("/api/members", memberRouter);
 app.use("/api/roles", roleRouter);
+app.use("/api/master-data", masterDataRouter);
 app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
