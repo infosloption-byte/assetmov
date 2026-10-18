@@ -49,7 +49,7 @@ Not included or not yet verified: Platform Admin or Company Admin UI, company us
 
 ## Database-backed acceptance suite
 
-An opt-in integration suite has been added at `backend/tests/integration/api-acceptance.test.ts`. It requires explicit opt-in and refuses to run unless `DATABASE_URL` targets a local database named `assetmov_test`. It covers health/database readiness, registration, session restoration, login/logout and revocation, CSRF rejection, tenant/workspace isolation, location create/list, and asset create/list/detail. It cleans up its uniquely named test tenant/user records. The initial suite passed locally on 2026-10-18 (1/1, zero failures). Expanded platform-admin authorization, subscription management and audit assertions were subsequently committed but have not yet been executed locally.
+An opt-in integration suite has been added at `backend/tests/integration/api-acceptance.test.ts`. It requires explicit opt-in and refuses to run unless `DATABASE_URL` targets a local database named `assetmov_test`. It covers health/database readiness, registration, session restoration, login/logout and revocation, CSRF rejection, tenant/workspace isolation, location create/list, and asset create/list/detail. It cleans up its uniquely named test tenant/user records. The initial suite passed locally on 2026-10-18 (1/1, zero failures). Expanded platform-admin authorization, subscription management, auditing, asset-cap boundaries, expired-trial and suspended-subscription assertions are committed. The developer confirmed the first expansion passed locally on 2026-10-18; the newly added quota/trial assertions still need a local run.
 
 The CI workflow now provisions disposable MySQL, applies committed migrations, seeds subscription plans, and runs both unit and database-backed tests. The CI container currently uses case-insensitive table-name behavior to match the WAMP-generated migration history. Validate migration portability on a default case-sensitive Linux MySQL instance before production deployment.
 
@@ -73,7 +73,7 @@ These are developer-reported local results. The developer also confirmed schema 
 - [x] Generate and apply both migrations to the local `assetmov` MySQL database on 2026-10-17; `npx prisma migrate status` reports 2 migrations and the database is up to date.
 - [x] Commit both migration directories, `migration_lock.toml`, and the root `package-lock.json` to `main` in commit `8989ffc`.
 - [x] Replay both committed migrations on a clean WAMP MySQL `assetmov_test` database (2026-10-18). Default case-sensitive Linux portability remains unverified.
-- Initial opt-in API acceptance suite passed locally on disposable MySQL (2026-10-18). Expanded platform-admin permission, subscription, and audit tests are committed and still need a local run; then add trial-boundary, transfer, assignment concurrency and broader permission cases.
+- Initial opt-in API acceptance suite passed locally on disposable MySQL (2026-10-18). Expanded platform-admin permission, subscription and audit checks passed locally on 2026-10-18. Newly added asset-cap, trial-expiry and suspended-subscription integration assertions still need local verification; next add transfer, assignment concurrency and broader permission cases.
 - Add database-backed transfer/assignment concurrency tests and route integration tests.
 - Resolve the observed GitHub Actions `startup_failure`/zero-job state and obtain a successful CI run before accepting this as a validated foundation.
 
