@@ -21,7 +21,8 @@
     "db:migrate": "npm run db:migrate --workspace @assetmov/backend",
     "db:generate": "npm run db:generate --workspace @assetmov/backend",
     "db:deploy": "npm run db:deploy --workspace @assetmov/backend",
-    "test:integration": "npm run test:integration --workspace @assetmov/backend"
+    "test:integration": "npm run test:integration --workspace @assetmov/backend",
+    "db:status": "npm run db:status --workspace @assetmov/backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
