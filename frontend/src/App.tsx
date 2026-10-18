@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
@@ -50,6 +50,9 @@ function App() {
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [passwordDialog, setPasswordDialog] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
 
   useEffect(() => {
@@ -159,6 +162,30 @@ function App() {
     return () => controller.abort();
   }, [user, activeTenantId]);
 
+  async function changeOwnPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (passwordBusy || !csrfToken) { setPasswordError("Please sign in again to refresh your security token."); return; }
+    const data = new FormData(event.currentTarget);
+    const currentPassword = String(data.get("currentPassword") ?? "");
+    const newPassword = String(data.get("newPassword") ?? "");
+    const confirmPassword = String(data.get("confirmPassword") ?? "");
+    if (newPassword !== confirmPassword) { setPasswordError("New passwords do not match."); return; }
+    setPasswordBusy(true); setPasswordError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/auth/change-password", {
+        method: "POST", credentials: "include",
+        headers: { "X-CSRF-Token": csrfToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not change password.");
+      setPasswordDialog(false);
+      setActionError("");
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : "Could not change password.");
+    } finally { setPasswordBusy(false); }
+  }
+
   async function handleLogout() {
     setActionError("");
     try {
@@ -265,6 +292,7 @@ function App() {
                 )}
                 <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
+                <button className="topbar-button ghost" type="button" onClick={() => { setPasswordError(""); setPasswordDialog(true); }}>Password</button>
                 <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
               </>
             ) : (
@@ -276,7 +304,17 @@ function App() {
           </div>
         </header>
 
-        {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
+        {passwordDialog && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="passwordDialogTitle">
+          <div className="asset-modal-heading"><h2 id="passwordDialogTitle">Change password</h2><button className="modal-close" type="button" onClick={() => setPasswordDialog(false)}>×</button></div>
+          <form className="asset-create-form" onSubmit={event => void changeOwnPassword(event)}>
+            <label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+            <label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+            <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+            <p className="asset-inline-hint">Changing your password signs out your other sessions.</p>
+            {passwordError && <div className="asset-inline-error" role="alert">{passwordError}</div>}
+            <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setPasswordDialog(false)}>Cancel</button><button className="primary-button" disabled={passwordBusy} type="submit">Update password</button></div>
+          </form></section></div>}
+        {displayedError && <div className="action-error" role="alert">{displayedError}</div>
 
         {activePage === "company" ? (
           <CompanyAdminPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} currentUserId={user?.id ?? null} isOwner={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER"} allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? false} />
