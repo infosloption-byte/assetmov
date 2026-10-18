@@ -492,3 +492,9 @@ button.primary-button { border: 0; font-family: inherit; }
 .company-permissions label small { color:var(--muted); }
 .asset-table select { max-width:190px; padding:7px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:11px; }
 .asset-register-toolbar p { color:var(--muted); font-size:11px; margin:5px 0 0; }
+
+.account-sessions-list { display:grid; gap:10px; max-height:320px; overflow:auto; margin:14px 0; }
+.account-session { display:flex; justify-content:space-between; align-items:center; gap:12px; border:1px solid var(--line); border-radius:9px; padding:12px; }
+.account-session > div { min-width:0; display:grid; gap:5px; }
+.account-session strong { font-size:12px; }
+.account-session small { color:var(--muted); font-size:10px; overflow-wrap:anywhere; }
