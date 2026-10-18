@@ -74,6 +74,7 @@ interface AssetListResponse {
 interface ApiSession {
   cookie: string;
   csrfToken: string;
+  userId: string;
   tenant: TenantSummary;
   email: string;
   password: string;
@@ -144,6 +145,7 @@ test("registration, session security, tenant isolation, locations and assets wor
       return {
         cookie: sessionCookie(response),
         csrfToken: body.csrfToken,
+        userId: body.user.id,
         tenant,
         email: emails[index],
         password,
@@ -157,6 +159,8 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: ownerA.cookie }),
     });
     assert.equal(me.status, 200, "The registration session should authenticate /me.");
+    const meBody = await me.json() as { user: { id: string } };
+    assert.equal(meBody.user.id, ownerA.userId);
 
     const ownContext = await fetch(`${baseUrl}/api/workspace/context`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
@@ -286,7 +290,7 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(loginResponse.status, 200);
     const loginBody = await loginResponse.json() as LoginResponse;
     const loginCookie = sessionCookie(loginResponse);
-    assert.equal(loginBody.user.id, (await me.json().catch(() => null) as { user?: { id?: string } } | null)?.user?.id ?? loginBody.user.id);
+    assert.equal(loginBody.user.id, ownerA.userId);
 
     const logoutResponse = await fetch(`${baseUrl}/api/auth/logout`, {
       method: "POST",
