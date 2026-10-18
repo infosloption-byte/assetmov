@@ -108,8 +108,8 @@ function requestHeaders(options: {
 
 test("registration, session security, tenant isolation, locations and assets work against MySQL", async () => {
   const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
-  const tenantSlugs = [`it-${suffix}-a`, `it-${suffix}-b`];
-  const emails = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
+  const tenantSlugs: [string, string] = [`it-${suffix}-a`, `it-${suffix}-b`];
+  const emails: [string, string] = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
   const password = "AssetMov-Test-Password-2026!";
   let server: Server | undefined;
   let baseUrl = "";
