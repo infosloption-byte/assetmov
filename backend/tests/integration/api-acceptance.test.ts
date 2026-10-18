@@ -345,6 +345,23 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     if (createMember.status !== 201) assert.fail(`User creation failed: ${createMember.status} ${await createMember.text()}`);
     const managed = await createMember.json() as { data: { id: string } };
+    const editProfile = await fetch(`${baseUrl}/api/members/${managed.data.id}/profile`, {
+      method: "PATCH",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ fullName: "Integration Renamed User" }),
+    });
+    assert.equal(editProfile.status, 200);
+    const updatedProfile = await prisma.user.findUniqueOrThrow({ where: { email: managedEmail } });
+    assert.equal(updatedProfile.fullName, "Integration Renamed User");
+    const foreignProfile = await fetch(`${baseUrl}/api/members/${managed.data.id}/profile`, {
+      method: "PATCH",
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ fullName: "Unauthorized Change" }),
+    });
+    assert.equal(foreignProfile.status, 404);
+
     const scopeDenied = await fetch(`${baseUrl}/api/members/${managed.data.id}/location-access`, {
       method: "PATCH",
       headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
