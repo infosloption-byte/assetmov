@@ -31,13 +31,13 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Secure session cookie, CSRF middleware and authentication/API rate limits.
 - [ ] Review throttling/lockout policy against production abuse scenarios.
 - [x] Role/permission schema, seeded owner permission set and request permission helpers.
-- [ ] Add tenant admin UI for member/role assignment and permission editing.\n- [ ] Verify newly committed tenant member list and activation/deactivation APIs locally against MySQL; quota checks, owner safeguards, audit and session revocation have initial code and smoke assertions, but not yet a passing local run.
+- [ ] Add tenant admin UI for member/role assignment and permission editing. Backend role CRUD (system roles protected), permission catalog, direct user creation, role assignment and member status APIs now exist; these new routes still require local acceptance testing.\n- [ ] Verify newly committed tenant member list and activation/deactivation APIs locally against MySQL; quota checks, owner safeguards, audit and session revocation have initial code and smoke assertions, but not yet a passing local run.
 - [x] Tenant membership middleware, permission gates and hierarchical location-scope resolution.
 - [ ] Implement a separate Platform Super Admin identity/permission scope and protected platform-admin area; never represent it as a tenant role. (API foundation is on `main`; keep the platform-admin area unchecked until database-backed authorization tests pass. The UI is still outstanding.)
 - [ ] Implement tenant/company administration for company profile, settings, users and memberships.
 - [ ] Add tenant admin UI to create/update/deactivate custom roles and assign permission-catalogue actions.
 - [ ] Prevent privilege escalation: a tenant admin cannot grant platform permissions or permissions they cannot delegate; protect last-owner/admin recovery.
-- [ ] Add invitations, membership activation/deactivation and tenant-scoped session revocation.
+- [ ] Add optional secure password-setup/invitation flow and tenant-scoped session revocation. Direct admin-created users with an initial password are now implemented, but first-login password rotation and email delivery are not yet implemented.
 - [ ] Add platform tenant lifecycle controls (trial/active/suspended/cancelled), with reasons and audit.
 - [ ] Keep subscription state and asset/user/storage limits separate from role permissions; enforce each relevant rule server-side.
 - [ ] Add tests proving platform routes reject company admins and company routes never allow cross-tenant escalation.
