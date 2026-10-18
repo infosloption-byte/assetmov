@@ -314,7 +314,7 @@ function App() {
             {passwordError && <div className="asset-inline-error" role="alert">{passwordError}</div>}
             <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setPasswordDialog(false)}>Cancel</button><button className="primary-button" disabled={passwordBusy} type="submit">Update password</button></div>
           </form></section></div>}
-        {displayedError && <div className="action-error" role="alert">{displayedError}</div>
+        {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
 
         {activePage === "company" ? (
           <CompanyAdminPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} currentUserId={user?.id ?? null} isOwner={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER"} allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? false} />
