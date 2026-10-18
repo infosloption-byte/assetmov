@@ -42,7 +42,7 @@ Printable GRN/receipt documents, assignment/unassignment, request approval, main
 
 ## Start locally (Windows + WampServer)
 
-See [Local Development](docs/LOCAL_DEVELOPMENT.md) for the full WAMP configuration and folder-specific commands, including the initial Prisma migration.
+See [Local Development](docs/LOCAL_DEVELOPMENT.md) for the full WAMP configuration and folder-specific commands, including the initial Prisma migration. The same guide includes an opt-in database-backed API acceptance suite that only runs against a dedicated local `assetmov_test` database.
 
 Start WampServer and create an empty local `assetmov` database in phpMyAdmin. Then run these commands from the repository root in PowerShell. Run the `Copy-Item` commands only if the local `.env` files do not already exist:
 
