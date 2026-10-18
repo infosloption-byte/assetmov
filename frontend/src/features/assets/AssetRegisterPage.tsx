@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -477,10 +478,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </form>
         <label className="asset-status-filter">
           <span>Status</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.currentTarget.value)}>
-            <option value="">All statuses</option>
-            {(["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "IN_SERVICE", "DAMAGED", "DISPOSED", "RETIRED", "DRAFT"] as AssetStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
-          </select>
+          <ThemeSelect label="Filter by asset status" value={statusFilter} onChange={setStatusFilter} options={[{value:"",label:"All statuses"}, ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[]).map(status => ({value:status,label:statusLabel(status)}))]}/>
         </label>
       </div>
 
@@ -530,10 +528,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
               </div>
               <div className="asset-form-two-col">
                 <div><label htmlFor="currentLocationId">Current location</label>
-                  <select id="currentLocationId" name="currentLocationId" defaultValue="" required={!allLocationsAccess}>
-                    <option value="">No location selected</option>
-                    {locations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}
-                  </select>
+                  <ThemeSelect label="Asset location" name="currentLocationId" defaultValue="" required={!allLocationsAccess} options={[{value:"",label:"No location selected"}, ...locations.map(location => ({value:location.id,label:location.name + " (" + location.code + ")"}))]}/>
                 </div>
                 {canEditFinancial && <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>}
               </div>
