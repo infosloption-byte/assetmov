@@ -376,6 +376,40 @@ authRouter.get("/csrf", requireSession, async (request, response, next) => {
   }
 });
 
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(12).max(128),
+}).strict();
+
+authRouter.post("/change-password", requireSession, requireCsrf, async (request, response, next) => {
+  const parsed = passwordChangeSchema.safeParse(request.body);
+  if (!parsed.success || parsed.data.currentPassword === parsed.data.newPassword) {
+    sendError(response, 400, "VALIDATION_ERROR", "Provide your current password and a different new password of at least 12 characters.");
+    return;
+  }
+  try {
+    const userId = request.auth!.userId;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.disabledAt || !await verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
+      sendError(response, 403, "CURRENT_PASSWORD_INVALID", "The current password is incorrect.");
+      return;
+    }
+    const passwordHash = await hashPassword(parsed.data.newPassword);
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.user.updateMany({ where: { id: userId, passwordHash: user.passwordHash }, data: { passwordHash } });
+      if (changed.count !== 1) throw new Error("PASSWORD_CHANGED_CONCURRENTLY");
+      await tx.session.deleteMany({ where: { userId, id: { not: request.auth!.sessionId } } });
+    });
+    response.status(200).json({ success: true, message: "Password changed. Other sessions were signed out." });
+  } catch (error) {
+    if (error instanceof Error && error.message === "PASSWORD_CHANGED_CONCURRENTLY") {
+      sendError(response, 409, "PASSWORD_CHANGED_CONCURRENTLY", "Your password changed in another session. Please retry.");
+      return;
+    }
+    next(error);
+  }
+});
+
 authRouter.post("/logout", requireSession, requireCsrf, async (request, response, next) => {
   try {
     await prisma.session.deleteMany({ where: { id: request.auth!.sessionId } });
