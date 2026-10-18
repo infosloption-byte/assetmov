@@ -168,6 +168,46 @@ test("registration, session security, tenant isolation, locations and assets wor
     const ownerA = await register(0);
     const ownerB = await register(1);
 
+    const newCategory = await fetch(`${baseUrl}/api/master-data/categories`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ name: "IT Equipment", code: `IT_${suffix.toUpperCase()}`, description: "Company IT hardware" }),
+    });
+    assert.equal(newCategory.status, 201);
+    const category = await newCategory.json() as { data: { id: string } };
+
+    const visibleCategories = await fetch(`${baseUrl}/api/master-data/categories`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(visibleCategories.status, 200);
+    assert.ok((await visibleCategories.json() as { data: Array<{ id: string }> }).data.some(item => item.id === category.data.id));
+    const anotherCompanyCategories = await fetch(`${baseUrl}/api/master-data/categories`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(anotherCompanyCategories.status, 200);
+    assert.ok(!(await anotherCompanyCategories.json() as { data: Array<{ id: string }> }).data.some(item => item.id === category.data.id));
+
+    const foreignModel = await fetch(`${baseUrl}/api/master-data/models`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ categoryId: category.data.id, name: "Invalid foreign model", fields: [] }),
+    });
+    assert.equal(foreignModel.status, 400);
+
+    const newModel = await fetch(`${baseUrl}/api/master-data/models`, {
+      method: "POST",
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ categoryId: category.data.id, name: `Laptop-${suffix}`,
+        fields: [{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }] }),
+    });
+    assert.equal(newModel.status, 201);
+    const model = await newModel.json() as { data: { id: string } };
+    const savedModel = await prisma.assetModel.findUniqueOrThrow({ where: { id: model.data.id } });
+    assert.equal(savedModel.tenantId, ownerA.tenant.id);
+
     const ownerSubscription = await prisma.tenantSubscription.findUnique({
       where: { tenantId: ownerA.tenant.id },
       include: { plan: true },
