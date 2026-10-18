@@ -84,7 +84,9 @@ function sessionCookie(response: Response): string {
   const value = response.headers.get("set-cookie");
   assert.ok(value, "Expected the API to issue a session cookie.");
   const pair = value.split(";")[0];
-  assert.ok(pair?.startsWith("assetmov_session="), "Expected the AssetMov session cookie.");
+  if (!pair || !pair.startsWith("assetmov_session=")) {
+    assert.fail("Expected the AssetMov session cookie.");
+  }
   return pair;
 }
 
@@ -115,13 +117,16 @@ test("registration, session security, tenant isolation, locations and assets wor
   try {
     await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`;
     const trialPlan = await prisma.subscriptionPlan.findUnique({ where: { key: "trial" } });
-    assert.ok(trialPlan?.isActive && trialPlan.trialDurationDays > 0,
-      "Seed the active Trial plan into assetmov_test before running acceptance tests.");
+    if (!trialPlan || !trialPlan.isActive || trialPlan.trialDurationDays <= 0) {
+      assert.fail("Seed the active Trial plan into assetmov_test before running acceptance tests.");
+    }
 
     server = app.listen(0, "127.0.0.1");
     await once(server, "listening");
     const address = server.address();
-    assert.ok(address && typeof address !== "string", "Expected an ephemeral TCP address.");
+    if (!address || typeof address === "string") {
+      assert.fail("Expected an ephemeral TCP address.");
+    }
     baseUrl = `http://127.0.0.1:${address.port}`;
 
     const healthResponse = await fetch(`${baseUrl}/api/health`);
@@ -146,7 +151,7 @@ test("registration, session security, tenant isolation, locations and assets wor
       }
       const body = await response.json() as RegistrationResponse;
       const tenant = body.user.memberships[0]?.tenant;
-      assert.ok(tenant?.id, "Registration should return the new workspace.");
+      if (!tenant?.id) assert.fail("Registration should return the new workspace.");
       assert.ok(body.csrfToken, "Registration should return a CSRF token.");
       return {
         cookie: sessionCookie(response),
@@ -165,7 +170,7 @@ test("registration, session security, tenant isolation, locations and assets wor
       where: { tenantId: ownerA.tenant.id },
       include: { plan: true },
     });
-    assert.ok(ownerSubscription, "Company registration should create a tenant subscription.");
+    if (!ownerSubscription) assert.fail("Company registration should create a tenant subscription.");
     assert.equal(ownerSubscription.status, "TRIALING");
     assert.equal(ownerSubscription.plan.key, "trial");
     assert.ok(
