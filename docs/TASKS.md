@@ -15,10 +15,10 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Validate the Prisma schema locally with `npm run db:validate` (2026-10-17).
 - [x] Generate and apply the initial migration to the local development database (2026-10-17; `20261017170733_initial_assetmov`).
 - [x] Commit both generated migration directories, `migration_lock.toml`, and the root npm lockfile to `main` (commit `8989ffc`); local migration status reports two migrations up to date.
-- [ ] Review the migration SQL and verify a clean disposable MySQL database can apply both committed migrations from scratch. CI configuration now includes this replay, but a successful workflow run is not confirmed.
+- [x] Verify a clean disposable WAMP MySQL `assetmov_test` database applies both committed migrations from scratch (2026-10-18). Portability to default case-sensitive Linux MySQL remains unverified.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
-- [ ] Run the new opt-in MySQL API acceptance suite successfully in local test DB and CI; the suite source now covers registration, session lifecycle, CSRF, workspace isolation, location APIs, and asset APIs.
+- [x] Run the initial opt-in MySQL API acceptance suite locally (2026-10-18: 1/1 passing), covering registration, sessions, CSRF, isolation, locations and assets.\n- [ ] Run and verify expanded platform-administration acceptance assertions locally and obtain passing CI.
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
 
 ## B. Identity, SaaS and authorization — P0
