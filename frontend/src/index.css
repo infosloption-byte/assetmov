@@ -479,3 +479,16 @@ button.primary-button { border: 0; font-family: inherit; }
   .asset-custody-form-fields { grid-template-columns: 1fr; }
   .asset-custody-return-row { align-items: stretch; flex-direction: column; }
 }
+
+/* Company administration */
+.company-admin-tabs { display:flex; gap:8px; margin:22px 0; border-bottom:1px solid var(--line); }
+.company-admin-tabs button { border:0; background:transparent; padding:12px 15px; color:var(--muted); font-weight:700; font-size:12px; cursor:pointer; border-bottom:2px solid transparent; }
+.company-admin-tabs button.active { color:var(--green-dark); border-bottom-color:var(--green); }
+.company-permissions { display:grid; gap:9px; max-height:240px; overflow:auto; border:1px solid var(--line); border-radius:9px; padding:12px; }
+.company-permissions legend { font-size:12px; font-weight:700; padding:0 5px; }
+.company-permissions label { display:flex; gap:10px; align-items:flex-start; font-size:12px; }
+.company-permissions label input { width:auto; margin-top:3px; }
+.company-permissions label span { display:flex; flex-direction:column; gap:2px; }
+.company-permissions label small { color:var(--muted); }
+.asset-table select { max-width:190px; padding:7px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:11px; }
+.asset-register-toolbar p { color:var(--muted); font-size:11px; margin:5px 0 0; }
