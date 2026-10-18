@@ -47,6 +47,12 @@ Single-asset creation now has an initial quota/trial check: it locks the tenant 
 
 Not included or not yet verified: Platform Admin or Company Admin UI, company usage screen, active-user quota enforcement, uploaded-file storage tracking, quota enforcement on future bulk/import paths, trial-expiry blocking across the other mutating workflows, payment integration, or DB-backed concurrency tests.
 
+## Database-backed acceptance suite
+
+An opt-in integration suite has been added at `backend/tests/integration/api-acceptance.test.ts`. It requires explicit opt-in and refuses to run unless `DATABASE_URL` targets a local database named `assetmov_test`. It covers health/database readiness, registration, session restoration, login/logout and revocation, CSRF rejection, tenant/workspace isolation, location create/list, and asset create/list/detail. It cleans up its uniquely named test tenant/user records. The test suite has been committed but has not yet been confirmed passing in a run.
+
+The CI workflow now provisions disposable MySQL, applies committed migrations, seeds subscription plans, and runs both unit and database-backed tests. The CI container currently uses case-insensitive table-name behavior to match the WAMP-generated migration history. Validate migration portability on a default case-sensitive Linux MySQL instance before production deployment.
+
 ## Verification status
 
 ### Locally verified on 2026-10-17
@@ -67,7 +73,7 @@ These are developer-reported local results. The developer also confirmed schema 
 - [x] Generate and apply both migrations to the local `assetmov` MySQL database on 2026-10-17; `npx prisma migrate status` reports 2 migrations and the database is up to date.
 - [x] Commit both migration directories, `migration_lock.toml`, and the root `package-lock.json` to `main` in commit `8989ffc`.
 - [ ] Review the migration SQL and verify a clean, disposable MySQL database can reproduce the schema by applying both committed migrations from scratch.
-- Against a disposable MySQL database, exercise register/login/logout, workspace context, location create/list, asset create/list/detail/update, CSRF rejection, permission denial, subscription/trial behavior, and cross-tenant isolation.
+- Run the new opt-in API acceptance suite against disposable MySQL, then extend it with asset update, permission-denial, subscription/trial boundary, transfer and assignment concurrency cases.
 - Add database-backed transfer/assignment concurrency tests and route integration tests.
 - Resolve the observed GitHub Actions `startup_failure`/zero-job state and obtain a successful CI run before accepting this as a validated foundation.
 
