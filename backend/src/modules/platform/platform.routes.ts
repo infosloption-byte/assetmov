@@ -385,6 +385,9 @@ platformRouter.patch(
           where: { tenantId: tenant.id },
           include: { plan: true },
         });
+        if (current?.billingSource === "PADDLE" || current?.paddleSubscriptionId) {
+          throw new Error("PADDLE_SUBSCRIPTION_MANAGED");
+        }
         const now = new Date();
         const trialEndsAt = new Date(now.getTime() + plan.trialDurationDays * 24 * 60 * 60 * 1000);
         const status = mode === "trial" ? "TRIALING" : mode === "activate" ? "ACTIVE" : "SUSPENDED";
@@ -445,6 +448,11 @@ platformRouter.patch(
         },
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "PADDLE_SUBSCRIPTION_MANAGED") {
+        sendError(response, 409, "PADDLE_SUBSCRIPTION_MANAGED",
+          "Paddle subscriptions may be changed only by the provider. Suspend or unsuspend company access separately.");
+        return;
+      }
       if (error instanceof Error && error.message === "TENANT_NOT_FOUND") {
         sendError(response, 404, "TENANT_NOT_FOUND", "The requested company was not found.");
         return;
@@ -503,4 +511,38 @@ platformRouter.get("/overview", requireSession, requirePlatformAdmin, async (_re
       },
     } });
   } catch (error) { next(error); }
+});
+
+const platformTenantStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED"]),
+  reason: reasonSchema,
+}).strict();
+
+/** Platform suspension never forges a successful Paddle payment. */
+platformRouter.patch("/tenants/:tenantId/status", requireSession, requirePlatformAdmin,
+  requireCsrf, async (request, response, next) => {
+  const parsed = platformTenantStatusSchema.safeParse(request.body);
+  const id = request.params.tenantId;
+  if (!parsed.success || typeof id !== "string" || !id) {
+    sendError(response, 400, "VALIDATION_ERROR", "Provide a company status and audit reason."); return;
+  }
+  try {
+    const result = await prisma.$transaction(async tx => {
+      const tenant = await tx.tenant.findUnique({ where: { id } });
+      if (!tenant) throw new Error("TENANT_NOT_FOUND");
+      const updated = await tx.tenant.update({ where: { id }, data: { status: parsed.data.status } });
+      await tx.platformAuditLog.create({ data: {
+        actorUserId: request.auth!.userId, action: "tenant.platform_status_changed",
+        entityType: "Tenant", entityId: id, reason: parsed.data.reason,
+        oldData: { status: tenant.status }, newData: { status: updated.status },
+      } });
+      return updated;
+    });
+    response.json({ data: { id: result.id, status: result.status } });
+  } catch (error) {
+    if (error instanceof Error && error.message === "TENANT_NOT_FOUND") {
+      sendError(response, 404, "TENANT_NOT_FOUND", "Company not found."); return;
+    }
+    next(error);
+  }
 });
