@@ -658,6 +658,35 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     assert.equal(restoreMember.status,200);
 
+    const settingsBody = (companyRegistrationOpen: boolean) => JSON.stringify({
+      companyRegistrationOpen, supportEmail:"support@assetmov.example",
+      announcement:"Internal acceptance test", reason:"Platform registration acceptance check",
+    });
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,json:true,origin:true}),
+      body:settingsBody(false),
+    })).status,403,"Global settings require CSRF.");
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:settingsBody(false),
+    })).status,200);
+    const blockedSignup = await fetch(`${baseUrl}/api/auth/register`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({ tenantName:"Blocked company",tenantSlug:"blocked-"+suffix,
+        fullName:"Blocked Owner",email:"blocked."+suffix+"@example.test",password }),
+    });
+    assert.equal(blockedSignup.status,403);
+    assert.equal((await blockedSignup.json() as ErrorResponse).error?.code,"REGISTRATION_CLOSED");
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:settingsBody(true),
+    })).status,200);
+    const configurationAudit = await prisma.platformAuditLog.findFirst({
+      where:{action:"platform.settings_changed",actorUserId:ownerA.userId},
+      orderBy:{createdAt:"desc"},
+    });
+    assert.ok(configurationAudit?.reason);
+
     const noCsrfPlan = await fetch(`${baseUrl}/api/platform/plans`, {
       method: "POST",
       headers: requestHeaders({ cookie: ownerA.cookie, json: true, origin: true }),
