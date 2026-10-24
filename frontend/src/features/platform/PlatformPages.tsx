@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
 import type { PlatformPage } from "./PlatformConsole";
 
@@ -41,7 +41,7 @@ function Notice({ error, success }: {error?:string;success?:string}) {
 function Empty({ children }: { children: string }) {
   return <div className="platform-empty">{children}</div>;
 }
-function Table({ headings, children }: { headings: string[]; children: React.ReactNode }) {
+function Table({ headings, children }: { headings: string[]; children: ReactNode }) {
   return <div className="platform-table-frame"><table className="platform-table">
     <thead><tr>{headings.map(heading => <th key={heading}>{heading}</th>)}</tr></thead>
     <tbody>{children}</tbody>
@@ -370,7 +370,8 @@ export function PlatformSettings({csrfToken}:{csrfToken:string|null}){
     .catch(e=>setError(e instanceof Error?e.message:"Settings unavailable."));},[request]);
   async function save(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(!settings||busy)return;
-    const form=new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form=new FormData(formElement);
     setBusy(true);setError("");setSuccess("");
     try{
       const result=await request<{data:Settings}>("/platform-console/settings","PATCH",{
@@ -380,7 +381,7 @@ export function PlatformSettings({csrfToken}:{csrfToken:string|null}){
         reason:String(form.get("reason")??"").trim(),
       });
       setSettings(result.data);setSuccess("Platform settings saved and audited.");
-      event.currentTarget.reset();
+      formElement.reset();
     }catch(e){setError(e instanceof Error?e.message:"Settings could not be saved.");}
     finally{setBusy(false);}
   }
