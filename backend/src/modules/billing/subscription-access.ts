@@ -13,13 +13,13 @@ export function subscriptionDecision(
     return { allowed: false, code: "TENANT_SUSPENDED", message: "The platform has suspended this company. Contact support." };
   }
   if (!subscription) {
-    return { allowed: false, code: "SUBSCRIPTION_REQUIRED", message: "Activate a subscription in Billing & Plan." };
+    return { allowed: false, code: "SUBSCRIPTION_NOT_CONFIGURED", message: "Activate a subscription in Billing & Plan." };
   }
   if (subscription.status === "TRIALING") {
     if (subscription.trialEndsAt && subscription.trialEndsAt > now) {
       return { allowed: true, code: null, message: "" };
     }
-    return { allowed: false, code: "TRIAL_EXPIRED", message: "Your trial has expired. Open Billing & Plan to subscribe." };
+    return { allowed: false, code: "SUBSCRIPTION_EXPIRED", message: "Your trial has expired. Open Billing & Plan to subscribe." };
   }
   if (subscription.status === "ACTIVE") {
     // Paddle-backed subscriptions must have a current, server-confirmed billing period.
@@ -30,6 +30,6 @@ export function subscriptionDecision(
     }
     return { allowed: true, code: null, message: "" };
   }
-  return { allowed: false, code: "SUBSCRIPTION_PAYMENT_REQUIRED",
+  return { allowed: false, code: "SUBSCRIPTION_INACTIVE",
     message: "Company subscription is inactive or requires payment. Open Billing & Plan." };
 }
