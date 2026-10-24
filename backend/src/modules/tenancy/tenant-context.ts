@@ -1,6 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { expandLocationScope } from "./location-scope.js";
+import { subscriptionDecision } from "../billing/subscription-access.js";
 
 type LocationMode = "read" | "manage";
 
@@ -56,34 +57,32 @@ export const requireTenant: RequestHandler = async (
       },
     });
 
-    if (!membership || membership.tenant.status === "SUSPENDED") {
+    if (!membership) {
       sendError(response, 403, "TENANT_ACCESS_DENIED", "You do not have access to that workspace.");
       return;
     }
 
-    // Expired/inactive companies remain readable for authorized users but
-    // cannot mutate operational records. Deactivation is allowed so owners
-    // can reduce usage or revoke access even when their plan has expired.
-    const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
-    const isMemberDeactivation =
-      request.baseUrl === "/api/members" && request.method === "PATCH" &&
-      request.path.startsWith("/") && request.path.endsWith("/status") && request.path.split("/").length === 3 && request.body?.isActive === false;
+    // Like BuildHire: an expired trial or unpaid company cannot bypass the
+    // screen by calling GET or POST APIs. Billing is the only recovery area
+    // accessible to the tenant owner; workspace context supports the shell.
+    const isRecovery = request.baseUrl === "/api/billing" ||
+      (request.baseUrl === "/api/workspace" && request.path === "/context");
+    const isMemberDeactivation = request.baseUrl === "/api/members" &&
+      request.method === "PATCH" && request.path.startsWith("/") &&
+      request.path.endsWith("/status") && request.path.split("/").length === 3 &&
+      request.body?.isActive === false;
     const isAttachmentRemoval = request.baseUrl === "/api/files" && request.method === "DELETE";
-    if (isWrite && !isMemberDeactivation && !isAttachmentRemoval) {
+    if (!isRecovery && !isMemberDeactivation && !isAttachmentRemoval) {
       const subscription = await prisma.tenantSubscription.findUnique({
-        where: { tenantId }, select: { status: true, trialEndsAt: true },
+        where: { tenantId },
+        select: {
+          status: true, trialEndsAt: true, currentPeriodEndsAt: true, billingSource: true,
+        },
       });
-      if (!subscription) {
-        sendError(response, 409, "SUBSCRIPTION_NOT_CONFIGURED", "This workspace does not have a subscription.");
-        return;
-      }
-      if (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING") {
-        sendError(response, 403, "SUBSCRIPTION_INACTIVE", "This subscription is not active.");
-        return;
-      }
-      if (subscription.status === "TRIALING" &&
-          (!subscription.trialEndsAt || subscription.trialEndsAt <= new Date())) {
-        sendError(response, 403, "SUBSCRIPTION_EXPIRED", "The workspace trial has expired.");
+      const access = subscriptionDecision(subscription, membership.tenant.status);
+      if (!access.allowed) {
+        sendError(response, access.code === "SUBSCRIPTION_NOT_CONFIGURED" ? 409 : 403,
+          access.code ?? "SUBSCRIPTION_INACTIVE", access.message);
         return;
       }
     }
