@@ -5,6 +5,7 @@ import { requireSession, requireCsrf } from "../auth/auth-middleware.js";
 import { requireTenant } from "../tenancy/tenant-context.js";
 import { paddleConfig, paddleIsReady, PaddleError, paddleRequest, verifiedPaddlePrice, type PaddleInterval } from "./paddle.js";
 import { subscriptionDecision } from "./subscription-access.js";
+import { confirmPlanChange, previewPlanChange } from "./plan-change.js";
 
 export const billingRouter = Router();
 billingRouter.use(requireSession, requireTenant);
@@ -249,5 +250,32 @@ billingRouter.post("/manage", requireCompanyAdmin, requireCsrf, async (request, 
     }
     response.setHeader("Cache-Control", "private, no-store");
     response.json({ data: { url } });
+  } catch (error) { providerFail(response, error); }
+});
+
+const confirmSchema = selectSchema.extend({ confirmedAmountMinor: z.number().int().safe() });
+
+billingRouter.post("/change-preview", requireCompanyAdmin, requireCsrf, async (request, response) => {
+  const selected = selectSchema.safeParse(request.body);
+  if (!selected.success) {
+    fail(response, 400, "INVALID_PLAN", "Select a valid plan and interval."); return;
+  }
+  try {
+    const quote = await previewPlanChange(request.auth!.tenantId!, selected.data);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json({ data: quote });
+  } catch (error) { providerFail(response, error); }
+});
+
+billingRouter.post("/change-confirm", requireCompanyAdmin, requireCsrf, async (request, response) => {
+  const selected = confirmSchema.safeParse(request.body);
+  if (!selected.success) {
+    fail(response, 400, "INVALID_QUOTE", "Confirm the provider's exact quoted amount."); return;
+  }
+  try {
+    const data = await confirmPlanChange(
+      request.auth!.tenantId!, selected.data, selected.data.confirmedAmountMinor,
+    );
+    response.json({ data });
   } catch (error) { providerFail(response, error); }
 });
