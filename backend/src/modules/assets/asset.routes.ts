@@ -9,6 +9,7 @@ import {
   AssetPlanLimitError,
   SubscriptionAccessError,
 } from "../subscriptions/subscription-policy.js";
+import { CustomFieldValidationError, validateCustomFieldValues } from "../master-data/custom-fields.js";
 
 export const assetRouter = Router();
 
@@ -35,6 +36,7 @@ const assetCreateSchema = z.object({
   title: z.string().trim().min(1).max(191),
   description: z.string().trim().max(20000).optional(),
   modelId: z.string().trim().min(1).optional(),
+  customFields: z.record(z.string(), z.unknown()).optional(),
   manufacturerId: z.string().trim().min(1).optional(),
   supplierId: z.string().trim().min(1).optional(),
   currentLocationId: z.string().trim().min(1).optional(),
@@ -288,7 +290,7 @@ assetRouter.post(
 
         const [model, manufacturer, supplier, location] = await Promise.all([
           input.modelId
-            ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true } })
+            ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true, fieldSchema: true } })
             : Promise.resolve(null),
           input.manufacturerId
             ? tx.manufacturer.findFirst({ where: { id: input.manufacturerId, tenantId, isActive: true }, select: { id: true } })
@@ -305,6 +307,7 @@ assetRouter.post(
         if (input.manufacturerId && !manufacturer) throw new Error("REFERENCE_MANUFACTURER_INVALID");
         if (input.supplierId && !supplier) throw new Error("REFERENCE_SUPPLIER_INVALID");
         if (assignedLocationId && !location) throw new Error("REFERENCE_LOCATION_INVALID");
+        const validatedFields = validateCustomFieldValues(model?.fieldSchema ?? null, input.customFields ?? {});
 
         const asset = await tx.asset.create({
           data: {
@@ -315,6 +318,7 @@ assetRouter.post(
             title: input.title,
             description: input.description || undefined,
             modelId: input.modelId || undefined,
+            customFields: validatedFields,
             manufacturerId: input.manufacturerId || undefined,
             supplierId: input.supplierId || undefined,
             currentLocationId: assignedLocationId,
@@ -368,6 +372,10 @@ assetRouter.post(
 
       response.status(201).json({ data: result });
     } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        sendError(response, 400, error.code, error.message);
+        return;
+      }
       if (error instanceof AssetPlanLimitError) {
         response.status(409).json({
           error: {
@@ -416,6 +424,7 @@ const assetUpdateSchema = z.object({
   title: z.string().trim().min(1).max(191).optional(),
   description: z.string().trim().max(20000).optional(),
   modelId: z.string().trim().min(1).optional(),
+  customFields: z.record(z.string(), z.unknown()).optional(),
   manufacturerId: z.string().trim().min(1).optional(),
   supplierId: z.string().trim().min(1).optional(),
   purchaseOrderNumber: z.string().trim().max(191).optional(),
@@ -494,7 +503,7 @@ assetRouter.patch(
 
         const [model, manufacturer, supplier] = await Promise.all([
           input.modelId
-            ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true } })
+            ? tx.assetModel.findFirst({ where: { id: input.modelId, tenantId, isActive: true }, select: { id: true, fieldSchema: true } })
             : Promise.resolve(null),
           input.manufacturerId
             ? tx.manufacturer.findFirst({ where: { id: input.manufacturerId, tenantId, isActive: true }, select: { id: true } })
@@ -506,6 +515,16 @@ assetRouter.patch(
         if (input.modelId && !model) throw new Error("ASSET_REFERENCE_INVALID");
         if (input.manufacturerId && !manufacturer) throw new Error("ASSET_REFERENCE_INVALID");
         if (input.supplierId && !supplier) throw new Error("ASSET_REFERENCE_INVALID");
+        const targetModelId = input.modelId ?? existing.modelId;
+        const targetModel = input.modelId ? model : targetModelId
+          ? await tx.assetModel.findFirst({ where: { id: targetModelId, tenantId }, select: { fieldSchema: true } })
+          : null;
+        const validatedFields = input.customFields !== undefined || input.modelId !== undefined
+          ? validateCustomFieldValues(
+              targetModel?.fieldSchema ?? null,
+              input.customFields ?? (input.modelId !== undefined ? {} : existing.customFields ?? {}),
+            )
+          : undefined;
 
         const updated = await tx.asset.update({
           where: { id: existing.id },
@@ -515,6 +534,7 @@ assetRouter.patch(
             ...(input.title !== undefined ? { title: input.title } : {}),
             ...(input.description !== undefined ? { description: input.description } : {}),
             ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
+            ...(validatedFields !== undefined ? { customFields: validatedFields } : {}),
             ...(input.manufacturerId !== undefined ? { manufacturerId: input.manufacturerId } : {}),
             ...(input.supplierId !== undefined ? { supplierId: input.supplierId } : {}),
             ...(input.purchaseOrderNumber !== undefined ? { purchaseOrderNumber: input.purchaseOrderNumber } : {}),
@@ -605,6 +625,10 @@ assetRouter.patch(
 
       response.status(200).json({ data: result });
     } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        sendError(response, 400, error.code, error.message);
+        return;
+      }
       if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
         sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
         return;
@@ -758,6 +782,10 @@ assetRouter.post(
 
       response.status(200).json({ data: result });
     } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        sendError(response, 400, error.code, error.message);
+        return;
+      }
       if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
         sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
         return;
@@ -889,6 +917,10 @@ assetRouter.post(
 
       response.status(200).json({ data: result });
     } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        sendError(response, 400, error.code, error.message);
+        return;
+      }
       if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
         sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
         return;
