@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
 import "./billing.css";
 
@@ -72,7 +72,7 @@ export default function CompanyBillingPage({ tenantId, csrfToken, isCompanyAdmin
   }, [tenantId, isCompanyAdmin, request, onChanged]);
   useEffect(() => { void reload(); }, [reload]);
 
-  async function updateBillingEmail(event: React.FormEvent<HTMLFormElement>) {
+  async function updateBillingEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     const data = new FormData(event.currentTarget);
