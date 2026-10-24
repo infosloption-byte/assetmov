@@ -19,7 +19,7 @@ type History = {
     periodEndsAt: string | null; trialEndsAt: string | null; cancelAtPeriodEnd: boolean;
     paddleSubscriptionId: string | null; interval: Interval | null;
   };
-  payments: Payment[]; attempts: Attempt[]; hasCustomer: boolean;
+  payments: Payment[]; attempts: Attempt[]; hasCustomer: boolean; billingEmail: string | null;
 };
 type Quote = {
   planId: string; planName: string; interval: Interval; immediateAmountMinor: number;
@@ -41,6 +41,7 @@ export default function CompanyBillingPage({ tenantId, csrfToken, isCompanyAdmin
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [editingEmail, setEditingEmail] = useState(false);
 
   const request = useCallback(async <T,>(path: string, method = "GET", body?: unknown): Promise<T> => {
     if (!tenantId) throw new Error("Select a company workspace.");
@@ -70,6 +71,23 @@ export default function CompanyBillingPage({ tenantId, csrfToken, isCompanyAdmin
     finally { setLoading(false); }
   }, [tenantId, isCompanyAdmin, request, onChanged]);
   useEffect(() => { void reload(); }, [reload]);
+
+  async function updateBillingEmail(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const data = new FormData(event.currentTarget);
+    setBusy("email"); setError(""); setNotice("");
+    try {
+      await request("/customer", "PATCH", {
+        email: String(data.get("billingEmail") ?? "").trim(),
+        reason: String(data.get("billingReason") ?? "").trim(),
+      });
+      setEditingEmail(false);
+      setNotice("The company billing contact has been updated.");
+      await reload();
+    } catch (e) { setError(e instanceof Error ? e.message : "Cannot update billing email."); }
+    finally { setBusy(""); }
+  }
 
   async function begin(planId: string) {
     if (busy) return;
@@ -153,6 +171,25 @@ export default function CompanyBillingPage({ tenantId, csrfToken, isCompanyAdmin
         {current?.cancelAtPeriodEnd && <p>Cancellation is scheduled at the end of the current period.</p>}
         {history?.hasCustomer && <button className="topbar-button ghost" type="button" disabled={!!busy} onClick={() => void manage()}>Open Paddle billing portal ↗</button>}
       </div>
+    </div>
+    <div className="billing-current">
+      <div>
+        <span className="eyebrow">BILLING IDENTITY</span>
+        <p><strong>{history?.billingEmail ?? "Company administrator's account email"}</strong></p>
+        <p>A company-specific billing email avoids conflicts with other applications using the same Paddle merchant account.</p>
+      </div>
+      {!history?.hasCustomer && (history?.attempts.length ?? 0) === 0 &&
+        <button type="button" className="topbar-button ghost" onClick={() => setEditingEmail(true)}>Change billing email</button>}
+      {editingEmail && <form className="asset-create-form" onSubmit={e => void updateBillingEmail(e)}>
+        <label>Billing contact email<input name="billingEmail" type="email" required maxLength={191}
+          defaultValue={history?.billingEmail ?? ""}/></label>
+        <label>Audit reason<textarea name="billingReason" minLength={8} maxLength={1000}
+          required placeholder="Why should this company's billing contact be updated?"/></label>
+        <div className="asset-modal-actions">
+          <button type="button" className="plain-button" onClick={() => setEditingEmail(false)}>Cancel</button>
+          <button className="primary-button" type="submit" disabled={!!busy}>Save billing email</button>
+        </div>
+      </form>}
     </div>
     {readyAttempt && !hasPaid && <div className="billing-notice">
       An existing checkout is pending. <a href={readyAttempt.checkoutUrl!}>Continue secure checkout ↗</a>
