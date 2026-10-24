@@ -65,7 +65,7 @@ test("Paddle plan change preview parses charge, credit and rejects currency mism
     update_summary: { result: { action: "charge" as const, amount: "500", currency_code: "USD" } },
   };
   assert.deepEqual(parsePaddleQuote(preview, "USD"), { amountMinor: 500, currency: "USD", action: "charge" });
-  assert.equal(parsePaddleQuote({ ...preview, update_summary: { result: { action: "credit", amount: "200", currency_code: "USD" } } }, "USD").amountMinor, -200);
+  assert.equal(parsePaddleQuote({ ...preview, update_summary: { result: { action: "credit" as const, amount: "200", currency_code: "USD" } } }, "USD").amountMinor, -200);
   assert.throws(() => parsePaddleQuote(preview, "LKR"), PaddleError);
   assert.equal(subscriptionStatus("past_due"), "PAST_DUE");
   assert.equal(subscriptionStatus("canceled"), "EXPIRED");
