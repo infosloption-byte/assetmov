@@ -632,15 +632,15 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
             </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading asset history…</div>}
             {detailError && <div className="asset-inline-error" role="alert">{detailError}</div>}
-            {selectedAsset && !editingAsset && selectedAsset.model?.fieldSchema?.fields.length && <section className="asset-history-section" aria-label="Model custom field values">
+            {selectedAsset && !editingAsset && (selectedAsset.model?.fieldSchema?.fields.length ?? 0) > 0 && <section className="asset-history-section" aria-label="Model custom field values">
               <h3>Model-specific information</h3>
-              {selectedAsset.model.fieldSchema.fields.map(field => <div className="account-session" key={field.key}>
-                <strong>{field.label}</strong><span>{Array.isArray(selectedAsset.customFields?.[field.key])
-                  ? (selectedAsset.customFields[field.key] as string[]).join(", ")
-                  : selectedAsset.customFields?.[field.key] === true ? "Yes"
-                  : selectedAsset.customFields?.[field.key] === false ? "No"
-                  : String(selectedAsset.customFields?.[field.key] ?? "—")}</span>
-              </div>)}
+              {selectedAsset.model?.fieldSchema?.fields.map(field => {
+                const value = selectedAsset.customFields?.[field.key];
+                return <div className="account-session" key={field.key}>
+                  <strong>{field.label}</strong><span>{Array.isArray(value) ? value.join(", ")
+                    : value === true ? "Yes" : value === false ? "No" : String(value ?? "—")}</span>
+                </div>;
+              })}
             </section>}
             {selectedAsset && !editingAsset && <AssetFilesPanel assetId={selectedAsset.id} tenantId={tenantId} csrfToken={csrfToken} canEdit={permissions.includes("asset.update") && (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId)))}/> }
             {selectedAsset && (editingAsset ? (
