@@ -33,8 +33,8 @@ function storageLabel(bytes: string | null) {
   return bytes === null ? "Unlimited" : (Number(bytes) / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " GiB";
 }
 export default function PlatformAdminPage({ csrfToken, isPlatformAdmin, section }: Props) {
-  const [tab, setTab] = useState<"overview" | "companies" | "plans">(section ?? "overview");
-  useEffect(() => { if (section) setTab(section); }, [section]);
+  const [tab, setTab] = useState<"overview" | "companies" | "plans">("overview");
+  const currentTab = section ?? tab;
   const [pulse, setPulse] = useState<Pulse | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -170,11 +170,11 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin, section 
     {error && <div className="theme-notice error" role="alert">{error}</div>}
     {success && <div className="theme-notice success" role="status">{success}</div>}
     {!section && <div className="transfer-tabs" role="tablist" aria-label="Platform administration section">
-      <button type="button" role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Platform overview</button>
-      <button type="button" role="tab" aria-selected={tab === "companies"} className={tab === "companies" ? "active" : ""} onClick={() => setTab("companies")}>Companies</button>
-      <button type="button" role="tab" aria-selected={tab === "plans"} className={tab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Subscription plans</button>
+      <button type="button" role="tab" aria-selected={currentTab === "overview"} className={currentTab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Platform overview</button>
+      <button type="button" role="tab" aria-selected={currentTab === "companies"} className={currentTab === "companies" ? "active" : ""} onClick={() => setTab("companies")}>Companies</button>
+      <button type="button" role="tab" aria-selected={currentTab === "plans"} className={currentTab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Subscription plans</button>
     </div>}
-    {tab === "overview" ? <>
+    {currentTab === "overview" ? <>
       <div className="stats-grid">
         {[
           ["Companies", pulse?.companyCount], ["Plans", pulse?.planCount],
@@ -199,7 +199,7 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin, section 
             <td>{new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(payment.amountMinor/100)}</td>
           </tr>)}</tbody></table></div>
       <p className="asset-inline-hint">Revenue reflects recorded Paddle USD transactions, not a payout or accounting statement. Provider webhooks remain authoritative.</p>
-    </> : tab === "companies" ? <>
+    </> : currentTab === "companies" ? <>
       <div className="asset-register-toolbar"><form className="asset-search-form" onSubmit={e => { e.preventDefault(); setPage(1); setSearch(query.trim()); }}>
         <label htmlFor="companyQuery" className="sr-only">Search companies</label>
         <input id="companyQuery" value={query} onChange={e => setQuery(e.currentTarget.value)} placeholder="Search company name or slug"/>
