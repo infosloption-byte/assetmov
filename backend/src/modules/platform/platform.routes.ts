@@ -241,6 +241,15 @@ platformRouter.patch(
           .filter((price): price is string => typeof price === "string");
         if (new Set(finalPrices).size !== finalPrices.length ||
             (finalPrices.length > 0 && !finalProduct)) throw new Error("PADDLE_CATALOG_INVALID");
+        if (current.paddleProductId !== finalProduct ||
+            fields.some(field => (changes[field] ?? null) !== current[field] && changes[field] !== undefined)) {
+          const boundSubscribers = await tx.tenantSubscription.count({
+            where: { planId: current.id, billingSource: "PADDLE" },
+          });
+          if (boundSubscribers > 0) {
+            throw new Error("PADDLE_PRICE_MAPPING_LOCKED");
+          }
+        }
 
         const updated = await tx.subscriptionPlan.update({
           where: { id: current.id },
@@ -264,6 +273,11 @@ platformRouter.patch(
 
       response.status(200).json({ data: serializePlan(plan) });
     } catch (error) {
+      if (error instanceof Error && error.message === "PADDLE_PRICE_MAPPING_LOCKED") {
+        sendError(response, 409, "PADDLE_PRICE_MAPPING_LOCKED",
+          "Existing Paddle subscriptions rely on this product/price mapping. Contact support for a planned migration.");
+        return;
+      }
       if (error instanceof Error && error.message === "PADDLE_CATALOG_INVALID") {
         sendError(response, 400, "PADDLE_CATALOG_INVALID", "Paddle plan needs one AssetMov product and distinct prices."); return;
       }
