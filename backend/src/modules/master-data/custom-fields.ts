@@ -91,3 +91,23 @@ export function validateCustomFieldValues(schema: unknown, input: unknown): Cust
   }
   return result;
 }
+
+/**
+ * MySQL's JSON representation can reorder object keys on persistence.
+ * Object property order is not meaningful for model field definitions,
+ * while field array order (the form's display order) is meaningful.
+ */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return "[" + value.map(canonicalJson).join(",") + "]";
+  }
+  if (value !== null && typeof value === "object") {
+    const properties = Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return "{" + properties.map(([key, item]) =>
+      JSON.stringify(key) + ":" + canonicalJson(item)
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value) ?? "null";
+}
