@@ -1,5 +1,11 @@
 # AssetMov Implementation Status
 
+## BuildHire-reference SaaS/Paddle implementation (2026-10-24; acceptance pending)
+
+Reviewed BuildHire source from the `infosloption-byte/candidate` repository. The stacked `feature/paddle-saas-billing-admin` branch implements the reusable SaaS elements—company-scoped Paddle customers and checkout attempts, signed webhook reconciliation, provider-verified prices, payment history, quote/confirm plan changes, a responsive Company Billing & Plan screen, a Platform Admin billing activity overview and independent suspension. Existing tenant-scoped full Company Administrator (`TENANT_OWNER`) and **company-created custom roles/permissions** remain intact. BuildHire's fixed business roles are not imported.
+
+A new **additive** Prisma migration `20261024000200_paddle_billing` is committed. Real sandbox provider credentials/products/domains are not configured in Git. The user has not run schema migration/TypeScript/lint/integration tests for this new branch yet, and no Paddle sandbox transaction was processed. Do not claim payment integration is live, validated, or production-ready. The earlier administration branch's 32 unit tests, MySQL acceptance and frontend builds were locally verified, but **these do not verify the new billing code**. Details and acceptance commands: [PADDLE_BILLING_ASSETMOV.md](PADDLE_BILLING_ASSETMOV.md).
+
 ## Coordinated administration/quota implementation (2026-10-24 — draft PR #6)
 
 This feature branch contains a bulk set of additions: Platform Super Admin web UI, company subscription-usage display, stronger membership permission delegation, runtime custom-field validation and model editing, a tenant-scoped attachment API/storage budget, and broad database-acceptance assertions. See [ADMIN_QUOTAS_BATCH.md](ADMIN_QUOTAS_BATCH.md).
