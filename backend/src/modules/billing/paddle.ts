@@ -91,7 +91,7 @@ export function validatePaddlePrice(price: Price, priceId: string, interval: Pad
       price.billing_cycle?.interval !== (interval === "MONTH" ? "month" : "year") ||
       price.billing_cycle.frequency !== 1 ||
       !/^\d+$/.test(price.unit_price?.amount ?? "") || !Number.isSafeInteger(amount) ||
-      !/^[A-Z]{3}$/.test(price.unit_price?.currency_code ?? "") ||
+      price.unit_price?.currency_code !== "USD" ||
       (price.quantity && price.quantity.minimum > 1) ||
       // AssetMov already starts a locally timed signup trial. Avoid giving another Paddle trial.
       price.trial_period !== null) {
