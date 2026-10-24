@@ -83,3 +83,11 @@ ALTER TABLE `PaddlePayment` ADD CONSTRAINT `PaddlePayment_tenantId_fkey`
   FOREIGN KEY (`tenantId`) REFERENCES `Tenant`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `PaddleWebhookEvent` ADD CONSTRAINT `PaddleWebhookEvent_tenantId_fkey`
   FOREIGN KEY (`tenantId`) REFERENCES `Tenant`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Match the default organization administrator label across existing tenants.
+-- The immutable tenant role key stays TENANT_OWNER; custom roles are untouched.
+UPDATE `Role`
+SET `name` = 'Company Administrator',
+    `description` = 'Full company access including user management, configurable roles, assets and company billing.',
+    `updatedAt` = CURRENT_TIMESTAMP(3)
+WHERE `key` = 'TENANT_OWNER' AND `isSystem` = TRUE;
