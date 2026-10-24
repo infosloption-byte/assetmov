@@ -98,7 +98,7 @@ billingRouter.get("/history", requireCompanyAdmin, async (request, response, nex
           plan: { select: { id: true, name: true } },
         },
       }),
-      prisma.paddleBillingCustomer.findUnique({ where: { tenantId }, select: { paddleCustomerId: true } }),
+      prisma.paddleBillingCustomer.findUnique({ where: { tenantId }, select: { paddleCustomerId: true, email: true } }),
     ]);
     response.setHeader("Cache-Control", "private, no-store");
     response.json({ data: {
@@ -110,7 +110,7 @@ billingRouter.get("/history", requireCompanyAdmin, async (request, response, nex
         paddleSubscriptionId: subscription.paddleSubscriptionId,
         interval: subscription.paddleInterval,
       } : null,
-      payments, attempts, hasCustomer: !!customer?.paddleCustomerId,
+      payments, attempts, hasCustomer: !!customer?.paddleCustomerId, billingEmail: customer?.email ?? null,
     } });
   } catch (error) { next(error); }
 });
@@ -170,8 +170,9 @@ billingRouter.post("/checkout", requireCompanyAdmin, requireCsrf, async (request
 
     let customerId = prepared.customerId;
     if (!customerId) {
+      const billingCustomer = await prisma.paddleBillingCustomer.findUniqueOrThrow({ where: { tenantId } });
       const matches = await paddleRequest<Array<{ id: string }>>(
-        `/customers?email=${encodeURIComponent(user.email)}`, config,
+        `/customers?email=${encodeURIComponent(billingCustomer.email)}`, config,
       );
       // Paddle may be shared with another app/company. Never attach a preexisting
       // billing identity by matching email alone; it could expose payment history.
@@ -181,9 +182,9 @@ billingRouter.post("/checkout", requireCompanyAdmin, requireCsrf, async (request
       }
       const remote = await paddleRequest<{ id: string; email: string }>("/customers", config, {
         method: "POST",
-        body: { email: user.email, name: tenant.name, custom_data: { assetmov_tenant_id: tenantId } },
+        body: { email: billingCustomer.email, name: tenant.name, custom_data: { assetmov_tenant_id: tenantId } },
       });
-      if (!/^ctm_[a-z\d]{26}$/.test(remote.id) || remote.email.toLowerCase() !== user.email.toLowerCase()) {
+      if (!/^ctm_[a-z\d]{26}$/.test(remote.id) || remote.email.toLowerCase() !== billingCustomer.email.toLowerCase()) {
         throw new PaddleError(502, "PADDLE_CUSTOMER_INVALID", "Paddle returned an unexpected customer identity.");
       }
       const linked = await prisma.paddleBillingCustomer.updateMany({
@@ -227,6 +228,50 @@ billingRouter.post("/checkout", requireCompanyAdmin, requireCsrf, async (request
       fail(response, error.httpStatus, error.code, error.message);
       return;
     }
+    next(error);
+  }
+});
+
+const billingEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(191),
+  reason: z.string().trim().min(8).max(1000),
+}).strict();
+
+/** A company can choose a distinct billing email before Paddle creates its identity. */
+billingRouter.patch("/customer", requireCompanyAdmin, requireCsrf, async (request, response, next) => {
+  const parsed = billingEmailSchema.safeParse(request.body);
+  if (!parsed.success) {
+    fail(response, 400, "VALIDATION_ERROR", "Provide a valid billing email and audit reason."); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const config = paddleConfig();
+    const result = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM Tenant WHERE id = ${tenantId} FOR UPDATE`;
+      const current = await tx.paddleBillingCustomer.findUnique({ where: { tenantId } });
+      if (current?.paddleCustomerId || await tx.paddleCheckoutAttempt.count({
+        where: { tenantId, status: { in: ["PENDING", "READY", "CONFIRMED"] } },
+      }) > 0) {
+        throw new PaddleError(409, "BILLING_IDENTITY_LOCKED",
+          "A billing identity or checkout already exists. Contact support before changing the email.");
+      }
+      const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+      const updated = await tx.paddleBillingCustomer.upsert({
+        where: { tenantId },
+        create: { tenantId, email: parsed.data.email, name: tenant.name, environment: config.environment },
+        update: { email: parsed.data.email },
+      });
+      await tx.auditLog.create({ data: {
+        tenantId, actorUserId: request.auth!.userId, action: "billing.email_changed",
+        entityType: "PaddleBillingCustomer", entityId: updated.id,
+        oldData: { billingEmail: current?.email ?? null },
+        newData: { billingEmail: updated.email, reason: parsed.data.reason },
+      } });
+      return updated.email;
+    });
+    response.json({ data: { billingEmail: result } });
+  } catch (error) {
+    if (error instanceof PaddleError) { fail(response, error.httpStatus, error.code, error.message); return; }
     next(error);
   }
 });
