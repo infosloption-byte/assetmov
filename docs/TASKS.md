@@ -1,5 +1,23 @@
 # AssetMov Task Checklist
 
+## Coordinated SaaS administration and quota batch (PR #6; acceptance pending)
+
+- [x] Commit platform-admin React plan and company management screens with audited subscription action controls.
+- [x] Commit backend permission-delegation constraints on company membership role creation/changes.
+- [x] Commit company subscription usage summaries for assets, users, storage and trial duration.
+- [x] Commit typed model custom-field server validation, dynamic asset forms and safe model editing.
+- [x] Commit tenant-aware MySQL attachment table, additive migration and transactional storage limits.
+- [x] Commit tenant-level write guard for expired/inactive subscriptions (with cleanup exceptions).
+- [x] Commit expanded unit/integration assertions for custom values, storage quota, user quota, model isolation and expiry.
+- [ ] Run backend lint, TS, unit tests, Prisma migration/client generation, API acceptance suite against `assetmov_test`, and backend build.
+- [ ] Run frontend lint, TS and production build; manually verify Platform and Company administration and asset attachments.
+- [ ] Demonstrate two-tenant isolation for role/member/assets/attachments and transfer/assignment in a browser.
+- [ ] Obtain a successful GitHub Actions CI run; currently startup failures have been reported.
+- [ ] Replace MySQL-blob upload prototype with secure scanned streamed object storage before production.
+- [ ] Verify the current migration history on a case-sensitive Linux MySQL target.
+
+See [ADMIN_QUOTAS_BATCH.md](ADMIN_QUOTAS_BATCH.md) for the coordinated verification commands and walkthrough.
+
 Use this as the working implementation checklist. Keep tasks unchecked until implemented **and tested**. Link pull requests/commits beside the relevant task when work begins.
 
 ## A. Repository and developer experience
