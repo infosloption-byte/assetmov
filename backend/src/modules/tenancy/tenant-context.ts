@@ -67,7 +67,7 @@ export const requireTenant: RequestHandler = async (
     const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
     const isMemberDeactivation =
       request.baseUrl === "/api/members" && request.method === "PATCH" &&
-      /^\\/[^/]+\\/status$/.test(request.path) && request.body?.isActive === false;
+      request.path.startsWith("/") && request.path.endsWith("/status") && request.path.split("/").length === 3 && request.body?.isActive === false;
     const isAttachmentRemoval = request.baseUrl === "/api/files" && request.method === "DELETE";
     if (isWrite && !isMemberDeactivation && !isAttachmentRemoval) {
       const subscription = await prisma.tenantSubscription.findUnique({
