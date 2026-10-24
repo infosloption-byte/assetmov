@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import AssetFilesPanel from "./AssetFilesPanel";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -630,6 +631,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
             </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading asset history…</div>}
             {detailError && <div className="asset-inline-error" role="alert">{detailError}</div>}
+            {selectedAsset && !editingAsset && <AssetFilesPanel assetId={selectedAsset.id} tenantId={tenantId} csrfToken={csrfToken} canEdit={permissions.includes("asset.update") && (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId)))}/> }
             {selectedAsset && (editingAsset ? (
               <form className="asset-edit-form" onSubmit={(event) => void saveAssetEdit(event)}>
                 <label htmlFor="editAssetTitle">Asset name <span>*</span></label>
