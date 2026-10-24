@@ -830,7 +830,8 @@ test("registration, session security, tenant isolation, locations and assets wor
       body: JSON.stringify({ event_type: "subscription.created" }),
     });
     assert.equal(forged.status, 400);
-    const confirmed = await sendProviderEvent("subscription.created", subscriptionData("active"), eventAt(0));
+    const firstProviderEventId = "evt_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const confirmed = await sendProviderEvent("subscription.created", subscriptionData("active"), eventAt(0), firstProviderEventId);
     assert.equal(confirmed.status, 200, await confirmed.text());
     const paidAccess = await fetch(`${baseUrl}/api/assets`, {
       headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
@@ -839,6 +840,43 @@ test("registration, session security, tenant isolation, locations and assets wor
     const paidState = await prisma.tenantSubscription.findUniqueOrThrow({ where: { tenantId: ownerB.tenant.id } });
     assert.equal(paidState.billingSource, "PADDLE");
     assert.equal(paidState.paddleSubscriptionId, sandboxSubscriptionId);
+    const replay = await sendProviderEvent("subscription.created", subscriptionData("active"), eventAt(0), firstProviderEventId);
+    assert.equal(replay.status, 200, "Exact duplicated signed event must be idempotent.");
+    assert.equal(await prisma.paddleWebhookEvent.count({ where: { eventId: firstProviderEventId } }), 1);
+    const blockedManualPlan = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/subscription`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ planId: createdPlanId, mode: "activate",
+          reason: "Do not replace an existing Paddle subscription" }),
+      },
+    );
+    assert.equal(blockedManualPlan.status, 409, "Platform operator must not forge paid access.");
+    const manualError = await blockedManualPlan.json() as ErrorResponse;
+    assert.equal(manualError.error?.code, "PADDLE_SUBSCRIPTION_MANAGED");
+
+    const platformSuspension = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/status`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ status: "SUSPENDED",
+          reason: "Test platform suspension independently of Paddle status" }),
+      },
+    );
+    assert.equal(platformSuspension.status, 200);
+    const whileSuspended = await fetch(`${baseUrl}/api/assets`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(whileSuspended.status, 403);
+    const reinstate = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/status`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ status: "ACTIVE",
+          reason: "Restore independent platform access after support review" }),
+      },
+    );
+    assert.equal(reinstate.status, 200);
 
     const receipt = await sendProviderEvent("transaction.completed", {
       id: sandboxTransactionId, subscription_id: sandboxSubscriptionId,
