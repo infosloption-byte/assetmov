@@ -70,6 +70,17 @@ function App() {
   const [billingError, setBillingError] = useState("");
   const [billingEpoch, setBillingEpoch] = useState(0);
   const refreshBilling = useCallback(() => setBillingEpoch(n => n + 1), []);
+  useEffect(() => {
+    const onReturnToApp = () => {
+      if (document.visibilityState === "visible") refreshBilling();
+    };
+    window.addEventListener("focus", refreshBilling);
+    document.addEventListener("visibilitychange", onReturnToApp);
+    return () => {
+      window.removeEventListener("focus", refreshBilling);
+      document.removeEventListener("visibilitychange", onReturnToApp);
+    };
+  }, [refreshBilling]);
 
   useEffect(() => {
     const controller = new AbortController();
