@@ -393,7 +393,10 @@ test("registration, session security, tenant isolation, locations and assets wor
     const unsafeEdit = await editModel([]);
     assert.equal(unsafeEdit.status, 409);
     assert.equal((await unsafeEdit.json() as ErrorResponse).error?.code, "MODEL_IN_USE");
-    assert.equal((await editModel([{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }])).status, 200);
+    const safeEdit = await editModel([{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }]);
+    if (safeEdit.status !== 200) {
+      assert.fail(`Unchanged field definition must allow model rename (${safeEdit.status}): ${await safeEdit.text()}`);
+    }
 
     const assetDetail = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
