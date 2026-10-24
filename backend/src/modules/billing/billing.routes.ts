@@ -65,7 +65,9 @@ billingRouter.get("/plans", requireCompanyAdmin, async (_request, response, next
       const prices = await Promise.all((["MONTH", "YEAR"] as const).map(async interval => {
         const priceId = priceIdFor(plan, interval);
         if (!priceId || !config) return null;
-        try { return await verifiedPaddlePrice(priceId, interval, config); }
+        try { const verified = await verifiedPaddlePrice(priceId, interval, config);
+          return plan.paddleProductId && verified.productId === plan.paddleProductId ? verified : null;
+        }
         catch { return null; }
       }));
       return {
@@ -125,6 +127,9 @@ billingRouter.post("/checkout", requireCompanyAdmin, requireCsrf, async (request
     }
     const priceId = priceIdFor(plan, selected.data.interval);
     const price = await verifiedPaddlePrice(priceId ?? "", selected.data.interval, config);
+    if (!plan.paddleProductId || price.productId !== plan.paddleProductId) {
+      throw new PaddleError(503, "PADDLE_PRODUCT_MISMATCH", "Use an AssetMov-specific Paddle product and approved price IDs.");
+    }
     const user = await prisma.user.findUnique({ where: { id: request.auth!.userId }, select: { email: true } });
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
     if (!user || !tenant) { fail(response, 403, "TENANT_ACCESS_DENIED", "Account or workspace missing."); return; }
