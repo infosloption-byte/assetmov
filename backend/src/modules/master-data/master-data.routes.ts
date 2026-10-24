@@ -136,3 +136,52 @@ masterDataRouter.post("/models", requirePermission("tenant.settings.manage"), re
     next(error);
   }
 });
+
+masterDataRouter.patch("/models/:id", requirePermission("tenant.settings.manage"), requireCsrf, async (request, response, next) => {
+  const parsed = modelSchema.safeParse(request.body);
+  const id = request.params.id;
+  if (!parsed.success || typeof id !== "string" || !id) {
+    sendError(response, 400, "VALIDATION_ERROR"); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const result = await prisma.$transaction(async tx => {
+      const existing = await tx.assetModel.findFirst({ where: { id, tenantId } });
+      if (!existing) throw new Error("MODEL_NOT_FOUND");
+      const category = await tx.assetCategory.findFirst({
+        where: { id: parsed.data.categoryId, tenantId, isActive: true },
+      });
+      if (!category) throw new Error("CATEGORY_NOT_FOUND");
+      const assetCount = await tx.asset.count({ where: { tenantId, modelId: id } });
+      const previousSchema = JSON.stringify(existing.fieldSchema ?? { version: 1, fields: [] });
+      const nextSchema = { version: 1, fields: parsed.data.fields };
+      if (assetCount > 0 && (
+        previousSchema !== JSON.stringify(nextSchema) || existing.categoryId !== category.id
+      )) throw new Error("MODEL_IN_USE");
+      const model = await tx.assetModel.update({
+        where: { id }, data: {
+          categoryId: category.id, name: parsed.data.name, code: parsed.data.code,
+          fieldSchema: nextSchema,
+        },
+      });
+      await tx.auditLog.create({ data: {
+        tenantId, actorUserId: request.auth!.userId,
+        action: "asset_model.updated", entityType: "AssetModel", entityId: id,
+        oldData: { name: existing.name, categoryId: existing.categoryId },
+        newData: { name: model.name, categoryId: model.categoryId, fieldSchema: nextSchema },
+      } });
+      return model;
+    });
+    response.json({ data: result });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (["MODEL_NOT_FOUND", "CATEGORY_NOT_FOUND", "MODEL_IN_USE"].includes(code)) {
+      sendError(response, code === "MODEL_NOT_FOUND" ? 404 : code === "CATEGORY_NOT_FOUND" ? 400 : 409, code);
+      return;
+    }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      sendError(response, 409, "MODEL_ALREADY_EXISTS"); return;
+    }
+    next(error);
+  }
+});
