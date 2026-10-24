@@ -1,5 +1,11 @@
 # AssetMov Implementation Status
 
+## Coordinated administration/quota implementation (2026-10-24 — draft PR #6)
+
+This feature branch contains a bulk set of additions: Platform Super Admin web UI, company subscription-usage display, stronger membership permission delegation, runtime custom-field validation and model editing, a tenant-scoped attachment API/storage budget, and broad database-acceptance assertions. See [ADMIN_QUOTAS_BATCH.md](ADMIN_QUOTAS_BATCH.md).
+
+**This is a code-complete development candidate, not a verified release.** GitHub Actions continues to return `startup_failure` before tests run, and the revised branch has **not** yet been validated by a successful local backend/frontend build or its new database migration. Do not mark these features production-ready until WAMP-based acceptance and a future successful CI run pass. This branch introduces one **additive** storage table migration; it does not require dropping or reinitializing databases.
+
 **Last review:** 2026-10-18  
 **Repository:** [infosloption-byte/assetmov](https://github.com/infosloption-byte/assetmov)
 
