@@ -727,6 +727,19 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(firstUpload.status, 201);
     const firstFile = await firstUpload.json() as { data: { id: string; sizeBytes: number } };
     assert.equal(firstFile.data.sizeBytes, 400 * 1024);
+    const authorizedDownload = await fetch(`${baseUrl}/api/files/${firstFile.data.id}/download`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(authorizedDownload.status, 200);
+    assert.equal((await authorizedDownload.arrayBuffer()).byteLength, 400 * 1024);
+    const noCsrfUpload = await fetch(`${baseUrl}/api/files`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        json: true, origin: true }),
+      body: JSON.stringify({ assetId: limitedAssetId, filename: "must-not-persist.txt",
+        mimeType: "text/plain", contentBase64: testPayload }),
+    });
+    assert.equal(noCsrfUpload.status, 403);
+
     assert.equal((await uploadFile()).status, 201);
     const blockedUpload = await uploadFile();
     assert.equal(blockedUpload.status, 409);
