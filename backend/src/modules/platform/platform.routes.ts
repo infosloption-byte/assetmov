@@ -12,6 +12,8 @@ const storageLimitSchema = z.string()
   .transform((value) => BigInt(value))
   .refine((value) => value <= MAX_SIGNED_BIGINT, "Storage limit is too large.")
   .nullable();
+const paddleId = z.string().trim().regex(/^pri_[a-z\d]{26}$/).nullable();
+const paddleProduct = z.string().trim().regex(/^pro_[a-z\d]{26}$/).nullable();
 const reasonSchema = z.string().trim().min(8).max(1000);
 
 const planCreateSchema = z.object({
@@ -23,6 +25,11 @@ const planCreateSchema = z.object({
   storageLimitBytes: storageLimitSchema,
   trialDurationDays: z.number().int().min(0).max(3650),
   isActive: z.boolean(),
+  paddleProductId: paddleProduct.optional(),
+  paddleSandboxMonthlyPriceId: paddleId.optional(),
+  paddleSandboxYearlyPriceId: paddleId.optional(),
+  paddleLiveMonthlyPriceId: paddleId.optional(),
+  paddleLiveYearlyPriceId: paddleId.optional(),
   reason: reasonSchema,
 }).strict();
 
@@ -34,6 +41,11 @@ const planUpdateSchema = z.object({
   storageLimitBytes: storageLimitSchema.optional(),
   trialDurationDays: z.number().int().min(0).max(3650).optional(),
   isActive: z.boolean().optional(),
+  paddleProductId: paddleProduct.optional(),
+  paddleSandboxMonthlyPriceId: paddleId.optional(),
+  paddleSandboxYearlyPriceId: paddleId.optional(),
+  paddleLiveMonthlyPriceId: paddleId.optional(),
+  paddleLiveYearlyPriceId: paddleId.optional(),
   reason: reasonSchema,
 }).strict().refine(
   (value) => Object.keys(value).some((key) => key !== "reason"),
@@ -62,6 +74,11 @@ type SerializablePlan = {
   storageLimitBytes: bigint | null;
   trialDurationDays: number;
   isActive: boolean;
+  paddleProductId: string | null;
+  paddleSandboxMonthlyPriceId: string | null;
+  paddleSandboxYearlyPriceId: string | null;
+  paddleLiveMonthlyPriceId: string | null;
+  paddleLiveYearlyPriceId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -151,6 +168,14 @@ platformRouter.post(
       }
 
       const { reason, ...input } = parsed.data;
+      const chosenPrices = [
+        input.paddleSandboxMonthlyPriceId, input.paddleSandboxYearlyPriceId,
+        input.paddleLiveMonthlyPriceId, input.paddleLiveYearlyPriceId,
+      ].filter((value): value is string => typeof value === "string");
+      if (new Set(chosenPrices).size !== chosenPrices.length ||
+          (chosenPrices.length > 0 && !input.paddleProductId)) {
+        sendError(response, 400, "PADDLE_CATALOG_INVALID", "Choose one AssetMov product and distinct Paddle prices."); return;
+      }
       const plan = await prisma.$transaction(async (tx) => {
         const created = await tx.subscriptionPlan.create({
           data: {
@@ -207,6 +232,15 @@ platformRouter.patch(
       const plan = await prisma.$transaction(async (tx) => {
         const current = await tx.subscriptionPlan.findUnique({ where: { id: planId } });
         if (!current) throw new Error("PLAN_NOT_FOUND");
+        const finalProduct = changes.paddleProductId === undefined ? current.paddleProductId : changes.paddleProductId;
+        const fields = [
+          "paddleSandboxMonthlyPriceId", "paddleSandboxYearlyPriceId",
+          "paddleLiveMonthlyPriceId", "paddleLiveYearlyPriceId",
+        ] as const;
+        const finalPrices = fields.map(field => changes[field] === undefined ? current[field] : changes[field])
+          .filter((price): price is string => typeof price === "string");
+        if (new Set(finalPrices).size !== finalPrices.length ||
+            (finalPrices.length > 0 && !finalProduct)) throw new Error("PADDLE_CATALOG_INVALID");
 
         const updated = await tx.subscriptionPlan.update({
           where: { id: current.id },
@@ -230,6 +264,9 @@ platformRouter.patch(
 
       response.status(200).json({ data: serializePlan(plan) });
     } catch (error) {
+      if (error instanceof Error && error.message === "PADDLE_CATALOG_INVALID") {
+        sendError(response, 400, "PADDLE_CATALOG_INVALID", "Paddle plan needs one AssetMov product and distinct prices."); return;
+      }
       if (error instanceof Error && error.message === "PLAN_NOT_FOUND") {
         sendError(response, 404, "PLAN_NOT_FOUND", "The requested plan was not found.");
         return;
