@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import { rateLimit } from "express-rate-limit";
 import { prisma } from "../../lib/prisma.js";
 import {
   dateOf, paddleConfig, recordOf, stringOf, subscriptionStatus, verifyPaddleSignature,
@@ -8,7 +9,11 @@ export const paddleWebhookRouter = Router();
 type Event = { event_id: string; event_type: string; occurred_at: string; data: Record<string, unknown> };
 const priceFields = ["paddleSandboxMonthlyPriceId", "paddleSandboxYearlyPriceId"] as const;
 
-paddleWebhookRouter.post("/", express.raw({ type: "application/json", limit: "256kb" }), async (request, response) => {
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 600,
+  standardHeaders: "draft-8", legacyHeaders: false,
+});
+paddleWebhookRouter.post("/", webhookLimiter, express.raw({ type: "application/json", limit: "256kb" }), async (request, response) => {
   let secret: string;
   try { secret = paddleConfig().webhookSecret; }
   catch { response.status(503).json({ error: { code: "PADDLE_NOT_CONFIGURED" } }); return; }
