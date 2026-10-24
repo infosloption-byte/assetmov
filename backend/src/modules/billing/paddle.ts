@@ -89,7 +89,7 @@ export function validatePaddlePrice(price: Price, priceId: string, interval: Pad
   const amount = Number(price.unit_price?.amount);
   if (price.id !== priceId || price.status !== "active" || !/^pro_[a-z\d]{26}$/.test(price.product_id) ||
       price.billing_cycle?.interval !== (interval === "MONTH" ? "month" : "year") ||
-      price.billing_cycle.frequency !== 1 ||
+      price.billing_cycle?.frequency !== 1 ||
       !/^\d+$/.test(price.unit_price?.amount ?? "") || !Number.isSafeInteger(amount) ||
       price.unit_price?.currency_code !== "USD" ||
       (price.quantity && price.quantity.minimum > 1) ||
