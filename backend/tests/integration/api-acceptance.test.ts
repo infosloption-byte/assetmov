@@ -679,7 +679,7 @@ test("registration, session security, tenant isolation, locations and assets wor
     let limitedAssetId = "";
     for (let index = 0; index < 4; index += 1) {
       const allowed = await registerLimitedAsset(index);
-      assert.equal(allowed.status, 201, `Asset ${index + 1} should fit the plan cap: ${await allowed.text()}`);
+      if (allowed.status !== 201) assert.fail(`Asset ${index + 1} creation failed: ${await allowed.text()}`);
       const registered = await allowed.json() as { data: { id: string } };
       if (index === 0) limitedAssetId = registered.data.id;
     }
