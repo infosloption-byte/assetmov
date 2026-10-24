@@ -210,7 +210,10 @@ function App() {
     return () => controller.abort();
   }, [user?.id, activeTenantId, billingEpoch]);
 
-  useEffect(() => { setActivePage("overview"); }, [activeTenantId]);
+  useEffect(() => {
+    const fromCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
+    setActivePage(fromCheckout ? "billing" : "overview");
+  }, [activeTenantId]);
 
   async function changeOwnPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -339,10 +342,10 @@ function App() {
           <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
           </>}
           {user?.isPlatformAdmin && <button className={"nav-item " + (activePage === "platform" ? "active" : "")} type="button" onClick={() => setActivePage("platform")}><span className="nav-icon">◇</span> Platform Admin</button>}
-          {(activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
-          {activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
-          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
-          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
+          {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
+          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
+          {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
+          <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a></>}
           {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
             <button className={"nav-item " + (activePage === "billing" ? "active" : "")}
               type="button" onClick={() => setActivePage("billing")}><span className="nav-icon">▤</span> Billing & Plan</button>
