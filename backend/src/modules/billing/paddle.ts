@@ -84,7 +84,7 @@ type Price = {
   unit_price: { amount: string; currency_code: string };
   quantity?: { minimum: number; maximum: number };
 };
-export type VerifiedPrice = { id: string; amountMinor: number; currency: string; interval: PaddleInterval };
+export type VerifiedPrice = { id: string; productId: string; amountMinor: number; currency: string; interval: PaddleInterval };
 export function validatePaddlePrice(price: Price, priceId: string, interval: PaddleInterval): VerifiedPrice {
   const amount = Number(price.unit_price?.amount);
   if (price.id !== priceId || price.status !== "active" || !/^pro_[a-z\d]{26}$/.test(price.product_id) ||
@@ -98,7 +98,7 @@ export function validatePaddlePrice(price: Price, priceId: string, interval: Pad
     throw new PaddleError(503, "PADDLE_PRICE_INVALID",
       "Paddle price is not an active no-trial recurring price matching the selected billing interval.");
   }
-  return { id: priceId, amountMinor: amount, currency: price.unit_price.currency_code, interval };
+  return { id: priceId, productId: price.product_id, amountMinor: amount, currency: price.unit_price.currency_code, interval };
 }
 export async function verifiedPaddlePrice(priceId: string, interval: PaddleInterval, config: PaddleConfig) {
   if (!/^pri_[a-z\d]{26}$/.test(priceId)) throw new PaddleError(503, "PADDLE_PRICE_UNCONFIGURED", "Configure AssetMov's own recurring Paddle price IDs.");
