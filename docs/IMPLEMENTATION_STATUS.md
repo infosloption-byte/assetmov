@@ -4,7 +4,9 @@
 
 This feature branch contains a bulk set of additions: Platform Super Admin web UI, company subscription-usage display, stronger membership permission delegation, runtime custom-field validation and model editing, a tenant-scoped attachment API/storage budget, and broad database-acceptance assertions. See [ADMIN_QUOTAS_BATCH.md](ADMIN_QUOTAS_BATCH.md).
 
-**This is a code-complete development candidate, not a verified release.** GitHub Actions continues to return `startup_failure` before tests run, and the revised branch has **not** yet been validated by a successful local backend/frontend build or its new database migration. Do not mark these features production-ready until WAMP-based acceptance and a future successful CI run pass. This branch introduces one **additive** storage table migration; it does not require dropping or reinitializing databases.
+**Local automated acceptance checkpoint passed (developer logs, 2026-10-24).** The local WAMP MySQL `assetmov` and `assetmov_test` databases both have all three committed migrations applied, including the additive storage migration. Backend ESLint, TypeScript, Prisma Client generation, production build, and **32/32 unit tests** passed. The expanded opt-in `assetmov_test` MySQL API acceptance suite passed **1/1** after correcting MySQL JSON comparison of unchanged model definitions. Frontend ESLint, TypeScript and Vite build also passed (39 transformed modules).
+
+**This is not yet a production-accepted release.** Browser walkthroughs for Platform Admin, Company Admin, custom fields, attachments, quotas and transfers are pending; GitHub Actions continues to return `startup_failure` before tests run. The final production storage architecture and case-sensitive Linux MySQL migration rehearsal are also pending.
 
 **Last review:** 2026-10-18  
 **Repository:** [infosloption-byte/assetmov](https://github.com/infosloption-byte/assetmov)
