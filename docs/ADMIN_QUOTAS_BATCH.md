@@ -2,7 +2,30 @@
 
 **Branch:** `feature/admin-quotas-masterdata-batch`
 **Review PR:** [#6](https://github.com/infosloption-byte/assetmov/pull/6)
-**Status:** code committed for coordinated local acceptance; **not production accepted** until all checks below pass.
+**Status:** local frontend/backend automated checks **passed** on Windows WAMP (developer logs, 2026-10-24); **manual browser, CI and deployment acceptance still pending**.
+
+### Local verification recorded on 2026-10-24
+
+| Check | Result |
+| --- | --- |
+| Backend Prisma schema, migration status/client generation | Passed; three migrations applied to `assetmov` and `assetmov_test` |
+| Backend lint, TypeScript and build | Passed |
+| Backend unit tests | **32/32 passed** |
+| MySQL database API acceptance | **1/1 suite passed**, real `assetmov_test` |
+| Frontend lint, TypeScript and Vite build | Passed; 39 modules transformed |
+| Browser end-to-end acceptance | Not yet verified |
+| GitHub Actions | `startup_failure` before execution; not green |
+| Case-sensitive Linux MySQL portability | Not yet verified |
+
+After completing the integration test in PowerShell, restore development environment selection **before starting your backend**:
+
+```powershell
+Remove-Item Env:ASSETMOV_RUN_DB_INTEGRATION_TESTS -ErrorAction SilentlyContinue
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+```
+
+If an API server remains running in a terminal that inherited the `assetmov_test` override, restart it with the normal development environment. Otherwise a browser session may accidentally modify the test database.
+
 
 ## Delivery map
 
