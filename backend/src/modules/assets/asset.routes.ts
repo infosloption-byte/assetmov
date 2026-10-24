@@ -782,10 +782,6 @@ assetRouter.post(
 
       response.status(200).json({ data: result });
     } catch (error) {
-      if (error instanceof CustomFieldValidationError) {
-        sendError(response, 400, error.code, error.message);
-        return;
-      }
       if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
         sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
         return;
@@ -917,10 +913,6 @@ assetRouter.post(
 
       response.status(200).json({ data: result });
     } catch (error) {
-      if (error instanceof CustomFieldValidationError) {
-        sendError(response, 400, error.code, error.message);
-        return;
-      }
       if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
         sendError(response, 404, "ASSET_NOT_FOUND", "The requested asset was not found.");
         return;
