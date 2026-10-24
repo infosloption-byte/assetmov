@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
@@ -8,9 +8,12 @@ import EmployeePage from "./features/employees/EmployeePage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
 import MasterDataPage from "./features/master-data/MasterDataPage";
 import PlatformAdminPage from "./features/platform/PlatformAdminPage";
+import CompanyBillingPage from "./features/billing/CompanyBillingPage";
+import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
 
 type ApiHealth = "checking" | "online" | "offline";
+type BillingStatus = { allowed: boolean; reason: string | null; isCompanyAdmin: boolean; status: string | null; planName: string | null; trialEndsAt: string | null; periodEndsAt: string | null };
 type AccountSession = { id: string; createdAt: string; lastSeenAt: string | null; expiresAt: string; ipAddress: string | null; userAgent: string | null; isCurrent: boolean };
 
 interface WorkspaceContext {
@@ -45,7 +48,7 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "masterData" | "platform">("overview");
+  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "masterData" | "platform" | "billing">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -62,6 +65,11 @@ function App() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
+  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState("");
+  const [billingEpoch, setBillingEpoch] = useState(0);
+  const refreshBilling = useCallback(() => setBillingEpoch(n => n + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -170,6 +178,29 @@ function App() {
     return () => controller.abort();
   }, [user, activeTenantId]);
 
+  useEffect(() => {
+    if (!user?.id || !activeTenantId) {
+      setBillingStatus(null); setBillingLoading(false); setBillingError("");
+      return;
+    }
+    const controller = new AbortController();
+    setBillingStatus(null); setBillingLoading(true); setBillingError("");
+    void fetch(apiBaseUrl + "/billing/status", {
+      credentials: "include", signal: controller.signal, headers: { "X-Tenant-Id": activeTenantId },
+    }).then(async response => {
+      const payload = await response.json().catch(() => ({})) as {
+        data?: BillingStatus; error?: { message?: string };
+      };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Unable to verify company subscription.");
+      if (!controller.signal.aborted) setBillingStatus(payload.data);
+    }).catch(error => {
+      if (!controller.signal.aborted) setBillingError(error instanceof Error ? error.message : "Subscription status unavailable.");
+    }).finally(() => { if (!controller.signal.aborted) setBillingLoading(false); });
+    return () => controller.abort();
+  }, [user?.id, activeTenantId, billingEpoch]);
+
+  useEffect(() => { setActivePage("overview"); }, [activeTenantId]);
+
   async function changeOwnPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (passwordBusy || !csrfToken) { setPasswordError("Please sign in again to refresh your security token."); return; }
@@ -245,6 +276,8 @@ function App() {
       setActiveTenantId(null);
       setWorkspaceContext(null);
       setWorkspaceError("");
+      setBillingStatus(null);
+      setBillingError("");
       setActivePage("overview");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
@@ -287,16 +320,22 @@ function App() {
         </a>
         <div className="workspace-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Main navigation">
+          {(!user || billingLoading || (!billingError && billingStatus?.allowed)) && <>
           <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
           <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
           <button className={"nav-item " + (activePage === "transfers" ? "active" : "")} type="button" onClick={() => setActivePage("transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</button>
           <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
           <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
+          </>}
           {user?.isPlatformAdmin && <button className={"nav-item " + (activePage === "platform" ? "active" : "")} type="button" onClick={() => setActivePage("platform")}><span className="nav-icon">◇</span> Platform Admin</button>}
           {(activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
           {activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a>
+          {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
+            <button className={"nav-item " + (activePage === "billing" ? "active" : "")}
+              type="button" onClick={() => setActivePage("billing")}><span className="nav-icon">▤</span> Billing & Plan</button>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon">✳</div><strong>Built for clarity.</strong><p>Know what you own, where it is, and what happened to it.</p></div>
@@ -306,7 +345,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "masterData" ? "Categories & models" : activePage === "platform" ? "Platform administration" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "masterData" ? "Categories & models" : activePage === "platform" ? "Platform administration" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -363,7 +402,29 @@ function App() {
           </form></section></div>}
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
 
-        {activePage === "platform" ? (
+        {user && activeTenantId && (billingLoading || !billingStatus && !billingError) ? (
+          <div className="billing-gate" role="status"><div className="billing-gate-body">
+            <h2>Checking company subscription…</h2><p>Verifying active trial or Paddle billing status with the API.</p>
+          </div></div>
+        ) : user && activeTenantId && (billingError || billingStatus?.allowed === false) &&
+          activePage !== "platform" && activePage !== "billing" ? (
+          <section className="billing-gate" aria-label="Subscription attention required">
+            <div className="billing-gate-body">
+              <span className="billing-state">{billingStatus?.status ?? "Subscription required"}</span>
+              <h2>Company access requires an active subscription</h2>
+              <p>{billingError || billingStatus?.reason?.replaceAll("_", " ").toLowerCase() || "Open Billing & Plan to review payment and trial details."}</p>
+              {(billingStatus?.isCompanyAdmin || selectedMembership?.role.key === "TENANT_OWNER") ? (
+                <button className="primary-button" type="button" onClick={() => setActivePage("billing")}>Open Billing & Plan ↗</button>
+              ) : <p>Contact your Company Administrator to renew the subscription. Other company roles cannot manage billing.</p>}
+              <p>Your data remains in the company workspace. Sign out is available above.</p>
+              <button className="topbar-button ghost" type="button" onClick={refreshBilling}>Recheck subscription</button>
+            </div>
+          </section>
+        ) : activePage === "billing" ? (
+          <CompanyBillingPage tenantId={activeTenantId} csrfToken={csrfToken}
+            isCompanyAdmin={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER"}
+            onChanged={refreshBilling}/>
+        ) : activePage === "platform" ? (
           <PlatformAdminPage csrfToken={csrfToken} isPlatformAdmin={user?.isPlatformAdmin === true} />
         ) : activePage === "masterData" ? (
           <MasterDataPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} />
