@@ -9,8 +9,9 @@
 - [x] Commit tenant-aware MySQL attachment table, additive migration and transactional storage limits.
 - [x] Commit tenant-level write guard for expired/inactive subscriptions (with cleanup exceptions).
 - [x] Commit expanded unit/integration assertions for custom values, storage quota, user quota, model isolation and expiry.
-- [ ] Run backend lint, TS, unit tests, Prisma migration/client generation, API acceptance suite against `assetmov_test`, and backend build.
-- [ ] Run frontend lint, TS and production build; manually verify Platform and Company administration and asset attachments.
+- [x] Verify backend lint, TS, 32/32 unit tests, Prisma schema, all 3 migrations/client generation, 1/1 MySQL API acceptance suite against `assetmov_test`, and backend build on local Windows WAMP (developer logs, 2026-10-24).
+- [x] Verify frontend ESLint, TypeScript and Vite production build locally (developer logs, 2026-10-24; 39 transformed modules).
+- [ ] Manually verify Platform and Company Admin screens, asset custom fields, storage attachments, trial/quotas and error-handling across two real browser sessions.
 - [ ] Demonstrate two-tenant isolation for role/member/assets/attachments and transfer/assignment in a browser.
 - [ ] Obtain a successful GitHub Actions CI run; currently startup failures have been reported.
 - [ ] Replace MySQL-blob upload prototype with secure scanned streamed object storage before production.
@@ -36,7 +37,8 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 - [x] Verify a clean disposable WAMP MySQL `assetmov_test` database applies both committed migrations from scratch (2026-10-18). Portability to default case-sensitive Linux MySQL remains unverified.
 - [x] Add a CI workflow configuration for lint, typecheck, unit tests, schema validation and builds.
 - [ ] Resolve the observed Actions `startup_failure`/zero-job state and obtain one successful CI run.
-- [x] Run the initial opt-in MySQL API acceptance suite locally (2026-10-18: 1/1 passing), covering registration, sessions, CSRF, isolation, locations and assets.\n- [ ] Run and verify expanded platform-administration acceptance assertions locally and obtain passing CI.
+- [x] Run the initial opt-in MySQL API acceptance suite locally (2026-10-18: 1/1 passing), covering registration, sessions, CSRF, isolation, locations and assets.\n- [x] Run expanded platform-administration, subscriptions, custom-field, and tenant-scoped attachment API acceptance assertions against local `assetmov_test` (2026-10-24, 1 suite passed).
+- [ ] Obtain passing GitHub Actions CI; current workflow run does not reach job execution (`startup_failure`).
 - [x] Add a database readiness endpoint and structured error/logging conventions (runtime verification remains).
 
 ## B. Identity, SaaS and authorization — P0
