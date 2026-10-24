@@ -1,5 +1,11 @@
 # AssetMov Implementation Status
 
+## Dedicated Platform Console (2026-10-24; acceptance pending)
+
+The stacked `feature/dedicated-platform-console` branch now routes promoted `isPlatformAdmin` accounts into an independent Platform Console rather than the company dashboard. Navigation groups: **Platform** (Overview, Companies, Users), **Operations** (Platform Reports, Activities & Security), **Finance** (Billing & Revenue, Plans & Limits), and **System** (Settings). Operators need no tenant membership; dual-role users can explicitly switch to their separate Company Workspace. New platform-only endpoints provide user oversight, account suspension/session revocation, cross-company reporting, audit/security telemetry, payment summaries, and audited global registration settings, with one additive settings migration.
+
+This new branch has **not yet been validated by local backend/frontend builds, the new migration or MySQL integration suite**. Parent branch results do not establish new console correctness. See [PLATFORM_CONSOLE.md](PLATFORM_CONSOLE.md) for commands and acceptance gates.
+
 ## BuildHire-reference SaaS/Paddle implementation (2026-10-24; acceptance pending)
 
 Reviewed BuildHire source from the `infosloption-byte/candidate` repository. The stacked `feature/paddle-saas-billing-admin` branch implements the reusable SaaS elements—company-scoped Paddle customers and checkout attempts, signed webhook reconciliation, provider-verified prices, payment history, quote/confirm plan changes, a responsive Company Billing & Plan screen, a Platform Admin billing activity overview and independent suspension. Existing tenant-scoped full Company Administrator (`TENANT_OWNER`) and **company-created custom roles/permissions** remain intact. BuildHire's fixed business roles are not imported.
