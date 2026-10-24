@@ -24,7 +24,7 @@ type Pulse = {
     latestPayments: Array<{ transactionId: string; tenantId: string; tenantName: string;
       status: string; amountMinor: number; currency: string; occurredAt: string }> };
 };
-type Props = { csrfToken: string | null; isPlatformAdmin: boolean };
+type Props = { csrfToken: string | null; isPlatformAdmin: boolean; section?: "companies" | "plans" };
 
 function displayLimit(value: number | string | null): string {
   return value === null ? "Unlimited" : Number(value).toLocaleString();
@@ -32,8 +32,9 @@ function displayLimit(value: number | string | null): string {
 function storageLabel(bytes: string | null) {
   return bytes === null ? "Unlimited" : (Number(bytes) / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " GiB";
 }
-export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props) {
-  const [tab, setTab] = useState<"overview" | "companies" | "plans">("overview");
+export default function PlatformAdminPage({ csrfToken, isPlatformAdmin, section }: Props) {
+  const [tab, setTab] = useState<"overview" | "companies" | "plans">(section ?? "overview");
+  useEffect(() => { if (section) setTab(section); }, [section]);
   const [pulse, setPulse] = useState<Pulse | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -162,17 +163,17 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
   return <section className="asset-register-page">
     <div className="asset-page-heading">
       <div><div className="eyebrow"><span className="eyebrow-line"/> PLATFORM CONTROL</div>
-        <h1 className="asset-page-title">Platform administration</h1>
-        <p>Manage registered companies, subscription plans, trials and suspension with mandatory audit reasons.</p></div>
+        <h1 className="asset-page-title">{section === "companies" ? "Companies" : section === "plans" ? "Plans & Limits" : "Platform administration"}</h1>
+        <p>{section === "companies" ? "Review tenants, subscriptions and resource use; suspend platform access or manage manual plans." : section === "plans" ? "Configure plan quotas and Paddle product pricing with audited changes." : "Manage registered companies, subscription plans, trials and suspension with mandatory audit reasons."}</p></div>
       <button type="button" className="topbar-button ghost" onClick={() => void reload()} disabled={loading}>Refresh ↻</button>
     </div>
     {error && <div className="theme-notice error" role="alert">{error}</div>}
     {success && <div className="theme-notice success" role="status">{success}</div>}
-    <div className="transfer-tabs" role="tablist" aria-label="Platform administration section">
+    {!section && <div className="transfer-tabs" role="tablist" aria-label="Platform administration section">
       <button type="button" role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Platform overview</button>
       <button type="button" role="tab" aria-selected={tab === "companies"} className={tab === "companies" ? "active" : ""} onClick={() => setTab("companies")}>Companies</button>
       <button type="button" role="tab" aria-selected={tab === "plans"} className={tab === "plans" ? "active" : ""} onClick={() => setTab("plans")}>Subscription plans</button>
-    </div>
+    </div>}
     {tab === "overview" ? <>
       <div className="stats-grid">
         {[
