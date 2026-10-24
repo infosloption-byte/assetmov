@@ -639,6 +639,7 @@ model SubscriptionPlan {
   updatedAt         DateTime             @updatedAt
   subscriptions     TenantSubscription[]
   paddleCheckoutAttempts PaddleCheckoutAttempt[]
+  paddleProductId String? @db.VarChar(80)
   paddleSandboxMonthlyPriceId String? @db.VarChar(80)
   paddleSandboxYearlyPriceId  String? @db.VarChar(80)
   paddleLiveMonthlyPriceId    String? @db.VarChar(80)
