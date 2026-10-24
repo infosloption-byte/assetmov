@@ -36,6 +36,10 @@ paddleWebhookRouter.post("/", express.raw({ type: "application/json", limit: "25
         } });
       }
       await tx.$queryRaw`SELECT id FROM PaddleWebhookEvent WHERE id = ${marker.id} FOR UPDATE`;
+      marker = await tx.paddleWebhookEvent.findUniqueOrThrow({ where: { eventId: event.event_id } });
+      if (marker.environment !== "sandbox" || marker.eventType !== event.event_type) {
+        throw new Error("Provider event identifier conflicts with a previous event.");
+      }
       if (marker.status === "PROCESSED") return;
 
       const body = recordOf(event.data);
@@ -51,10 +55,17 @@ paddleWebhookRouter.post("/", express.raw({ type: "application/json", limit: "25
             !customerId || !/^ctm_[a-z\d]{26}$/.test(customerId) || !priceId) {
           throw new Error("Paddle subscription event has incomplete provider identifiers.");
         }
-        const plan = await tx.subscriptionPlan.findFirst({
+        const mappedPlans = await tx.subscriptionPlan.findMany({
           where: { OR: priceFields.map(field => ({ [field]: priceId })) },
         });
-        if (!plan) throw new Error("Paddle price is not mapped to an AssetMov plan.");
+        if (mappedPlans.length !== 1 || !mappedPlans[0]) {
+          throw new Error("The Paddle price does not uniquely identify an AssetMov plan.");
+        }
+        const plan = mappedPlans[0];
+        const providerProduct = stringOf(recordOf(firstItem.price).product_id);
+        if (!plan.paddleProductId || (providerProduct && plan.paddleProductId !== providerProduct)) {
+          throw new Error("Paddle subscription price does not belong to the AssetMov plan product.");
+        }
         const attemptId = stringOf(metadata.assetmov_billing_attempt_id);
         const linked = await tx.tenantSubscription.findUnique({ where: { paddleSubscriptionId: subscriptionId } });
         const attempt = attemptId
