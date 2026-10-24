@@ -1,5 +1,6 @@
 -- Provider-isolated Paddle Billing integration. Do not alter historical tenant data.
 ALTER TABLE `SubscriptionPlan`
+  ADD COLUMN `paddleProductId` VARCHAR(80) NULL,
   ADD COLUMN `paddleSandboxMonthlyPriceId` VARCHAR(80) NULL,
   ADD COLUMN `paddleSandboxYearlyPriceId` VARCHAR(80) NULL,
   ADD COLUMN `paddleLiveMonthlyPriceId` VARCHAR(80) NULL,
