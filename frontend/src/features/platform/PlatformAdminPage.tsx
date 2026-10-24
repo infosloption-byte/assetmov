@@ -48,6 +48,7 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
   const [editingPlan, setEditingPlan] = useState<Plan | "new" | null>(null);
   const [editingTenant, setEditingTenant] = useState<Company | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [platformStatus, setPlatformStatus] = useState<"ACTIVE" | "SUSPENDED">("ACTIVE");
   const [mode, setMode] = useState<"trial" | "activate" | "suspend">("activate");
 
   const request = useCallback(async <T,>(url: string, method = "GET", body?: unknown): Promise<T> => {
@@ -141,6 +142,22 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
     finally { setBusy(false); }
   }
 
+  async function savePlatformStatus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingTenant || busy) return;
+    const data = new FormData(event.currentTarget);
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      await request("/tenants/" + editingTenant.id + "/status", "PATCH", {
+        status: platformStatus, reason: String(data.get("platformReason") ?? "").trim(),
+      });
+      setEditingTenant(null);
+      setSuccess("Platform company status updated and audited. Paddle payment state was not modified.");
+      await reload();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not change company status."); }
+    finally { setBusy(false); }
+  }
+
   if (!isPlatformAdmin) return <section className="asset-register-page"><h1>Access denied</h1><p>Only platform administrators can manage companies and plans.</p></section>;
   return <section className="asset-register-page">
     <div className="asset-page-heading">
@@ -197,7 +214,7 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
             <td>{company.subscription?.trialEndsAt ? new Date(company.subscription.trialEndsAt).toLocaleDateString() : "—"}</td>
             <td><button className="topbar-button ghost" type="button" onClick={() => {
               setEditingTenant(company); setSelectedPlanId(company.subscription?.planId ?? plans.find(p => p.isActive)?.id ?? "");
-              setMode("activate");
+              setMode("activate"); setPlatformStatus(company.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED");
             }}>Manage</button></td>
           </tr>)}</tbody>
       </table></div>
@@ -224,6 +241,10 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
     {editingTenant && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="tenantModalTitle">
       <div className="asset-modal-heading"><div><h2 id="tenantModalTitle">Manage {editingTenant.name}</h2><p>Company {editingTenant.slug}</p></div>
         <button className="modal-close" type="button" onClick={() => setEditingTenant(null)}>×</button></div>
+      {editingTenant.subscription?.status && editingTenant.subscription.plan && <p className="asset-inline-hint">
+        Subscription source and payment state are provider-authoritative when a Paddle subscription is present.
+        Platform suspension is managed independently.
+      </p>}
       <form className="asset-create-form" onSubmit={e => void saveSubscription(e)}>
         <label>Subscription plan</label>
         <ThemeSelect label="Subscription plan" value={selectedPlanId} onChange={setSelectedPlanId}
@@ -235,6 +256,19 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
         {mode === "suspend" && <p className="asset-inline-hint">Suspending immediately blocks company workspace access.</p>}
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingTenant(null)}>Cancel</button>
           <button type="submit" className="primary-button" disabled={busy || !selectedPlanId}>{busy ? "Saving…" : "Apply change"}</button></div>
+      </form>
+      <div className="asset-edit-section-label">Platform company access</div>
+      <form className="asset-create-form" onSubmit={e => void savePlatformStatus(e)}>
+        <label>Platform access status</label>
+        <ThemeSelect label="Platform access status" value={platformStatus}
+          onChange={value => setPlatformStatus(value as "ACTIVE" | "SUSPENDED")}
+          options={[{value:"ACTIVE",label:"Allow access subject to subscription"},
+            {value:"SUSPENDED",label:"Suspend company access"}]}/>
+        <label>Audit reason<textarea name="platformReason" required minLength={8} maxLength={1000}
+          placeholder="Reason for suspending or restoring platform access"/></label>
+        <p className="asset-inline-hint">This action does not activate a failed payment, extend a trial or override Paddle billing.</p>
+        <div className="asset-modal-actions"><button className="primary-button" type="submit"
+          disabled={busy}>{busy ? "Updating…" : "Update platform access"}</button></div>
       </form>
     </section></div>}
     {editingPlan && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
