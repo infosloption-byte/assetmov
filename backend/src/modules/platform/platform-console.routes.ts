@@ -28,7 +28,7 @@ const statusSchema = z.object({
 }).strict();
 const settingsSchema = z.object({
   companyRegistrationOpen: z.boolean(),
-  supportEmail: z.union([z.email().max(191), z.null()]),
+  supportEmail: z.union([z.string().trim().toLowerCase().email().max(191), z.null()]),
   announcement: z.union([z.string().trim().max(500), z.null()]),
   reason,
 }).strict();
