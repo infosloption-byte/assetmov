@@ -10,7 +10,14 @@ fileRouter.use(requireSession, requireTenant);
 const MAX_FILE_SIZE = 512 * 1024;
 const uploadSchema = z.object({
   assetId: z.string().min(1).max(36),
-  filename: z.string().trim().min(1).max(191).regex(/^[^\\/\x00-\x1F]+$/),
+  filename: z.string().trim().min(1).max(191).refine(
+    (name) => !name.includes("/") && !name.includes("\\") &&
+      Array.from(name).every((character) => {
+        const code = character.codePointAt(0);
+        return code !== undefined && code >= 32 && code !== 127;
+      }),
+    "Filename cannot contain path separators or control characters.",
+  ),
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain"]),
   contentBase64: z.string().min(4).max(Math.ceil(MAX_FILE_SIZE * 4 / 3) + 8),
 }).strict();
