@@ -159,7 +159,7 @@ export function PlatformUsers({csrfToken,currentUserId}:{csrfToken:string|null;c
   const [busy,setBusy]=useState(false);
   const load=useCallback(async()=>{setLoading(true);try {
     const result=await request<{data:{users:PlatformUser[];pagination:Paginated}}>("/platform-console/users?"+
-      new URLSearchParams({q:search,page:String(page),pageSize:"25"}));
+      new URLSearchParams({q:search,page:String(page),pageSize:"25"}).toString());
     setData(result.data);setError("");
   }catch(e){setError(e instanceof Error?e.message:"Unable to load users.");}finally{setLoading(false);}},[request,search,page]);
   useEffect(()=>{void load();},[load]);
@@ -276,7 +276,7 @@ export function PlatformActivity(){
   useEffect(()=>{void request<{data:Security}>("/platform-console/security").then(r=>setSecurity(r.data))
     .catch(e=>setError(e instanceof Error?e.message:"Security data unavailable."));},[request]);
   useEffect(()=>{void request<{data:{events:EventItem[];pagination:Paginated}}>("/platform-console/activities?"+
-    new URLSearchParams({source,page:String(page),pageSize:"20"})).then(r=>{setData(r.data);setError("");})
+    new URLSearchParams({source,page:String(page),pageSize:"20"}).toString()).then(r=>{setData(r.data);setError("");})
     .catch(e=>setError(e instanceof Error?e.message:"Activity history unavailable."));},[request,source,page]);
   return <div className="platform-section"><Notice error={error}/>
     <div className="platform-stats">
