@@ -78,7 +78,7 @@ ALTER TABLE `PaddleCheckoutAttempt` ADD CONSTRAINT `PaddleCheckoutAttempt_tenant
 ALTER TABLE `PaddleCheckoutAttempt` ADD CONSTRAINT `PaddleCheckoutAttempt_planId_fkey`
   FOREIGN KEY (`planId`) REFERENCES `SubscriptionPlan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `PaddleCheckoutAttempt` ADD CONSTRAINT `PaddleCheckoutAttempt_customerId_fkey`
-  FOREIGN KEY (`customerId`) REFERENCES `PaddleBillingCustomer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+  FOREIGN KEY (`customerId`) REFERENCES `PaddleBillingCustomer`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `PaddlePayment` ADD CONSTRAINT `PaddlePayment_tenantId_fkey`
   FOREIGN KEY (`tenantId`) REFERENCES `Tenant`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `PaddleWebhookEvent` ADD CONSTRAINT `PaddleWebhookEvent_tenantId_fkey`
