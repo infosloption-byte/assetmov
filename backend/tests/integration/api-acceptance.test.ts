@@ -112,6 +112,7 @@ test("registration, session security, tenant isolation, locations and assets wor
   const emails: [string, string] = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
   const password = "AssetMov-Test-Password-2026!";
   const managedEmail = `it.managed.${suffix}@example.test`;
+  const anotherMemberEmail = `it.extra.${suffix}@example.test`;
   let server: Server | undefined;
   let baseUrl = "";
   let createdPlanId: string | undefined;
@@ -451,6 +452,27 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     if (createMember.status !== 201) assert.fail(`User creation failed: ${createMember.status} ${await createMember.text()}`);
     const managed = await createMember.json() as { data: { id: string } };
+    // Trial user capacity: creation and reactivation share tenant locking.
+    const createExtraUser = (email: string) => fetch(`${baseUrl}/api/members`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ email, fullName: "Quota Test User", initialPassword: password,
+        roleId: customRole.data.id, allLocationsAccess: false }),
+    });
+    const extraUser = await createExtraUser(anotherMemberEmail);
+    assert.equal(extraUser.status, 201);
+    const extraMember = await extraUser.json() as { data: { id: string } };
+    const fourthMember = await createExtraUser(`it.denied.${suffix}@example.test`);
+    assert.equal(fourthMember.status, 409);
+    assert.equal((await fourthMember.json() as ErrorResponse).error?.code, "USER_PLAN_LIMIT_REACHED");
+    const changeMemberActive = (active: boolean) => fetch(`${baseUrl}/api/members/${extraMember.data.id}/status`, {
+      method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ isActive: active, reason: "Integration test changes membership active status" }),
+    });
+    assert.equal((await changeMemberActive(false)).status, 200);
+    assert.equal((await changeMemberActive(true)).status, 200);
+
     const editProfile = await fetch(`${baseUrl}/api/members/${managed.data.id}/profile`, {
       method: "PATCH",
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
@@ -750,6 +772,18 @@ test("registration, session security, tenant isolation, locations and assets wor
     const expiredTrial = await attemptOwnerAAsset("expired");
     assert.equal(expiredTrial.status, 403);
     assert.equal((await expiredTrial.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+    const expiredModelEdit = await fetch(`${baseUrl}/api/master-data/models/${model.data.id}`, {
+      method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ categoryId: category.data.id, name: "No write after trial",
+        fields: [{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }] }),
+    });
+    assert.equal(expiredModelEdit.status, 403);
+    assert.equal((await expiredModelEdit.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+    const readableAfterExpiry = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(readableAfterExpiry.status, 200);
 
     await prisma.tenantSubscription.update({
       where: { tenantId: ownerA.tenant.id },
@@ -758,7 +792,7 @@ test("registration, session security, tenant isolation, locations and assets wor
     const suspended = await attemptOwnerAAsset("suspended");
     assert.equal(suspended.status, 403);
     assert.equal((await suspended.json() as ErrorResponse).error?.code, "SUBSCRIPTION_INACTIVE");
-    assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 1);
+    assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 2);
 
     const auditActions = await prisma.platformAuditLog.findMany({
       where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
@@ -824,7 +858,7 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
         await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
       }
-      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail] } } });
+      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail, anotherMemberEmail] } } });
     } finally {
       if (server) {
         await new Promise<void>((resolve, reject) => {
