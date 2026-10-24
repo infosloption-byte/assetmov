@@ -461,3 +461,46 @@ platformRouter.patch(
     }
   },
 );
+
+/** Platform-only operational and billing pulse; no tenant-scoped permissions apply. */
+platformRouter.get("/overview", requireSession, requirePlatformAdmin, async (_request, response, next) => {
+  try {
+    const [
+      companyCount, planCount, subscriptionStatuses, assetCount, activeUserCount,
+      stored, payments, failedWebhooks, latestPayments,
+    ] = await Promise.all([
+      prisma.tenant.count(),
+      prisma.subscriptionPlan.count(),
+      prisma.tenantSubscription.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.asset.count(),
+      prisma.membership.count({ where: { isActive: true } }),
+      prisma.tenantStorageObject.aggregate({ _sum: { sizeBytes: true } }),
+      prisma.paddlePayment.aggregate({
+        where: { status: "PAID" }, _sum: { amountMinor: true }, _count: { _all: true },
+      }),
+      prisma.paddleWebhookEvent.count({ where: { status: "FAILED" } }),
+      prisma.paddlePayment.findMany({
+        orderBy: { occurredAt: "desc" }, take: 15,
+        include: { tenant: { select: { id: true, name: true } } },
+      }),
+    ]);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json({ data: {
+      companyCount, planCount,
+      subscriptionStatuses: subscriptionStatuses.map(entry => ({
+        status: entry.status, count: entry._count._all,
+      })),
+      assetCount, activeUserCount, storageUsedBytes: String(stored._sum.sizeBytes ?? 0),
+      paddle: {
+        paidTransactionCount: payments._count._all,
+        paidAmountMinor: payments._sum.amountMinor ?? 0,
+        failedWebhookCount: failedWebhooks,
+        latestPayments: latestPayments.map(item => ({
+          tenantId: item.tenantId, tenantName: item.tenant.name,
+          transactionId: item.transactionId, status: item.status,
+          amountMinor: item.amountMinor, currency: item.currency, occurredAt: item.occurredAt,
+        })),
+      },
+    } });
+  } catch (error) { next(error); }
+});
