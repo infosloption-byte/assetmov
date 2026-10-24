@@ -10,7 +10,7 @@ type Plan = {
 type Subscription = { id: string; status: string; planId: string; trialEndsAt: string | null; plan: Plan };
 type Company = {
   id: string; name: string; slug: string; status: string; assetCount: number;
-  activeUserCount: number; subscription: Subscription | null;
+  activeUserCount: number; storageUsedBytes: string; subscription: Subscription | null;
 };
 type Props = { csrfToken: string | null; isPlatformAdmin: boolean };
 
@@ -142,13 +142,13 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
         <input id="companyQuery" value={query} onChange={e => setQuery(e.currentTarget.value)} placeholder="Search company name or slug"/>
         <button type="submit">Search</button></form></div>
       <div className="asset-table-wrap"><table className="asset-table">
-        <thead><tr><th>Company</th><th>Status</th><th>Subscription</th><th>Assets</th><th>Users</th><th>Trial expiry</th><th>Action</th></tr></thead>
-        <tbody>{loading ? <tr><td colSpan={7}>Loading companies…</td></tr> : companies.length === 0
-          ? <tr><td colSpan={7}>No matching companies found.</td></tr>
+        <thead><tr><th>Company</th><th>Status</th><th>Subscription</th><th>Assets</th><th>Users</th><th>Storage used</th><th>Trial expiry</th><th>Action</th></tr></thead>
+        <tbody>{loading ? <tr><td colSpan={8}>Loading companies…</td></tr> : companies.length === 0
+          ? <tr><td colSpan={8}>No matching companies found.</td></tr>
           : companies.map(company => <tr key={company.id}>
             <td><strong>{company.name}</strong><span className="asset-number">{company.slug}</span></td>
             <td>{company.status}</td><td>{company.subscription?.plan.name ?? "Not configured"}<span className="asset-number">{company.subscription?.status ?? ""}</span></td>
-            <td>{company.assetCount.toLocaleString()}</td><td>{company.activeUserCount.toLocaleString()}</td>
+            <td>{company.assetCount.toLocaleString()}</td><td>{company.activeUserCount.toLocaleString()}</td><td>{(Number(company.storageUsedBytes) / 1024 ** 2).toFixed(2)} MiB</td>
             <td>{company.subscription?.trialEndsAt ? new Date(company.subscription.trialEndsAt).toLocaleDateString() : "—"}</td>
             <td><button className="topbar-button ghost" type="button" onClick={() => {
               setEditingTenant(company); setSelectedPlanId(company.subscription?.planId ?? plans.find(p => p.isActive)?.id ?? "");
