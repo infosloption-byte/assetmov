@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireSession, requireCsrf } from "../auth/auth-middleware.js";
 import { requireTenant, requirePermission } from "../tenancy/tenant-context.js";
+import { canonicalJson } from "./custom-fields.js";
 
 export const masterDataRouter = Router();
 masterDataRouter.use(requireSession, requireTenant);
@@ -153,10 +154,11 @@ masterDataRouter.patch("/models/:id", requirePermission("tenant.settings.manage"
       });
       if (!category) throw new Error("CATEGORY_NOT_FOUND");
       const assetCount = await tx.asset.count({ where: { tenantId, modelId: id } });
-      const previousSchema = JSON.stringify(existing.fieldSchema ?? { version: 1, fields: [] });
       const nextSchema = { version: 1, fields: parsed.data.fields };
+      const existingSchema = existing.fieldSchema ?? { version: 1, fields: [] };
+      // MySQL JSON objects can reorder keys; do not mistake this for a schema change.
       if (assetCount > 0 && (
-        previousSchema !== JSON.stringify(nextSchema) || existing.categoryId !== category.id
+        canonicalJson(existingSchema) !== canonicalJson(nextSchema) || existing.categoryId !== category.id
       )) throw new Error("MODEL_IN_USE");
       const model = await tx.assetModel.update({
         where: { id }, data: {
