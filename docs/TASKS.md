@@ -1,5 +1,19 @@
 # AssetMov Task Checklist
 
+## Dedicated Platform Super Admin console
+
+- [x] Separate Platform Console navigation shell from Company Workspace; default Platform Admin on login and support dual-role switching.
+- [x] Implement requested Platform, Operations, Finance and System navigation groups with all eight screens.
+- [x] Reuse real Company and Plan management; add cross-company Users, Reports, Activities & Security, Billing & Revenue, Settings APIs.
+- [x] Require independent database-verified platform authority; CSRF and audit reasons on sensitive changes.
+- [x] Protect operator accounts, revoke sessions when disabling a user, and enforce global registration closure in onboarding.
+- [x] Add additive platform settings migration, responsive custom styling and MySQL acceptance scenarios.
+- [ ] Verify Prisma migration, backend/frontend lint, TypeScript, unit/integration tests and builds on Windows WAMP.
+- [ ] Verify all eight screens and account switching in desktop/tablet/mobile browsers.
+- [ ] Resolve CI startup failures; rehearse Linux MySQL and live Paddle sandbox separately.
+
+See [PLATFORM_CONSOLE.md](PLATFORM_CONSOLE.md).
+
 ## BuildHire-pattern SaaS billing, company roles and Paddle (stacked PR; implementation, acceptance pending)
 
 - [x] Preserve AssetMov's per-company configurable roles and full-access system Company Administrator; no BuildHire fixed-role migration.
