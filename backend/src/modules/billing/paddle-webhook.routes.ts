@@ -176,13 +176,26 @@ paddleWebhookRouter.post("/", express.raw({ type: "application/json", limit: "25
   } catch (error) {
     // A signed but unrecognized event never grants access. Keep a recoverable
     // failure marker; Paddle will retry while operators resolve mismatches.
-    await prisma.paddleWebhookEvent.upsert({
-      where: { eventId: event.event_id },
-      create: { eventId: event.event_id, eventType: event.event_type,
-        occurredAt: dateOf(event.occurred_at)!, environment: "sandbox",
-        status: "FAILED", lastError: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
-      update: { status: "FAILED", lastError: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
-    }).catch(() => undefined);
+    const lastError = error instanceof Error ? error.message.slice(0, 500) : "Unknown error";
+    try {
+      const existing = await prisma.paddleWebhookEvent.findUnique({
+        where: { eventId: event.event_id }, select: { id: true, status: true },
+      });
+      if (!existing) {
+        await prisma.paddleWebhookEvent.create({ data: {
+          eventId: event.event_id, eventType: event.event_type,
+          occurredAt: dateOf(event.occurred_at)!, environment: "sandbox",
+          status: "FAILED", lastError,
+        } });
+      } else if (existing.status !== "PROCESSED") {
+        await prisma.paddleWebhookEvent.updateMany({
+          where: { id: existing.id, status: { not: "PROCESSED" } },
+          data: { status: "FAILED", lastError },
+        });
+      }
+    } catch {
+      // Do not suppress the failed HTTP status or downgrade a processed event.
+    }
     response.status(500).json({ error: { code: "PADDLE_EVENT_RECONCILIATION_REQUIRED" } });
   }
 });
