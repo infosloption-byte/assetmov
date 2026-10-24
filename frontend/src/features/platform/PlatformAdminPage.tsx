@@ -59,7 +59,7 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
       const [a, b] = await Promise.all([
         request<{ data: Plan[] }>("/plans"),
         request<{ data: Company[]; pagination: { pageCount: number } }>(
-          "/tenants?" + new URLSearchParams({ q: search, page: String(page), pageSize: "25" }),
+          "/tenants?" + new URLSearchParams({ q: search, page: String(page), pageSize: "25" }).toString(),
         ),
       ]);
       setPlans(a.data); setCompanies(b.data); setPageCount(Math.max(1, b.pagination.pageCount)); setError("");
@@ -79,7 +79,12 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
     };
     const parseStorage = () => {
       const text = String(data.get("storageGiB") ?? "").trim();
-      return text === "" ? null : String(BigInt(Math.round(Number(text) * 1024 ** 3)));
+      if (text === "") return null;
+      const gib = Number(text);
+      if (!Number.isFinite(gib) || gib < 0 || gib > 1_048_576) {
+        throw new Error("Storage quota must be a non-negative number of GiB.");
+      }
+      return String(BigInt(Math.round(gib * 1024 ** 3)));
     };
     const body = {
       ...(existing ? {} : { key: String(data.get("key") ?? "").trim().toLowerCase() }),
@@ -147,7 +152,7 @@ export default function PlatformAdminPage({ csrfToken, isPlatformAdmin }: Props)
             <td>{company.subscription?.trialEndsAt ? new Date(company.subscription.trialEndsAt).toLocaleDateString() : "—"}</td>
             <td><button className="topbar-button ghost" type="button" onClick={() => {
               setEditingTenant(company); setSelectedPlanId(company.subscription?.planId ?? plans.find(p => p.isActive)?.id ?? "");
-              setMode(company.status === "SUSPENDED" ? "activate" : "activate");
+              setMode("activate");
             }}>Manage</button></td>
           </tr>)}</tbody>
       </table></div>
