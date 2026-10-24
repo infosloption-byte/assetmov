@@ -439,7 +439,7 @@ function App() {
             <h2>Checking company subscription…</h2><p>Verifying active trial or Paddle billing status with the API.</p>
           </div></div>
         ) : user && activeTenantId && (billingError || billingStatus?.allowed === false) &&
-          activePage !== "platform" && activePage !== "billing" ? (
+          activePage !== "billing" ? (
           <section className="billing-gate" aria-label="Subscription attention required">
             <div className="billing-gate-body">
               <span className="billing-state">{billingStatus?.status ?? "Subscription required"}</span>
