@@ -298,7 +298,7 @@ billingRouter.post("/manage", requireCompanyAdmin, requireCsrf, async (request, 
   } catch (error) { providerFail(response, error); }
 });
 
-const confirmSchema = selectSchema.extend({ confirmedAmountMinor: z.number().int().safe() });
+const confirmSchema = selectSchema.extend({ confirmedAmountMinor: z.number().int().refine(Number.isSafeInteger) });
 
 billingRouter.post("/change-preview", requireCompanyAdmin, requireCsrf, async (request, response) => {
   const selected = selectSchema.safeParse(request.body);
