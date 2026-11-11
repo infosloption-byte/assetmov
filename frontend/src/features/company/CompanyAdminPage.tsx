@@ -216,7 +216,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           if (ok) setEditingProfile(null);
         })();
       }}>
-        <label>Full name<input name="fullName" required minLength={2} maxLength={191} defaultValue={editingProfile.user.fullName} /></label>
+        <label>Full name<input name="fullName" required minLength={2} maxLength={191} placeholder="Full name" defaultValue={editingProfile.user.fullName} /></label>
         <p className="asset-inline-hint">Email is an account identity and cannot be changed here.</p>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingProfile(null)}>Cancel</button><button className="primary-button" type="submit" disabled={busy}>Save profile</button></div>
       </form></section></div>}
