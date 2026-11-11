@@ -190,6 +190,7 @@ function AuthPage({ mode, onModeChange, onCancel, onAuthenticated }: AuthPagePro
             </button>
           </form>
 
+          {!isRegister && <p className="auth-small-note"><a href="/?accountAction=forgot">Forgot your password?</a></p>}
           <div className="auth-mode-switch">
             {isRegister ? "Already have an account?" : "New to AssetMov?"}
             <button type="button" onClick={() => onModeChange(isRegister ? "login" : "register")}>
@@ -197,7 +198,7 @@ function AuthPage({ mode, onModeChange, onCancel, onAuthenticated }: AuthPagePro
             </button>
           </div>
 
-          {isRegister && <p className="auth-small-note">By creating a workspace, you’ll become its first organization owner. Email verification and team invitations are part of the upcoming identity milestone.</p>}
+          {isRegister && <p className="auth-small-note">By creating a workspace, you’ll become its first organization owner. Use the Verify email action after registration to secure your account.</p>}
         </div>
         <div className="auth-mobile-footer">© {new Date().getFullYear()} AssetMov</div>
       </section>
