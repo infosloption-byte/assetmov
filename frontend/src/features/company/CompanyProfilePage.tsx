@@ -103,7 +103,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
         </div>
       </div>
       <label>Automatic inventory number prefix<input name="inventoryPrefix" required minLength={2} maxLength={16}
-        pattern="[A-Za-z0-9_-]{2,16}" defaultValue={company.inventoryPrefix}/></label>
+        pattern="(?:[A-Za-z0-9_]|-){2,16}" defaultValue={company.inventoryPrefix}/></label>
       <p className="asset-inline-hint">New automatically numbered assets use this prefix. Existing inventory numbers never change.</p>
       <label>Fiscal year starts</label>
       <ThemeSelect label="Fiscal year start month" value={month} onChange={setMonth} options={fiscalOptions}/>
