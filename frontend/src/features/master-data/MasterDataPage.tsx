@@ -146,11 +146,11 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
         {editingModel && <p className="asset-inline-hint">For a model already used by assets, only its name and code may be changed. Existing custom-field schemas remain locked to protect recorded asset data.</p>}
         <div className="master-fields-heading"><strong>Custom fields</strong><button className="topbar-button ghost" type="button" onClick={() => setFields(p => [...p, { key: "", label: "", type: "text", required: false }])}>Add field ＋</button></div>
         {fields.map((field, index) => <div className="master-field-row" key={index}>
-          <label>Field label<input required value={field.label} maxLength={120} onChange={e => modifyField(index, {label:e.target.value})}/></label>
-          <label>Field key<input required value={field.key} pattern="[a-z][a-zA-Z0-9_]*" maxLength={64} onChange={e => modifyField(index, {key:e.target.value})}/></label>
+          <label>Field label<input required placeholder="e.g. RAM capacity" value={field.label} maxLength={120} onChange={e => modifyField(index, {label:e.target.value})}/></label>
+          <label>Field key<input required placeholder="e.g. ram_gb" value={field.key} pattern="[a-z][a-zA-Z0-9_]*" maxLength={64} onChange={e => modifyField(index, {key:e.target.value})}/></label>
           <label>Type</label><ThemeSelect label={"Type of " + (field.label || "field")} value={field.type} options={fieldTypes}
             onChange={value => modifyField(index, {type:value as Field["type"],options:undefined})}/>
-          {(field.type === "singleSelect" || field.type === "multiSelect") && <label>Choices (comma separated)<input required value={(field.options ?? []).join(", ")} onChange={e => modifyField(index, { options: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })}/></label>}
+          {(field.type === "singleSelect" || field.type === "multiSelect") && <label>Choices (comma separated)<input required placeholder="e.g. 8 GB, 16 GB, 32 GB" value={(field.options ?? []).join(", ")} onChange={e => modifyField(index, { options: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })}/></label>}
           <label className="master-field-check"><input type="checkbox" checked={field.required} onChange={e => modifyField(index,{required:e.target.checked})}/> Required</label>
           <button className="topbar-button ghost" type="button" onClick={() => setFields(p => p.filter((_,i) => i !== index))}>Remove</button>
         </div>)}
