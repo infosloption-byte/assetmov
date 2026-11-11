@@ -91,6 +91,7 @@ const companyProfileSchema = z.object({
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   dateFormat: z.enum(["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"]),
   fiscalYearStartMonth: z.number().int().min(1).max(12),
+  inventoryPrefix: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{2,16}$/),
 }).strict();
 
 workspaceRouter.get("/profile", requireSession, requireTenant,
@@ -100,10 +101,11 @@ workspaceRouter.get("/profile", requireSession, requireTenant,
     const company = await prisma.tenant.findUnique({
       where: { id: tenantId! },
       select: { id: true, name: true, slug: true, status: true, timezone: true,
-        locale: true, currency: true, dateFormat: true, fiscalYearStartMonth: true },
+        locale: true, currency: true, dateFormat: true, fiscalYearStartMonth: true,
+        assetNumberSequence: { select: { prefix: true } } },
     });
     if (!company) { response.status(404).json({ error: { code: "COMPANY_NOT_FOUND" } }); return; }
-    response.json({ data: company });
+    response.json({ data: { ...company, inventoryPrefix: company.assetNumberSequence?.prefix ?? "AM", assetNumberSequence: undefined } });
   } catch (error) { next(error); }
 });
 
@@ -118,18 +120,23 @@ workspaceRouter.patch("/profile", requireSession, requireTenant,
     const tenantId = request.auth!.tenantId!;
     const data = await prisma.$transaction(async tx => {
       const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-      const company = await tx.tenant.update({ where: { id: tenantId }, data: parsed.data });
+      const { inventoryPrefix, ...preferences } = parsed.data;
+      const company = await tx.tenant.update({ where: { id: tenantId }, data: preferences });
+      const sequence = await tx.assetNumberSequence.update({
+        where: { tenantId }, data: { prefix: inventoryPrefix },
+      });
       const snapshot = (record: typeof company) => ({ name: record.name, timezone: record.timezone,
         locale: record.locale, currency: record.currency, dateFormat: record.dateFormat,
         fiscalYearStartMonth: record.fiscalYearStartMonth });
       await tx.auditLog.create({ data: { tenantId, actorUserId: request.auth!.userId,
         action: "company.profile_updated", entityType: "Tenant", entityId: tenantId,
-        oldData: snapshot(before), newData: snapshot(company),
+        oldData: snapshot(before), newData: { ...snapshot(company), inventoryPrefix: sequence.prefix },
         ipAddress: request.ip?.slice(0, 64) } });
-      return company;
+      return { company, inventoryPrefix: sequence.prefix };
     });
-    response.json({ data: { id: data.id, name: data.name, slug: data.slug,
-      timezone: data.timezone, locale: data.locale, currency: data.currency,
-      dateFormat: data.dateFormat, fiscalYearStartMonth: data.fiscalYearStartMonth } });
+    response.json({ data: { id: data.company.id, name: data.company.name, slug: data.company.slug,
+      timezone: data.company.timezone, locale: data.company.locale, currency: data.company.currency,
+      dateFormat: data.company.dateFormat, fiscalYearStartMonth: data.company.fiscalYearStartMonth,
+      inventoryPrefix: data.inventoryPrefix } });
   } catch (error) { next(error); }
 });
