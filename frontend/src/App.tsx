@@ -431,7 +431,7 @@ function App() {
           {user?.isPlatformAdmin && <button className="nav-item" type="button" onClick={() => setPlatformMode(true)}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></button>}
           {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
           {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("tenant.settings.manage") && <button className={"nav-item " + (activePage === "profile" ? "active" : "")} type="button" onClick={() => setActivePage("profile")}><span className="nav-icon">♧</span> Company profile</button>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
+          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Master data</button>}
           {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a></>}
           {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
@@ -447,7 +447,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Categories & models" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
