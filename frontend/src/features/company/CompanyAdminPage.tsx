@@ -34,6 +34,9 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [loading, setLoading] = useState(false);
   const canRoles = permissions.includes("roles.manage");
   const canMembers = permissions.includes("members.manage");
+  // A custom role may manage roles without permission to list members.
+  // Select the first page the caller is actually authorized to view.
+  const visibleTab = !canMembers && canRoles ? "roles" : !canRoles && canMembers ? "users" : tab;
 
   const call = useCallback(async <T,>(path: string, method = "GET", body?: unknown): Promise<T> => {
     if (!tenantId) throw new Error("Select a company workspace.");
@@ -132,14 +135,14 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       <div><span>Trial expires</span><strong>{subscriptionUsage.subscription?.trialEndsAt ? new Date(subscriptionUsage.subscription.trialEndsAt).toLocaleDateString() : "—"}</strong></div>
     </div>}
     <div className="company-admin-tabs">
-      {canMembers && <button className={tab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}>Users</button>}
-      {canRoles && <button className={tab === "roles" ? "active" : ""} type="button" onClick={() => setTab("roles")}>Roles & permissions</button>}
+      {canMembers && <button className={visibleTab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}>Users</button>}
+      {canRoles && <button className={visibleTab === "roles" ? "active" : ""} type="button" onClick={() => setTab("roles")}>Roles & permissions</button>}
     </div>
     {message && <div className="asset-success" role="status">{message}</div>}
     {error && <div className="asset-inline-error" role="alert">{error}</div>}
     {!tenantId && <p>Select a workspace to manage its users and roles.</p>}
     {!canMembers && !canRoles && <p>Your role does not allow user or role administration.</p>}
-    {tab === "users" && canMembers && tenantId && <>
+    {visibleTab === "users" && canMembers && tenantId && <>
       <div className="asset-register-toolbar">
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
         <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setUserFormOpen(true); }}>Add user ＋</button>
@@ -172,7 +175,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         </tr>)}
       </tbody></table></div>
     </>}
-    {tab === "roles" && canRoles && tenantId && <>
+    {visibleTab === "roles" && canRoles && tenantId && <>
       <div className="asset-register-toolbar"><span>{roles.length} COMPANY ROLES</span><button className="primary-button" type="button" onClick={() => { setSelectedRole(null); setSelectedPermissions([]); setRoleFormOpen(true); }}>Add role ＋</button></div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Role</th><th>Permissions</th><th>Members</th><th>Actions</th></tr></thead><tbody>
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
