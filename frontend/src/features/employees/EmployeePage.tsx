@@ -14,6 +14,8 @@ interface EmployeeItem {
   employeeCode: string;
   firstName: string;
   lastName: string;
+  designation: string | null;
+  employeeType: string | null;
   email: string | null;
   phone: string | null;
   homeLocationId: string | null;
@@ -174,7 +176,7 @@ function EmployeePage({
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
     };
-    for (const field of ["email", "phone", "homeLocationId"] as const) {
+    for (const field of ["email", "phone", "homeLocationId", "designation", "employeeType"] as const) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
@@ -222,7 +224,7 @@ function EmployeePage({
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
     };
-    for (const field of ["email", "phone", "homeLocationId"] as const) {
+    for (const field of ["email", "phone", "homeLocationId", "designation", "employeeType"] as const) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
@@ -294,7 +296,7 @@ function EmployeePage({
               <tr><td colSpan={6} className="asset-table-message"><span className="empty-icon">♙</span><strong>No employees found</strong><span>Add your employees and custodians before assigning equipment.</span>{canManage && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Add the first employee ↗</button>}</td></tr>
             ) : employees.map((employee) => (
               <tr key={employee.id}>
-                <td><strong className="employee-name">{employee.firstName} {employee.lastName}</strong><span className="asset-number">{employee.employeeCode}</span></td>
+                <td><strong className="employee-name">{employee.firstName} {employee.lastName}</strong><span className="asset-number">{employee.employeeCode}</span><span className="asset-number">{[employee.designation, employee.employeeType].filter(Boolean).join(" · ")}</span></td>
                 <td>{employee.email ?? "—"}<span className="asset-number">{employee.phone ?? ""}</span></td>
                 <td>{employee.homeLocation ? <>{employee.homeLocation.name}<span className="asset-number">{employee.homeLocation.code}</span></> : "Not assigned"}</td>
                 <td>{employee._count?.assignedAssets ?? 0}</td>
@@ -323,6 +325,10 @@ function EmployeePage({
                 <div><label htmlFor="employeeEmail">Email</label><input id="employeeEmail" name="email" type="email" maxLength={191} placeholder="Optional" /></div>
                 <div><label htmlFor="employeePhone">Phone</label><input id="employeePhone" name="phone" maxLength={50} placeholder="Optional" /></div>
               </div>
+              <div className="asset-form-two-col">
+                <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer"/></label>
+                <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent"/></label>
+              </div>
               <label htmlFor="employeeHomeLocation">Home location {!allLocationsAccess && <span>*</span>}</label>
               <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
               {!allLocationsAccess && manageableLocations.length === 0 && <p className="asset-inline-hint">You need a manageable location to add an employee. Ask an administrator to grant location access.</p>}
@@ -347,6 +353,10 @@ function EmployeePage({
               <div className="asset-form-two-col">
                 <div><label htmlFor="editEmployeeEmail">Email</label><input id="editEmployeeEmail" name="email" type="email" maxLength={191} defaultValue={editingEmployee.email ?? ""} /></div>
                 <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} defaultValue={editingEmployee.phone ?? ""} /></div>
+              </div>
+              <div className="asset-form-two-col">
+                <label>Designation<input name="designation" maxLength={100} defaultValue={editingEmployee.designation ?? ""}/></label>
+                <label>Employee type<input name="employeeType" maxLength={100} defaultValue={editingEmployee.employeeType ?? ""}/></label>
               </div>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
               <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
