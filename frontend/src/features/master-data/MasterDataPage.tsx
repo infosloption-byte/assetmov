@@ -104,7 +104,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
       <div className="asset-modal-heading"><h2 id="categoryTitle">{category ? "Edit category" : "New category"}</h2><button type="button" className="modal-close" onClick={() => setModal(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void saveCategory(event)}>
         <label>Name<input name="name" defaultValue={category?.name} required minLength={2} maxLength={191}/></label>
-        <label>Code<input name="code" defaultValue={category?.code} required maxLength={100} pattern="[a-zA-Z0-9_-]+" /></label>
+        <label>Code<input name="code" defaultValue={category?.code} required maxLength={100} pattern="(?:[a-zA-Z0-9_]|-)+" /></label>
         <label>Description<textarea name="description" defaultValue={category?.description ?? ""} maxLength={3000}/></label>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setModal(null)}>Cancel</button><button disabled={busy} className="primary-button" type="submit">Save category</button></div>
       </form></section></div>}
@@ -112,7 +112,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
       <div className="asset-modal-heading"><h2 id="modelTitle">{editingModel ? "Edit asset model" : "New asset model"}</h2><button type="button" className="modal-close" onClick={() => setModal(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void saveModel(event)}>
         <label>Model name<input name="name" required minLength={2} maxLength={191} defaultValue={editingModel?.name ?? ""}/></label>
-        <label>Model code<input name="code" maxLength={100} pattern="[a-zA-Z0-9_-]+" defaultValue={editingModel?.code ?? ""}/></label>
+        <label>Model code<input name="code" maxLength={100} pattern="(?:[a-zA-Z0-9_]|-)+" defaultValue={editingModel?.code ?? ""}/></label>
         <label>Category</label><ThemeSelect label="Asset category" value={selectedCategory} onChange={setSelectedCategory}
           options={categories.map(c => ({ value: c.id, label: c.name }))}/>
         {editingModel && <p className="asset-inline-hint">For a model already used by assets, only its name and code may be changed. Existing custom-field schemas remain locked to protect recorded asset data.</p>}
