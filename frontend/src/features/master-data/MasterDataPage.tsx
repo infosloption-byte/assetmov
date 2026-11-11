@@ -89,7 +89,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
     {success && <div className="theme-notice success" role="status">{success}</div>}
     {!canRead && <p>Asset read permission is required to view the catalogue.</p>}
     {canRead && <>
-      <div className="master-tabs" role="tablist" aria-label="Company master data">
+      <div className="master-data-tabs" role="tablist" aria-label="Company master data">
         {([
           ["categories", "Categories", categories.length],
           ["models", "Asset models", models.length],
@@ -103,7 +103,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
             <span>{label}</span>{count !== null && <small>{count}</small>}
           </button>)}
       </div>
-      <div className="master-tab-panel" id={"master-panel-" + tab}
+      <div className="master-data-panel" id={"master-panel-" + tab}
         role="tabpanel" aria-labelledby={"master-tab-" + tab} tabIndex={0}>
         {tab === "categories" && <>
           <div className="asset-register-toolbar master-section-heading"><div><h2>Asset categories</h2><p>Define the groups used to organize your asset models.</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setCategory(null);setModal("category");}}>Add category ＋</button>}</div>
