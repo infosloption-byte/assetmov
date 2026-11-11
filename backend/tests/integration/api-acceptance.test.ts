@@ -816,7 +816,16 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: ownerA.cookie }),
     });
     assert.equal(platformOverview.status, 200);
-    assert.equal(typeof (await platformOverview.json() as { data: { companyCount: number } }).data.companyCount, "number");
+    const overviewData = (await platformOverview.json() as {
+      data: { companyCount: number; paddle: { latestPayments: Array<{
+        tenantId: string; tenantName: string; transactionId: string;
+      }> } };
+    }).data;
+    assert.equal(typeof overviewData.companyCount, "number");
+    assert.ok(Array.isArray(overviewData.paddle.latestPayments));
+    assert.ok(overviewData.paddle.latestPayments.every(item =>
+      typeof item.tenantName === "string" && item.tenantName.length > 0),
+    "Platform overview must display payment history even when a tenant relation is unavailable.");
     const plansBody = await platformPlans.json() as { data: Array<{ id: string; key: string }> };
     assert.ok(plansBody.data.some((plan) => plan.key === "trial"));
 
