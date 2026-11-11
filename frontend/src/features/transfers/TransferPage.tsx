@@ -450,6 +450,60 @@ function TransferPage({
     }
   }
 
+  function printTransfer() {
+    if (!selectedTransfer) return;
+    const popup = window.open("", "_blank", "width=920,height=750");
+    if (!popup) { setDetailError("Your browser blocked the print window. Allow popups for this site."); return; }
+    popup.opener = null;
+    const doc = popup.document;
+    doc.title = selectedTransfer.status === "IN_TRANSIT" ?
+      "Issue Note " + selectedTransfer.transferNumber : "Goods Receipt " + selectedTransfer.transferNumber;
+    const style = doc.createElement("style");
+    style.textContent = "@page{size:A4;margin:18mm}body{font:13px Arial,sans-serif;color:#253b2d}h1{font-size:24px}p{margin:6px 0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{border:1px solid #cbd8ce;padding:9px;text-align:left}th{background:#edf4ed}footer{margin-top:38px;display:flex;justify-content:space-between}";
+    doc.head.appendChild(style);
+    const heading = doc.createElement("h1");
+    heading.textContent = selectedTransfer.status === "IN_TRANSIT" ? "Asset Issue Note" : "Goods Receipt Note";
+    doc.body.appendChild(heading);
+    const details: Array<[string,string]> = [
+      ["Reference", selectedTransfer.transferNumber], ["Status", titleCase(selectedTransfer.status)],
+      ["Origin", selectedTransfer.originLocation.name + " (" + selectedTransfer.originLocation.code + ")"],
+      ["Destination", selectedTransfer.destinationLocation.name + " (" + selectedTransfer.destinationLocation.code + ")"],
+      ["Dispatched", formatDate(selectedTransfer.dispatchedAt)],
+      ["Completed", formatDate(selectedTransfer.completedAt)],
+      ["Issued by", selectedTransfer.createdBy.fullName],
+      ["Notes", selectedTransfer.notes ?? "—"],
+    ];
+    for (const [label, value] of details) {
+      const para = doc.createElement("p");
+      const strong = doc.createElement("strong"); strong.textContent = label + ": ";
+      para.append(strong, doc.createTextNode(value));
+      doc.body.appendChild(para);
+    }
+    const table = doc.createElement("table");
+    const thead = doc.createElement("thead"); const header = doc.createElement("tr");
+    for (const label of ["Inventory no.", "Description", "Serial", "Receipt status", "Decision reason"]) {
+      const th = doc.createElement("th"); th.textContent = label; header.appendChild(th);
+    }
+    thead.appendChild(header); table.appendChild(thead);
+    const tbody = doc.createElement("tbody");
+    for (const item of selectedTransfer.lines) {
+      const row = doc.createElement("tr");
+      for (const value of [item.asset.inventoryNumber, item.asset.title, item.asset.serialNumber ?? "—",
+        titleCase(item.status), item.decisionReason ?? "—"]) {
+        const td = doc.createElement("td"); td.textContent = value; row.appendChild(td);
+      }
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody); doc.body.appendChild(table);
+    const foot = doc.createElement("footer");
+    for (const label of ["Issued by: __________________", "Received by: __________________"]) {
+      const span = doc.createElement("span"); span.textContent = label; foot.appendChild(span);
+    }
+    doc.body.appendChild(foot);
+    popup.focus();
+    popup.setTimeout(() => popup.print(), 150);
+  }
+
   const currentPendingLines = selectedTransfer?.lines.filter((line) => line.status === "IN_TRANSIT") ?? [];
   const canReceiveSelected = Boolean(
     selectedTransfer &&
@@ -602,6 +656,7 @@ function TransferPage({
               <div><span className="module-tag">TRANSFER DETAILS</span><h2 id="transferDetailTitle">{selectedTransfer?.transferNumber ?? (detailLoading ? "Loading transfer…" : "Transfer details")}</h2>
                 {selectedTransfer && <p>{selectedTransfer.originLocation.name} → {selectedTransfer.destinationLocation.name}</p>}
               </div>
+              {selectedTransfer && <button type="button" className="topbar-button ghost" onClick={printTransfer}>Print note / GRN</button>}
               <button type="button" className="modal-close" aria-label="Close transfer details" onClick={() => { setSelectedTransfer(null); setDetailError(""); setReceiptError(""); }}>×</button>
             </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading transfer lines…</div>}
