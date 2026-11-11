@@ -22,9 +22,9 @@ const passwordBody = redeemBody.extend({
   newPassword: z.string().min(12).max(128),
 });
 
-type Purpose = "EMAIL_VERIFY" | "PASSWORD_RESET";
+type Purpose = "EMAIL_VERIFY" | "PASSWORD_RESET" | "INVITATION";
 
-async function issueToken(userId: string, purpose: Purpose, minutes: number): Promise<string> {
+export async function issueToken(userId: string, purpose: Purpose, minutes: number): Promise<string> {
   const raw = createOpaqueToken();
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
   await prisma.$transaction(async tx => {
@@ -83,15 +83,18 @@ accountRecoveryRouter.post("/password/reset", limiter, async (request, response,
       const token = await tx.accountToken.findUnique({
         where: { tokenHash: hashToken(parsed.data.token) }, include: { user: true },
       });
-      if (!token || token.kind !== "PASSWORD_RESET" || token.usedAt || token.expiresAt <= now ||
+      if (!token || !["PASSWORD_RESET","INVITATION"].includes(token.kind) || token.usedAt || token.expiresAt <= now ||
           token.user.disabledAt) return false;
       const consumed = await tx.accountToken.updateMany({
         where: { id: token.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now },
       });
       if (consumed.count !== 1) return false;
-      await tx.user.update({ where: { id: token.userId }, data: { passwordHash } });
+      await tx.user.update({ where: { id: token.userId }, data: {
+        passwordHash,
+        ...(token.kind === "INVITATION" ? { emailVerifiedAt: now } : {}),
+      } });
       await tx.session.deleteMany({ where: { userId: token.userId } });
-      await tx.accountToken.updateMany({ where: { userId: token.userId, kind: "PASSWORD_RESET", usedAt: null },
+      await tx.accountToken.updateMany({ where: { userId: token.userId, kind: { in: ["PASSWORD_RESET","INVITATION"] }, usedAt: null },
         data: { usedAt: now } });
       return true;
     });
