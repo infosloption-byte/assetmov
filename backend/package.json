@@ -20,7 +20,8 @@
     "db:deploy": "prisma migrate deploy",
     "test:integration": "node --import tsx --test tests/integration/api-acceptance.test.ts",
     "db:status": "prisma migrate status",
-    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json"
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
+    "platform:bootstrap": "tsx src/scripts/bootstrap-platform-admin.ts"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
