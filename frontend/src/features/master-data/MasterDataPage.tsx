@@ -119,21 +119,21 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
       <div className="master-data-panel" id={"master-panel-" + tab}
         role="tabpanel" aria-labelledby={"master-tab-" + tab} tabIndex={0}>
         {tab === "categories" && <>
-          <div className="asset-register-toolbar master-section-heading"><div><h2>Asset categories</h2><p>Define the groups used to organize your asset models.</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setCategory(null);setModal("category");}}>Add category ＋</button>}</div>
+          <div className="asset-register-toolbar master-section-heading"><div><h2>Asset categories</h2><p>Define the groups used to organize your asset models.</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setCategory(null);setError("");setModal("category");}}>Add category ＋</button>}</div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Name</th><th>Code</th><th>Models</th><th>Actions</th></tr></thead>
-        <tbody>{loading ? <tr><td colSpan={4}>Loading…</td></tr> : categories.length === 0 ? <tr><td colSpan={4}>No categories yet.</td></tr> :
+        <tbody>{loading ? <tr><td colSpan={4}>Loading…</td></tr> : categories.length === 0 ? <tr><td colSpan={4} className="asset-table-message"><strong>No categories yet</strong><span>Create a category before adding an asset model.</span></td></tr> :
           categories.map(item => <tr key={item.id}><td><strong>{item.name}</strong><div>{item.description}</div></td><td>{item.code}</td>
             <td>{models.filter(m => m.categoryId === item.id).length}</td>
-            <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => { setCategory(item); setModal("category"); }}>Edit</button>}</td></tr>)}</tbody></table></div>
+            <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => { setCategory(item); setError(""); setModal("category"); }}>Edit</button>}</td></tr>)}</tbody></table></div>
         </>}
         {tab === "models" && <>
-          <div className="asset-register-toolbar master-section-heading"><div><h2>Asset models</h2><p>Set up reusable model definitions and custom attributes.</p></div>{canManage && <button className="primary-button" type="button" disabled={!categories.length} onClick={() => {setEditingModel(null);setSelectedCategory(categories[0]?.id ?? "");setFields([]);setModal("model");}}>Add model ＋</button>}</div>
+          <div className="asset-register-toolbar master-section-heading"><div><h2>Asset models</h2><p>Set up reusable model definitions and custom attributes.</p></div>{canManage && <button className="primary-button" type="button" disabled={!categories.length} onClick={() => {setEditingModel(null);setSelectedCategory(categories[0]?.id ?? "");setFields([]);setError("");setModal("model");}}>Add model ＋</button>}</div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Model</th><th>Category</th><th>Custom fields</th><th>Actions</th></tr></thead><tbody>
-        {models.length === 0 ? <tr><td colSpan={4}>No models yet.</td></tr> :
+        {models.length === 0 ? <tr><td colSpan={4} className="asset-table-message"><strong>No asset models yet</strong><span>Create a category, then add a model with optional custom fields.</span></td></tr> :
           models.map(model => <tr key={model.id}><td><strong>{model.name}</strong><div>{model.code ?? "—"}</div></td>
             <td>{categories.find(c => c.id === model.categoryId)?.name ?? "—"}</td>
             <td>{model.fieldSchema?.fields?.map(field => field.label).join(", ") || "None"}</td>
-            <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => {setEditingModel(model);setSelectedCategory(model.categoryId);setFields(model.fieldSchema?.fields ?? []);setModal("model");}}>Edit</button>}</td></tr>)}</tbody></table></div>
+            <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => {setEditingModel(model);setSelectedCategory(model.categoryId);setFields(model.fieldSchema?.fields ?? []);setError("");setModal("model");}}>Edit</button>}</td></tr>)}</tbody></table></div>
         </>}
         {(tab === "suppliers" || tab === "manufacturers") &&
           <VendorDirectory key={tab} kind={tab} tenantId={tenantId}
@@ -144,6 +144,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
     {modal === "category" && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="categoryTitle">
       <div className="asset-modal-heading"><h2 id="categoryTitle">{category ? "Edit category" : "New category"}</h2><button type="button" className="modal-close" onClick={() => setModal(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void saveCategory(event)}>
+        {error && <div role="alert" className="asset-inline-error">{error}</div>}
         <label>Name<input name="name" defaultValue={category?.name} required minLength={2} maxLength={191} placeholder="e.g. IT Equipment"/></label>
         <label>Code<input name="code" defaultValue={category?.code} required maxLength={100} placeholder="e.g. IT-EQUIP" pattern="(?:[a-zA-Z0-9_]|-)+" /></label>
         <label>Description<textarea name="description" defaultValue={category?.description ?? ""} placeholder="Optional category details" maxLength={3000}/></label>
@@ -152,6 +153,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
     {modal === "model" && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="modelTitle">
       <div className="asset-modal-heading"><h2 id="modelTitle">{editingModel ? "Edit asset model" : "New asset model"}</h2><button type="button" className="modal-close" onClick={() => setModal(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void saveModel(event)}>
+        {error && <div role="alert" className="asset-inline-error">{error}</div>}
         <label>Model name<input name="name" required minLength={2} maxLength={191} placeholder="e.g. Dell Latitude 7450" defaultValue={editingModel?.name ?? ""}/></label>
         <label>Model code<input name="code" maxLength={100} placeholder="e.g. LAT-7450" pattern="(?:[a-zA-Z0-9_]|-)+" defaultValue={editingModel?.code ?? ""}/></label>
         <label>Category</label><ThemeSelect label="Asset category" value={selectedCategory} onChange={setSelectedCategory}
