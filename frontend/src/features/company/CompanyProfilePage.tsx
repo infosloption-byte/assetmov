@@ -5,7 +5,7 @@ const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").r
 type Company = {
   id: string; name: string; slug: string; status: string; timezone: string;
   locale: string; currency: string; dateFormat: "YYYY-MM-DD"|"DD/MM/YYYY"|"MM/DD/YYYY";
-  fiscalYearStartMonth: number;
+  fiscalYearStartMonth: number; inventoryPrefix: string;
 };
 type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[] };
 
@@ -53,6 +53,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
       currency: String(fields.get("currency") ?? "").trim().toUpperCase(),
       dateFormat: format,
       fiscalYearStartMonth: Number(month),
+      inventoryPrefix: String(fields.get("inventoryPrefix") ?? "").trim().toUpperCase(),
     };
     setSaving(true);setError("");setMessage("");
     try {
@@ -101,6 +102,9 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
               {value:"MM/DD/YYYY",label:"MM/DD/YYYY"}]}/>
         </div>
       </div>
+      <label>Automatic inventory number prefix<input name="inventoryPrefix" required minLength={2} maxLength={16}
+        pattern="[A-Za-z0-9_-]{2,16}" defaultValue={company.inventoryPrefix}/></label>
+      <p className="asset-inline-hint">New automatically numbered assets use this prefix. Existing inventory numbers never change.</p>
       <label>Fiscal year starts</label>
       <ThemeSelect label="Fiscal year start month" value={month} onChange={setMonth} options={fiscalOptions}/>
       <div className="asset-modal-actions"><button type="submit" className="primary-button" disabled={saving || !csrfToken}>
