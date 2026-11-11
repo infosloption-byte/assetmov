@@ -392,3 +392,38 @@
 }
 .asset-import-panel .asset-table { min-width: 640px; }
 :is(.asset-create-form,.asset-edit-form,.vendor-directory) .status-toggle > span { color: #4b6351; }
+
+/* Import preview, dialogs and final responsive alignment. */
+.asset-import-panel .import-location-control { display: grid; gap: 8px; margin: 15px 0; }
+.asset-import-panel label { display: block; margin: 11px 0 7px; color: #536b59; font-size: 11px; font-weight: 700; }
+.asset-import-panel input[type="file"] { width: 100%; max-width: 100%; padding: 8px 10px; cursor: pointer; }
+.asset-import-panel input[type="file"]::file-selector-button {
+  border: 1px solid #dce7dc; background: #f1f6ef; color: #3d6349;
+  border-radius: 6px; padding: 8px 12px; margin-right: 12px;
+  font: 700 11px "DM Sans",sans-serif; cursor: pointer;
+}
+.asset-import-panel input[type="file"]::file-selector-button:hover { background: #e5f0e2; }
+.asset-import-panel .asset-table-wrap { max-width: 100%; }
+.asset-modal .asset-modal-actions {
+  position: sticky; bottom: 0; z-index: 4;
+  margin-top: 20px; padding: 14px 0 4px;
+  background: #fff; border-top: 1px solid var(--line);
+}
+.asset-search-panel .asset-search-actions .asset-search-form {
+  flex: 1 1 280px; min-width: 0; width: auto;
+}
+.asset-search-panel .asset-search-actions > .topbar-button {
+  flex: 0 0 auto; white-space: nowrap;
+}
+.asset-search-panel .asset-search-form input { font-size: 12px; }
+.asset-search-panel .asset-filter-field .theme-select-value {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.asset-register-page .asset-page-heading { min-width: 0; }
+.asset-register-page .asset-page-heading > div:first-child { min-width: 0; }
+.asset-register-page .asset-page-title { overflow-wrap: anywhere; }
+.asset-register-page .asset-table-wrap { max-width: 100%; }
+@media (max-width: 700px) {
+  .asset-search-panel .asset-search-actions .asset-search-form { width: 100%; flex-basis: 100%; }
+  .asset-search-panel .asset-search-actions > .topbar-button { align-self: flex-start; }
+}
