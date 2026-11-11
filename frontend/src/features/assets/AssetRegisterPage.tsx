@@ -150,6 +150,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [autoInventoryNumber, setAutoInventoryNumber] = useState(true);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -453,7 +454,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
 
     const formData = new FormData(event.currentTarget);
     const body: Record<string, unknown> = {
-      inventoryNumber: String(formData.get("inventoryNumber") ?? "").trim(),
+      inventoryNumber: autoInventoryNumber ? "" : String(formData.get("inventoryNumber") ?? "").trim(),
       title: String(formData.get("title") ?? "").trim(),
     };
     if (selectedModelId) {
@@ -771,8 +772,11 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
           <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetCreateTitle">
             <div className="asset-modal-heading"><div><span className="module-tag">NEW INVENTORY RECORD</span><h2 id="assetCreateTitle">Register an asset</h2><p>Start with its unique inventory number and basic details.</p></div><button type="button" className="modal-close" aria-label="Close form" onClick={() => setShowCreate(false)}>×</button></div>
             <form className="asset-create-form" onSubmit={(event) => void createAsset(event)}>
-              <label htmlFor="inventoryNumber">Inventory number <span>*</span></label>
-              <input id="inventoryNumber" name="inventoryNumber" autoComplete="off" maxLength={191} required placeholder="e.g. AM-IT-000124" />
+              <label><input type="checkbox" checked={autoInventoryNumber} onChange={event => setAutoInventoryNumber(event.target.checked)}/>
+                Generate inventory number automatically</label>
+              <label htmlFor="inventoryNumber">Inventory number {!autoInventoryNumber && <span>*</span>}</label>
+              <input id="inventoryNumber" name="inventoryNumber" autoComplete="off" maxLength={191}
+                disabled={autoInventoryNumber} required={!autoInventoryNumber} placeholder={autoInventoryNumber ? "Automatically assigned when saved" : "e.g. AM-000124"}/>
               <label htmlFor="assetTitle">Asset name <span>*</span></label>
               <input id="assetTitle" name="title" maxLength={191} required placeholder="e.g. Lenovo ThinkPad T14" />
               <div className="asset-form-two-col">
