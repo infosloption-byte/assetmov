@@ -803,7 +803,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
           <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetCreateTitle">
             <div className="asset-modal-heading"><div><span className="module-tag">NEW INVENTORY RECORD</span><h2 id="assetCreateTitle">Register an asset</h2><p>Start with its unique inventory number and basic details.</p></div><button type="button" className="modal-close" aria-label="Close form" onClick={() => setShowCreate(false)}>×</button></div>
             <form className="asset-create-form" onSubmit={(event) => void createAsset(event)}>
-              <label><input type="checkbox" checked={autoInventoryNumber} onChange={event => setAutoInventoryNumber(event.target.checked)}/>
+              <label className="checkbox-field"><input type="checkbox" checked={autoInventoryNumber} onChange={event => setAutoInventoryNumber(event.target.checked)}/>
                 Generate inventory number automatically</label>
               <label htmlFor="inventoryNumber">Inventory number {!autoInventoryNumber && <span>*</span>}</label>
               <input id="inventoryNumber" name="inventoryNumber" autoComplete="off" maxLength={191}
