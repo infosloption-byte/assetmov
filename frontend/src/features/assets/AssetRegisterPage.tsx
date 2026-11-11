@@ -654,52 +654,72 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
           <h1 className="asset-page-title">Asset register</h1>
           <p>Find equipment, confirm its current location and open the full lifecycle history.</p>
         </div>
-        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+        <div className="asset-heading-actions">
           {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
           {canCreate && permissions.includes("asset.import") && canReadLocations && csrfToken &&
             <button className="topbar-button ghost" type="button" onClick={() => setImportOpen(true)}>Import CSV</button>}
         </div>
       </div>
 
-      <div className="asset-register-toolbar">
-        <form className="asset-search-form" onSubmit={(event) => { event.preventDefault(); setPage(1); setSearch(searchInput.trim()); }}>
-          <label className="sr-only" htmlFor="assetSearch">Search assets</label>
-          <span className="search-symbol" aria-hidden="true">⌕</span>
-          <input id="assetSearch" value={searchInput} onChange={(event) => setSearchInput(event.currentTarget.value)} placeholder="Search inventory no., title or serial no." />
-          <button type="submit">Search</button>
-        </form>
-        <label className="asset-status-filter">
-          <span>Status</span>
-          <ThemeSelect label="Filter by asset status" value={statusFilter} onChange={value => {setPage(1);setStatusFilter(value);}} options={[{value:"",label:"All statuses"}, ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[]).map(status => ({value:status,label:statusLabel(status)}))]}/>
-        </label>
-        <div className="asset-register-filters" style={{display:"flex",flexWrap:"wrap",gap:"12px",alignItems:"end"}}>
-          <label>Category
+      <div className="asset-search-panel" aria-label="Asset search and filters">
+        <div className="asset-search-actions">
+          <form className="asset-search-form" onSubmit={(event) => {
+            event.preventDefault(); setPage(1); setSearch(searchInput.trim());
+          }}>
+            <label className="sr-only" htmlFor="assetSearch">Search assets</label>
+            <span className="search-symbol" aria-hidden="true">⌕</span>
+            <input id="assetSearch" value={searchInput}
+              onChange={event => setSearchInput(event.currentTarget.value)}
+              placeholder="Search by inventory number, asset or serial number"/>
+            <button type="submit">Search</button>
+          </form>
+          <button className="topbar-button ghost" type="button" onClick={() => {
+            setSearchInput(""); setSearch(""); setStatusFilter(""); setCategoryFilter("");
+            setModelFilter(""); setLocationFilter(""); setWarrantyBefore("");
+            setSortBy("inventoryNumber"); setSortOrder("asc"); setPage(1);
+          }}>Clear filters</button>
+        </div>
+        <div className="asset-register-filters">
+          <label className="asset-filter-field"><span>Status</span>
+            <ThemeSelect label="Filter by asset status" value={statusFilter}
+              onChange={value => { setPage(1); setStatusFilter(value); }}
+              options={[{value:"",label:"All statuses"},
+                ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[])
+                  .map(status => ({value:status,label:statusLabel(status)}))]}/>
+          </label>
+          <label className="asset-filter-field"><span>Category</span>
             <ThemeSelect label="Filter by category" value={categoryFilter}
               onChange={value => {setPage(1);setCategoryFilter(value);setModelFilter("");}}
-              options={[{value:"",label:"All categories"}, ...Array.from(new Map(models.filter(m => m.category).map(m => [m.categoryId, {value:m.categoryId,label:m.category!.name}])).values())]}/>
+              options={[{value:"",label:"All categories"},
+                ...Array.from(new Map(models.filter(m => m.category)
+                  .map(m => [m.categoryId,{value:m.categoryId,label:m.category!.name}])).values())]}/>
           </label>
-          <label>Model
+          <label className="asset-filter-field"><span>Model</span>
             <ThemeSelect label="Filter by asset model" value={modelFilter}
               onChange={value => {setPage(1);setModelFilter(value);}}
-              options={[{value:"",label:"All models"}, ...models.filter(m => !categoryFilter || m.categoryId === categoryFilter).map(m => ({value:m.id,label:m.name}))]}/>
+              options={[{value:"",label:"All models"},
+                ...models.filter(m => !categoryFilter || m.categoryId === categoryFilter)
+                  .map(m => ({value:m.id,label:m.name}))]}/>
           </label>
-          {canReadLocations && <label>Location
+          {canReadLocations && <label className="asset-filter-field"><span>Location</span>
             <ThemeSelect label="Filter by location" value={locationFilter}
               onChange={value => {setPage(1);setLocationFilter(value);}}
-              options={[{value:"",label:"All accessible locations"}, ...locations.map(l => ({value:l.id,label:l.name}))]}/>
+              options={[{value:"",label:"All accessible locations"},
+                ...locations.map(l => ({value:l.id,label:l.name}))]}/>
           </label>}
-          <label>Warranty before
+          <label className="asset-filter-field"><span>Warranty ends by</span>
             <input aria-label="Warranty ending by date" type="date" value={warrantyBefore}
               onChange={event => {setPage(1);setWarrantyBefore(event.target.value);}}/>
           </label>
-          <label>Sort by
+          <label className="asset-filter-field"><span>Sort by</span>
             <ThemeSelect label="Sort asset register" value={sortBy}
               onChange={value => {setPage(1);setSortBy(value);}}
-              options={[{value:"inventoryNumber",label:"Inventory number"},{value:"title",label:"Title"},
-                {value:"createdAt",label:"Created date"},{value:"updatedAt",label:"Updated date"},
-                {value:"warrantyEnd",label:"Warranty date"},{value:"status",label:"Status"}]}/>
+              options={[{value:"inventoryNumber",label:"Inventory number"},
+                {value:"title",label:"Title"},{value:"createdAt",label:"Created date"},
+                {value:"updatedAt",label:"Updated date"},{value:"warrantyEnd",label:"Warranty date"},
+                {value:"status",label:"Status"}]}/>
           </label>
-          <label>Direction
+          <label className="asset-filter-field"><span>Direction</span>
             <ThemeSelect label="Sort direction" value={sortOrder}
               onChange={value => {setPage(1);setSortOrder(value);}}
               options={[{value:"asc",label:"Ascending"},{value:"desc",label:"Descending"}]}/>
@@ -707,8 +727,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </div>
       </div>
 
-      {canAssignAssets && canReadEmployees && <div className="asset-register-toolbar">
-        <strong>{bulkSelected.length} asset(s) selected for assignment</strong>
+      {canAssignAssets && canReadEmployees && bulkSelected.length > 0 && <div className="asset-bulk-bar">
+        <strong>{bulkSelected.length} selected for assignment</strong>
         <button className="primary-button" type="button" disabled={bulkSelected.length === 0} onClick={() => void openBulkAssignment()}>
           Assign selected assets
         </button>
