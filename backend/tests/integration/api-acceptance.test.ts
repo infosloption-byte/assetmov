@@ -430,11 +430,22 @@ test("registration, session security, tenant isolation, locations and assets wor
       method:"PATCH", headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
         csrfToken:ownerA.csrfToken,json:true,origin:true}),
       body:JSON.stringify({name:profileBody.data.name,timezone:"Asia/Colombo",
-        locale:"en-LK",currency:"LKR",dateFormat:"YYYY-MM-DD",fiscalYearStartMonth:4}),
+        locale:"en-LK",currency:"LKR",dateFormat:"YYYY-MM-DD",fiscalYearStartMonth:4,
+        inventoryPrefix:"SL-AM"}),
     });
     assert.equal(profileUpdate.status,200,"Company owner can update local preferences.");
     const profileAfter = await profileUpdate.json() as {data:{timezone:string;currency:string}};
     assert.equal(profileAfter.data.currency,"LKR");
+    const automaticAsset = await fetch(`${baseUrl}/api/assets`, {
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({title:"Automatically numbered asset",inventoryNumber:"",
+        currentLocationId:createdLocation.data.id}),
+    });
+    assert.equal(automaticAsset.status,201,"Automatically numbered assets should be accepted.");
+    const automaticBody = await automaticAsset.json() as {data:{inventoryNumber:string}};
+    assert.match(automaticBody.data.inventoryNumber,/^SL-AM-[0-9]{6,}$/);
+
     const foreignProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
       headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerA.tenant.id}),
     });
