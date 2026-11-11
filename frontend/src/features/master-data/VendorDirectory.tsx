@@ -131,6 +131,7 @@ export default function VendorDirectory({ tenantId, csrfToken, permissions, kind
           <button type="button" className="modal-close" aria-label="Close" onClick={() => setModal(null)}>×</button>
         </div>
         <form key={modal + (editing?.id ?? "new")} className="asset-create-form" onSubmit={event => void save(event)}>
+          {error && <div role="alert" className="asset-inline-error">{error}</div>}
           <label>Name<input name="name" placeholder="Company or brand name" required minLength={2} maxLength={191} defaultValue={editing?.name ?? ""}/></label>
           {modal === "suppliers" && <>
             <label>Email<input type="email" name="email" placeholder="e.g. purchases@company.com" maxLength={191} defaultValue={editing?.email ?? ""}/></label>
