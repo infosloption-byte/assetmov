@@ -30,7 +30,7 @@ const optionalDate = z.string().trim().max(40).optional().refine(
 );
 
 const assetCreateSchema = z.object({
-  inventoryNumber: z.string().trim().min(1).max(191),
+  inventoryNumber: z.string().trim().max(191).default(""),
   assetNumber: z.string().trim().max(191).optional(),
   serialNumber: z.string().trim().max(191).optional(),
   title: z.string().trim().min(1).max(191),
@@ -327,10 +327,35 @@ assetRouter.post(
         if (assignedLocationId && !location) throw new Error("REFERENCE_LOCATION_INVALID");
         const validatedFields = validateCustomFieldValues(model?.fieldSchema ?? null, input.customFields ?? {});
 
+        // The locked tenant subscription row above serializes manual and
+        // generated numbering. Sequence is tenant-owned and persists through
+        // restarts; skip any identifiers that already exist in legacy data.
+        let inventoryNumber = input.inventoryNumber;
+        if (!inventoryNumber) {
+          let candidate = "";
+          for (let attempt = 0; attempt < 10000; attempt++) {
+            const sequence = await tx.assetNumberSequence.update({
+              where: { tenantId },
+              data: { nextValue: { increment: 1 } },
+              select: { prefix: true, nextValue: true },
+            });
+            const number = sequence.nextValue - 1;
+            if (number < 1 || number > 2_000_000_000) throw new Error("ASSET_NUMBER_EXHAUSTED");
+            candidate = sequence.prefix + "-" + String(number).padStart(6, "0");
+            const exists = await tx.asset.findFirst({
+              where: { tenantId, inventoryNumber: candidate }, select: { id: true },
+            });
+            if (!exists) break;
+            candidate = "";
+          }
+          if (!candidate) throw new Error("ASSET_NUMBER_EXHAUSTED");
+          inventoryNumber = candidate;
+        }
+
         const asset = await tx.asset.create({
           data: {
             tenantId,
-            inventoryNumber: input.inventoryNumber,
+            inventoryNumber,
             assetNumber: input.assetNumber || undefined,
             serialNumber: input.serialNumber || undefined,
             title: input.title,
@@ -410,6 +435,10 @@ assetRouter.post(
       if (error instanceof SubscriptionAccessError) {
         const statusCode = error.code === "SUBSCRIPTION_NOT_CONFIGURED" ? 409 : 403;
         sendError(response, statusCode, error.code, error.message);
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_NUMBER_EXHAUSTED") {
+        sendError(response, 409, "ASSET_NUMBER_EXHAUSTED", "No free inventory number could be allocated.");
         return;
       }
       if (isUniqueConstraintError(error)) {
