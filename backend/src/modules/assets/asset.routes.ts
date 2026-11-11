@@ -56,6 +56,12 @@ const listQuerySchema = z.object({
   q: z.string().trim().max(191).optional(),
   status: z.enum(assetStatuses).optional(),
   locationId: z.string().trim().min(1).optional(),
+  modelId: z.string().trim().min(1).max(36).optional(),
+  categoryId: z.string().trim().min(1).max(36).optional(),
+  custodianId: z.string().trim().min(1).max(36).optional(),
+  warrantyBefore: z.iso.date().optional(),
+  sortBy: z.enum(["inventoryNumber", "title", "createdAt", "updatedAt", "status", "warrantyEnd"]).default("inventoryNumber"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -103,7 +109,7 @@ assetRouter.get(
         return;
       }
 
-      const { q, status, locationId, page, pageSize } = parsed.data;
+      const { q, status, locationId, modelId, categoryId, custodianId, warrantyBefore, sortBy, sortOrder, page, pageSize } = parsed.data;
       if (locationId && !request.auth.allLocationsAccess && !(request.auth.accessibleLocationIds ?? []).includes(locationId)) {
         sendError(response, 403, "LOCATION_ACCESS_DENIED", "You cannot list assets in that location.");
         return;
@@ -113,6 +119,10 @@ assetRouter.get(
         tenantId,
         ...(status ? { status } : {}),
         ...(locationId ? { currentLocationId: locationId } : {}),
+        ...(modelId ? { modelId } : {}),
+        ...(categoryId ? { model: { categoryId } } : {}),
+        ...(custodianId ? { assignedEmployeeId: custodianId } : {}),
+        ...(warrantyBefore ? { warrantyEnd: { lte: new Date(warrantyBefore + "T23:59:59.999Z") } } : {}),
         ...(q ? {
           OR: [
             { inventoryNumber: { contains: q } },
@@ -131,7 +141,7 @@ assetRouter.get(
         prisma.asset.findMany({
           where,
           include: assetInclude,
-          orderBy: [{ inventoryNumber: "asc" }],
+          orderBy: [{ [sortBy]: sortOrder }, { id: "asc" }],
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
