@@ -179,6 +179,10 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         },
       });
 
+      await tx.assetNumberSequence.create({
+        data: { tenantId: tenant.id, prefix: "AM", nextValue: 1 },
+      });
+
       const trialPlan = await tx.subscriptionPlan.findFirst({
         where: { key: "trial", isActive: true },
       });
