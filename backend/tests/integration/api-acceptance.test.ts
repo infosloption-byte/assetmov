@@ -420,6 +420,71 @@ test("registration, session security, tenant isolation, locations and assets wor
     const assetListBody = await assetList.json() as AssetListResponse;
     assert.ok(assetListBody.data.some((item) => item.id === createdAsset.data.id));
 
+    // P0 company metadata, supplier/master-data isolation and safe location archiving.
+    const profileResponse = await fetch(`${baseUrl}/api/workspace/profile`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(profileResponse.status, 200);
+    const profileBody = await profileResponse.json() as {data:{name:string;timezone:string}};
+    const profileUpdate = await fetch(`${baseUrl}/api/workspace/profile`, {
+      method:"PATCH", headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:profileBody.data.name,timezone:"Asia/Colombo",
+        locale:"en-LK",currency:"LKR",dateFormat:"YYYY-MM-DD",fiscalYearStartMonth:4}),
+    });
+    assert.equal(profileUpdate.status,200,"Company owner can update local preferences.");
+    const profileAfter = await profileUpdate.json() as {data:{timezone:string;currency:string}};
+    assert.equal(profileAfter.data.currency,"LKR");
+    const foreignProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
+      headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerA.tenant.id}),
+    });
+    assert.equal(foreignProfile.status,403);
+
+    const supplierResponse = await fetch(`${baseUrl}/api/vendors/suppliers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Integration supplier " + suffix,email:"vendor@example.test"}),
+    });
+    assert.equal(supplierResponse.status,201);
+    const supplier = await supplierResponse.json() as {data:{id:string}};
+    const otherSupplierList = await fetch(`${baseUrl}/api/vendors/suppliers`,{
+      headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerB.tenant.id}),
+    });
+    assert.equal(otherSupplierList.status,200);
+    assert.ok(!(await otherSupplierList.json() as {data:Array<{id:string}>}).data.some(x=>x.id===supplier.data.id));
+    const supplierArchive = await fetch(`${baseUrl}/api/vendors/suppliers/${supplier.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(supplierArchive.status,200);
+    const manufacturerResponse = await fetch(`${baseUrl}/api/vendors/manufacturers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Integration manufacturer " + suffix}),
+    });
+    assert.equal(manufacturerResponse.status,201);
+
+    const cycleLocation = await fetch(`${baseUrl}/api/locations/${createdLocation.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({parentId:createdLocation.data.id}),
+    });
+    assert.equal(cycleLocation.status,400,"Locations cannot become their own parent.");
+    const usedLocationArchive = await fetch(`${baseUrl}/api/locations/${createdLocation.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(usedLocationArchive.status,409,"Cannot archive a location holding assets.");
+
+    const filteredAssets = await fetch(`${baseUrl}/api/assets?categoryId=${category.data.id}&pageSize=1&sortBy=createdAt&sortOrder=desc`,{
+      headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id}),
+    });
+    assert.equal(filteredAssets.status,200);
+    assert.equal((await filteredAssets.json() as {pagination:{pageSize:number};data:unknown[]}).pagination.pageSize,1);
+
+
     // The company overview shows real counts, never another tenant's inventory.
     const ownerOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
