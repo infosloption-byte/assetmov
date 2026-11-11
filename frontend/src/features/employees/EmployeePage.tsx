@@ -56,6 +56,7 @@ function EmployeePage({
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [success, setSuccess] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -95,6 +96,7 @@ function EmployeePage({
     try {
       const params = new URLSearchParams({ page: "1", pageSize: "100" });
       if (search) params.set("q", search);
+      if (showInactive && canManage) params.set("includeInactive", "true");
       const response = await fetch(apiBaseUrl + "/employees?" + params.toString(), {
         credentials: "include",
         headers: { "X-Tenant-Id": tenantId },
@@ -113,7 +115,7 @@ function EmployeePage({
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [tenantId, canRead, search]);
+  }, [tenantId, canRead, search, showInactive, canManage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -215,7 +217,7 @@ function EmployeePage({
     }
 
     const formData = new FormData(event.currentTarget);
-    const body: Record<string, string> = {
+    const body: Record<string, string | boolean> = {
       employeeCode: String(formData.get("employeeCode") ?? "").trim(),
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
@@ -224,6 +226,8 @@ function EmployeePage({
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
+
+    body.isActive = formData.get("isActive") === "on";
 
     setSavingEdit(true);
     setEditError("");
@@ -273,6 +277,7 @@ function EmployeePage({
           <button type="submit">Search</button>
         </form>
         <button className="topbar-button ghost" type="button" onClick={() => void loadEmployees()}>Refresh ↻</button>
+        {canManage && <label><input type="checkbox" checked={showInactive} onChange={event => setShowInactive(event.target.checked)}/> Include inactive</label>}
       </div>
 
       {success && <div className="asset-success" role="status">{success}</div>}
@@ -345,7 +350,9 @@ function EmployeePage({
               </div>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
               <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
-              {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
+              <label><input type="checkbox" name="isActive" defaultChecked={editingEmployee.isActive}/> Active employee</label>
+              <p className="asset-inline-hint">Employees with assigned assets cannot be deactivated until custody is transferred or returned.</p>
+              {editError && <div className="asset-inline-error" role="alert">{editError}</div>
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setEditingEmployee(null)}>Cancel</button><button className="primary-button" type="submit" disabled={savingEdit || locationsLoading}>{savingEdit ? "Saving…" : "Save changes"} {!savingEdit && <span>↗</span>}</button></div>
             </form>
           </section>
