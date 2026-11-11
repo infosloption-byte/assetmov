@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import AssetImportPanel from "./AssetImportPanel";
 import AssetFilesPanel from "./AssetFilesPanel";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
@@ -151,6 +152,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [pageCount, setPageCount] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [autoInventoryNumber, setAutoInventoryNumber] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -651,7 +653,11 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
           <h1 className="asset-page-title">Asset register</h1>
           <p>Find equipment, confirm its current location and open the full lifecycle history.</p>
         </div>
-        {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
+          {canCreate && permissions.includes("asset.import") && canReadLocations && csrfToken &&
+            <button className="topbar-button ghost" type="button" onClick={() => setImportOpen(true)}>Import CSV</button>}
+        </div>
       </div>
 
       <div className="asset-register-toolbar">
@@ -767,6 +773,10 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                 {bulkBusy ? "Assigning…" : "Confirm bulk assignment"}</button></div>
           </form>
         </section></div>}
+      {importOpen && tenantId && csrfToken &&
+        <AssetImportPanel tenantId={tenantId} csrfToken={csrfToken}
+          allLocationsAccess={allLocationsAccess} locations={locations} onFinished={() => loadAssets()}
+          onClose={() => setImportOpen(false)}/>}
       {showCreate && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
           <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetCreateTitle">
