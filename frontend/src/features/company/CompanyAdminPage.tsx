@@ -242,14 +242,14 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     {userFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="newUserTitle">
       <div className="asset-modal-heading"><h2 id="newUserTitle">Add company user</h2><button className="modal-close" type="button" onClick={() => setUserFormOpen(false)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void submitUser(event)}>
-        <label>Full name<input name="fullName" required minLength={2} maxLength={191} /></label>
-        <label>Email<input name="email" type="email" required maxLength={191} /></label>
+        <label>Full name<input name="fullName" required minLength={2} maxLength={191} placeholder="e.g. Nimal Perera" /></label>
+        <label>Email<input name="email" type="email" required maxLength={191} placeholder="e.g. nimal@company.com" /></label>
         <label><input type="checkbox" checked={inviteByEmail} onChange={event=>setInviteByEmail(event.target.checked)}/>
           Send secure invitation by email</label>
         {inviteByEmail ?
           <p className="asset-inline-hint">Recommended. The new user sets their own password from a one-time email link (requires configured transactional email).</p> :
           <><label>Initial password (development only)
-            <input name="initialPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password"/>
+            <input name="initialPassword" type="password" placeholder="Set a strong temporary password" required minLength={12} maxLength={128} autoComplete="new-password"/>
           </label><p className="asset-inline-hint">Development fallback only. Production requires email invitation.</p></>}
         <label>Role</label><ThemeSelect label="New user role" value={newUserRoleId} onChange={setNewUserRoleId} options={assignableRoles.map(role => ({ value: role.id, label: role.name }))}/>
         {allLocationsAccess && <label><input type="checkbox" name="allLocationsAccess" /> Access all company locations</label>}
@@ -259,8 +259,8 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       <div className="asset-modal-heading"><h2 id="roleFormTitle">{selectedRole ? "Edit role" : "Create role"}</h2><button className="modal-close" type="button" onClick={() => setRoleFormOpen(false)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void submitRole(event)}>
         {!selectedRole && <label>Role key<input name="key" required pattern="[A-Za-z][A-Za-z0-9_]{1,59}" placeholder="ASSET_MANAGER" /></label>}
-        <label>Role name<input name="name" required minLength={2} defaultValue={selectedRole?.name} /></label>
-        <label>Description<textarea name="description" defaultValue={selectedRole?.description ?? ""} /></label>
+        <label>Role name<input name="name" placeholder="e.g. Asset Officer" required minLength={2} defaultValue={selectedRole?.name} /></label>
+        <label>Description<textarea name="description" placeholder="Describe this role and its responsibilities" defaultValue={selectedRole?.description ?? ""} /></label>
         <fieldset className="company-permissions"><legend>Allowed actions</legend>{availablePermissions.map(permission => <label key={permission.key}><input type="checkbox" checked={selectedPermissions.includes(permission.key)} onChange={event => setSelectedPermissions(previous => event.target.checked ? [...previous, permission.key] : previous.filter(key => key !== permission.key))} /><span><strong>{permission.key}</strong><small>{permission.description}</small></span></label>)}</fieldset>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setRoleFormOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={busy}>Save role</button></div>
       </form></section></div>}
