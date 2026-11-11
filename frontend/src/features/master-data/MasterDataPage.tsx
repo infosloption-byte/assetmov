@@ -99,7 +99,20 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
           <button key={key} id={"master-tab-" + key} type="button"
             role="tab" aria-selected={tab === key} aria-controls={"master-panel-" + key}
             className={"master-tab " + (tab === key ? "active" : "")}
-            onClick={() => { setTab(key); setError(""); setSuccess(""); }}>
+            onClick={() => { setTab(key); setError(""); setSuccess(""); }}
+            onKeyDown={event => {
+              if (!["ArrowRight","ArrowLeft","Home","End"].includes(event.key)) return;
+              event.preventDefault();
+              const items = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+              const index = items.indexOf(event.currentTarget);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 :
+                (index + (event.key === "ArrowRight" ? 1 : -1) + items.length) % items.length;
+              const target = items[next];
+              if (target) {
+                setTab(target.id.replace("master-tab-", "") as MasterTab);
+                target.focus();
+              }
+            }}>
             <span>{label}</span>{count !== null && <small>{count}</small>}
           </button>)}
       </div>
