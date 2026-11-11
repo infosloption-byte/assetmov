@@ -224,7 +224,7 @@ function LocationsPage({
               {!allLocationsAccess && parentChoices.length === 0 && <p className="asset-inline-hint">Your role can create locations only below a location you manage. Ask an administrator to grant a manageable location scope.</p>}
               <label htmlFor="locationAddress">Address / description</label>
               <textarea id="locationAddress" name="address" rows={3} maxLength={500} defaultValue={editingLocation?.address ?? ""} placeholder="Optional address" />
-              {editingLocation && <label><input type="checkbox" name="isActive" defaultChecked={editingLocation.isActive}/> Active location</label>}
+              {editingLocation && <label className="status-toggle"><input type="checkbox" role="switch" name="isActive" defaultChecked={editingLocation.isActive}/> Active location</label>}
               {editingLocation && <p className="asset-inline-hint">Archiving requires no active children, assets, active employees or member location grants. Historical records are preserved.</p>}
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => { setShowCreate(false); setEditingLocation(null); }}>Cancel</button><button className="primary-button" type="submit" disabled={saving || (!allLocationsAccess && parentChoices.length === 0)}>{saving ? "Saving…" : editingLocation ? "Save changes" : "Save location"} {!saving && <span>↗</span>}</button></div>
