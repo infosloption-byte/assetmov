@@ -93,6 +93,7 @@ h1 em { font-weight: 500; color: #527d5f; font-style: normal; }
 .stat-placeholder { color: #b3bcb4; font: 500 21px Manrope, sans-serif; }
 .stat-card strong { display: block; font-size: 11px; }
 .stat-card p { margin: 5px 0 0; font-size: 9px; color: #929b94; }
+.overview-refresh { margin-top: 14px; }
 .modules-section { padding-top: 32px; }
 .module-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
 .module-card { padding: 17px 17px 19px; border: 1px solid #e5eae4; border-radius: 10px; background: #fff; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
