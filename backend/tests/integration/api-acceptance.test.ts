@@ -566,6 +566,27 @@ test("registration, session security, tenant isolation, locations and assets wor
     const managedBody = await managedContext.json() as WorkspaceResponse;
     assert.ok(managedBody.permissions.includes("asset.read"));
     assert.ok(!managedBody.permissions.includes("members.manage"));
+
+    const scopedOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(scopedOverview.status, 200);
+    assert.equal((await scopedOverview.json() as { data: { total: number } }).data.total, 2);
+
+    // A viewer with no granted locations must not learn company-wide totals.
+    const unscopedLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST", headers: requestHeaders({ json: true, origin: true }),
+      body: JSON.stringify({ email: anotherMemberEmail, password }),
+    });
+    assert.equal(unscopedLogin.status, 200);
+    const zeroScopeOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({
+        cookie: sessionCookie(unscopedLogin), tenantId: ownerA.tenant.id,
+      }),
+    });
+    assert.equal(zeroScopeOverview.status, 200);
+    assert.equal((await zeroScopeOverview.json() as { data: { total: number } }).data.total, 0);
+
     const deniedMemberBilling = await fetch(`${baseUrl}/api/billing/history`, {
       headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
     });
