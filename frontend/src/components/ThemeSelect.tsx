@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 type Option = { value: string; label: string; disabled?: boolean };
 type Props = {
@@ -31,7 +31,7 @@ export default function ThemeSelect({
     function close(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     }
-    function escape(event: globalThis.KeyboardEvent) {
+    function escape(event: KeyboardEvent) {
       if (event.key === "Escape" && root.current?.contains(document.activeElement)) {
         setOpen(false);
         trigger.current?.focus();
@@ -50,7 +50,7 @@ export default function ThemeSelect({
     onChange?.(next);
   }
 
-  function onKeyboard(event: KeyboardEvent<HTMLButtonElement>) {
+  function onKeyboard(event: ReactKeyboardEvent<HTMLButtonElement>) {
     if (disabled) return;
     if (event.key === "Escape") {
       if (open) { event.preventDefault(); setOpen(false); }
