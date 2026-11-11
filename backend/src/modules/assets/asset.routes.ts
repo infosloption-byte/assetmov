@@ -955,3 +955,81 @@ assetRouter.post(
     }
   },
 );
+
+const lifecycleSchema = z.object({
+  action: z.enum(["DAMAGE", "RESTORE", "DISPOSE", "RETIRE"]),
+  reason: z.string().trim().min(8).max(4000),
+}).strict();
+
+/** Non-destructive lifecycle transitions: preserve history and terminal state. */
+assetRouter.post("/:id/lifecycle", requireSession, requireTenant, requireCsrf,
+  async (request, response, next) => {
+    const parsed = lifecycleSchema.safeParse(request.body);
+    const id = request.params.id;
+    const tenantId = request.auth?.tenantId;
+    const actorUserId = request.auth?.userId;
+    if (!parsed.success || typeof id !== "string" || !id || !tenantId || !actorUserId) {
+      sendError(response, 400, "VALIDATION_ERROR", "Provide a valid asset, action and reason."); return;
+    }
+    const { action, reason } = parsed.data;
+    const permission = action === "DISPOSE" || action === "RETIRE" ? "asset.dispose" : "asset.update";
+    if (!request.auth?.permissions?.includes(permission)) {
+      sendError(response, 403, "PERMISSION_DENIED", "You cannot make this lifecycle change."); return;
+    }
+    const destination = action === "DAMAGE" ? "DAMAGED" :
+      action === "RESTORE" ? "AVAILABLE" : action === "DISPOSE" ? "DISPOSED" : "RETIRED";
+    const eventType = action === "DAMAGE" ? "MARKED_DAMAGED" :
+      action === "RESTORE" ? "MARKED_AVAILABLE" : action === "DISPOSE" ? "DISPOSED" : "RETIRED";
+
+    try {
+      const record = await prisma.$transaction(async tx => {
+        const existing = await tx.asset.findFirst({ where: { tenantId, id } });
+        if (!existing) throw new Error("ASSET_NOT_FOUND");
+        if (!request.auth?.allLocationsAccess && (
+            !existing.currentLocationId ||
+            !(request.auth.manageableLocationIds ?? []).includes(existing.currentLocationId)
+          )) throw new Error("ASSET_LOCATION_DENIED");
+        // Returning assigned assets to stock precedes damage/disposal; prevent
+        // silently discarding custody or interrupting in-transit assets.
+        const allowed = action === "DAMAGE" ? existing.status === "AVAILABLE" :
+          action === "RESTORE" ? existing.status === "DAMAGED" :
+          action === "DISPOSE" ? ["AVAILABLE", "DAMAGED"].includes(existing.status) :
+          ["DRAFT", "AVAILABLE", "DAMAGED"].includes(existing.status);
+        if (!allowed || existing.assignedEmployeeId) throw new Error("LIFECYCLE_TRANSITION_DENIED");
+
+        const changed = await tx.asset.updateMany({
+          where: { id, tenantId, status: existing.status, assignedEmployeeId: null },
+          data: { status: destination,
+            ...(action === "DISPOSE" ? { disposedAt: new Date() } :
+              action === "RESTORE" ? { disposedAt: null } : {}),
+          },
+        });
+        if (changed.count !== 1) throw new Error("LIFECYCLE_CONCURRENT_CHANGE");
+        await tx.assetTransaction.create({ data: {
+          tenantId, assetId: id, eventType, actorUserId, notes: reason,
+          fromLocationId: existing.currentLocationId, toLocationId: existing.currentLocationId,
+        } });
+        await tx.auditLog.create({ data: {
+          tenantId, actorUserId, action: "asset.lifecycle." + action.toLowerCase(),
+          entityType: "Asset", entityId: id,
+          oldData: { status: existing.status }, newData: { status: destination, reason },
+          ipAddress: request.ip?.slice(0, 64),
+        } });
+        return tx.asset.findFirst({ where: { tenantId, id }, include: assetInclude });
+      });
+      response.json({ data: record });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      if (["ASSET_NOT_FOUND","ASSET_LOCATION_DENIED","LIFECYCLE_TRANSITION_DENIED",
+        "LIFECYCLE_CONCURRENT_CHANGE"].includes(code)) {
+        sendError(response, code === "ASSET_NOT_FOUND" ? 404 :
+          code === "ASSET_LOCATION_DENIED" ? 403 : 409, code,
+          code === "LIFECYCLE_TRANSITION_DENIED"
+            ? "Return assigned assets first. This lifecycle transition is not allowed."
+            : code.replaceAll("_", " ").toLowerCase());
+        return;
+      }
+      next(error);
+    }
+  },
+);
