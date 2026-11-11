@@ -62,6 +62,7 @@ export default function PlatformConsole({
     if (!mobileOpen) return;
 
     const previousFocus = document.activeElement;
+    const menuButton = menuButtonRef.current;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
@@ -79,7 +80,7 @@ export default function PlatformConsole({
       document.removeEventListener("keydown", handleEscape);
       window.removeEventListener("resize", handleResize);
       if (previousFocus instanceof HTMLElement) previousFocus.focus();
-      else menuButtonRef.current?.focus();
+      else menuButton?.focus();
     };
   }, [mobileOpen]);
   const heading = headings[page];
