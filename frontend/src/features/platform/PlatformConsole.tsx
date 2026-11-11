@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AuthUser } from "../auth/types";
 import PlatformAdminPage from "./PlatformAdminPage";
 import {
@@ -56,6 +56,32 @@ export default function PlatformConsole({
   const [page, setPage] = useState<PlatformPage>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    const handleResize = () => {
+      if (window.innerWidth > 800) setMobileOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("resize", handleResize);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+      else menuButtonRef.current?.focus();
+    };
+  }, [mobileOpen]);
   const heading = headings[page];
   const navigate = (next: PlatformPage) => {
     setPage(next); setMobileOpen(false);
@@ -64,11 +90,11 @@ export default function PlatformConsole({
     .map(chunk => chunk[0]?.toUpperCase() ?? "").join("") || "PA";
 
   return <div className="platform-shell">
-    <aside className={"platform-sidebar" + (mobileOpen ? " is-open" : "")} aria-label="Platform administration">
+    <aside id="platform-navigation" className={"platform-sidebar" + (mobileOpen ? " is-open" : "")} aria-label="Platform administration">
       <div className="platform-brand">
         <div className="platform-brand-mark">A<span>.</span></div>
         <div><strong>assetmov</strong><small>PLATFORM CONSOLE</small></div>
-        <button className="platform-mobile-close" type="button" aria-label="Close navigation" onClick={() => setMobileOpen(false)}>×</button>
+        <button ref={closeButtonRef} className="platform-mobile-close" type="button" aria-label="Close navigation" onClick={() => setMobileOpen(false)}>×</button>
       </div>
       <div className="platform-instance">
         <span className="platform-instance-dot"/><span>Platform administration</span>
@@ -100,10 +126,10 @@ export default function PlatformConsole({
       </div>
     </aside>
     {mobileOpen && <button type="button" className="platform-mobile-overlay" aria-label="Close navigation" onClick={() => setMobileOpen(false)}/>}
-    <main className="platform-main">
+    <main className="platform-main" inert={mobileOpen}>
       <header className="platform-topbar">
         <div className="platform-topbar-left">
-          <button className="platform-menu-button" type="button" aria-label="Open platform navigation" onClick={() => setMobileOpen(true)}>☰</button>
+          <button ref={menuButtonRef} className="platform-menu-button" type="button" aria-label="Open platform navigation" aria-controls="platform-navigation" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}>☰</button>
           <div className="platform-breadcrumb"><span>Platform</span><span className="separator">/</span><strong>{heading.heading}</strong></div>
         </div>
         <div className="platform-topbar-actions">

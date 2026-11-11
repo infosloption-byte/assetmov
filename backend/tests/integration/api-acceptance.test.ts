@@ -420,6 +420,34 @@ test("registration, session security, tenant isolation, locations and assets wor
     const assetListBody = await assetList.json() as AssetListResponse;
     assert.ok(assetListBody.data.some((item) => item.id === createdAsset.data.id));
 
+    // The company overview shows real counts, never another tenant's inventory.
+    const ownerOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(ownerOverview.status, 200);
+    const ownerOverviewBody = await ownerOverview.json() as {
+      data: { total: number; assigned: number; inService: number; inTransit: number };
+    };
+    assert.equal(ownerOverviewBody.data.total, 2);
+    assert.equal(ownerOverviewBody.data.assigned, 0);
+    assert.equal(ownerOverviewBody.data.inService, 0);
+    assert.equal(ownerOverviewBody.data.inTransit, 0);
+
+    const otherCompanyOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(otherCompanyOverview.status, 200);
+    assert.equal((await otherCompanyOverview.json() as { data: { total: number } }).data.total, 0);
+
+    const missingOverviewTenant = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(missingOverviewTenant.status, 400);
+    const crossTenantOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(crossTenantOverview.status, 403);
+
     const crossTenantAsset = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
       headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
     });
@@ -538,6 +566,27 @@ test("registration, session security, tenant isolation, locations and assets wor
     const managedBody = await managedContext.json() as WorkspaceResponse;
     assert.ok(managedBody.permissions.includes("asset.read"));
     assert.ok(!managedBody.permissions.includes("members.manage"));
+
+    const scopedOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(scopedOverview.status, 200);
+    assert.equal((await scopedOverview.json() as { data: { total: number } }).data.total, 2);
+
+    // A viewer with no granted locations must not learn company-wide totals.
+    const unscopedLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST", headers: requestHeaders({ json: true, origin: true }),
+      body: JSON.stringify({ email: anotherMemberEmail, password }),
+    });
+    assert.equal(unscopedLogin.status, 200);
+    const zeroScopeOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({
+        cookie: sessionCookie(unscopedLogin), tenantId: ownerA.tenant.id,
+      }),
+    });
+    assert.equal(zeroScopeOverview.status, 200);
+    assert.equal((await zeroScopeOverview.json() as { data: { total: number } }).data.total, 0);
+
     const deniedMemberBilling = await fetch(`${baseUrl}/api/billing/history`, {
       headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
     });

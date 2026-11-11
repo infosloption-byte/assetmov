@@ -199,8 +199,8 @@
   .platform-shortcuts { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media(max-width:800px) {
-  .platform-sidebar { width:min(300px,88vw); transform:translateX(-100%); transition:transform .2s ease; }
-  .platform-sidebar.is-open { transform:translateX(0); }
+  .platform-sidebar { width:min(300px,88vw); transform:translateX(-100%); visibility:hidden; transition:transform .2s ease,visibility .2s; }
+  .platform-sidebar.is-open { transform:translateX(0); visibility:visible; }
   .platform-main { margin-left:0; }
   .platform-menu-button,.platform-mobile-close { display:block; }
   .platform-mobile-close { margin-left:auto; background:#ffffff18; border-color:#ffffff38; color:#fff; }
@@ -228,4 +228,19 @@
   .platform-toolbar>form { max-width:none; }
   .platform-form-footer { flex-direction:column; align-items:stretch; }
   .platform-footer { flex-direction:column; padding:16px; }
+}
+
+/* Visible keyboard focus, including the mobile off-canvas navigation. */
+.platform-shell button:focus-visible,
+.platform-shell a:focus-visible,
+.platform-shell input:focus-visible,
+.platform-shell textarea:focus-visible {
+  outline: 3px solid #8cc99b;
+  outline-offset: 2px;
+}
+.platform-shell button:disabled { cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .platform-sidebar, .platform-nav-item, .platform-shortcuts button {
+    transition: none;
+  }
 }

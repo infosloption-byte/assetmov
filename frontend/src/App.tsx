@@ -14,6 +14,7 @@ import ThemeSelect from "./components/ThemeSelect";
 
 type ApiHealth = "checking" | "online" | "offline";
 type BillingStatus = { allowed: boolean; reason: string | null; isCompanyAdmin: boolean; status: string | null; planName: string | null; trialEndsAt: string | null; periodEndsAt: string | null };
+type OverviewMetrics = { total: number; assigned: number; inService: number; inTransit: number };
 type AccountSession = { id: string; createdAt: string; lastSeenAt: string | null; expiresAt: string; ipAddress: string | null; userAgent: string | null; isCurrent: boolean };
 
 interface WorkspaceContext {
@@ -70,6 +71,10 @@ function App() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState("");
   const [billingEpoch, setBillingEpoch] = useState(0);
+  const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState("");
+  const [overviewEpoch, setOverviewEpoch] = useState(0);
   const refreshBilling = useCallback(() => setBillingEpoch(n => n + 1), []);
   useEffect(() => {
     const onReturnToApp = () => {
@@ -221,6 +226,48 @@ function App() {
     const fromCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
     setActivePage(fromCheckout ? "billing" : "overview");
   }, [activeTenantId]);
+
+  // Platform navigation uses platformMode, never a "platform" company page.
+  // Re-query when the selected workspace or its location permissions change.
+  useEffect(() => {
+    if (
+      !user?.id || !activeTenantId || activePage !== "overview" ||
+      billingStatus?.allowed !== true || !workspaceContext ||
+      workspaceContext.tenant.id !== activeTenantId ||
+      !workspaceContext.permissions.includes("asset.read")
+    ) {
+      setOverviewMetrics(null);
+      setOverviewLoading(false);
+      setOverviewError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    const tenantId = activeTenantId;
+    setOverviewMetrics(null);
+    setOverviewLoading(true);
+    setOverviewError("");
+    void fetch(apiBaseUrl + "/workspace/overview", {
+      credentials: "include",
+      headers: { "X-Tenant-Id": tenantId },
+      signal: controller.signal,
+    }).then(async response => {
+      const payload = await response.json().catch(() => ({})) as {
+        data?: OverviewMetrics; error?: { message?: string };
+      };
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error?.message ?? "Could not load the workspace snapshot.");
+      }
+      if (!controller.signal.aborted) setOverviewMetrics(payload.data);
+    }).catch(error => {
+      if (!controller.signal.aborted) {
+        setOverviewError(error instanceof Error ? error.message : "Unable to load metrics.");
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setOverviewLoading(false);
+    });
+    return () => controller.abort();
+  }, [user?.id, activeTenantId, activePage, billingStatus?.allowed, workspaceContext, overviewEpoch]);
 
   async function changeOwnPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -520,16 +567,22 @@ function App() {
           </div>
         </section>
 
-        <section className="stats-section" aria-label="Workspace metrics">
+        <section className="stats-section" aria-label="Workspace metrics" aria-busy={overviewLoading}>
           <div className="section-intro"><div><h2>Workspace snapshot</h2><p>{user && currentTenant
-            ? currentTenant.name + " is created. Live metrics will appear when inventory workflows are connected."
-            : "Live metrics will appear when your organization and data are connected."}</p></div><span className="preview-label">PREVIEW</span></div>
+            ? "Asset counts for " + currentTenant.name + ", limited to locations you can access."
+            : "Sign in and select a workspace to view live inventory metrics."}</p></div><span className="preview-label">{overviewLoading ? "LOADING" : overviewMetrics ? "LIVE DATA" : "NOT AVAILABLE"}</span></div>
           <div className="stats-grid">
-            <Metric label="Tracked assets" icon="◫" detail="Inventory at a glance" />
-            <Metric label="Assigned assets" icon="↗" detail="Custody and ownership" />
-            <Metric label="In maintenance" icon="⌁" detail="Service and repair queue" />
-            <Metric label="Open requests" icon="◷" detail="Items needing a decision" />
+            <Metric label="Tracked assets" value={overviewMetrics?.total ?? null} icon="◫" detail="Assets visible in your workspace" />
+            <Metric label="Assigned assets" value={overviewMetrics?.assigned ?? null} icon="↗" detail="Currently assigned to custodians" />
+            <Metric label="In service" value={overviewMetrics?.inService ?? null} icon="⌁" detail="Assets currently in service" />
+            <Metric label="In transit" value={overviewMetrics?.inTransit ?? null} icon="⇄" detail="Assets awaiting transfer receipt" />
           </div>
+          {overviewError && <p className="asset-inline-error" role="alert">{overviewError}</p>}
+          {user && activeWorkspaceContext && !activeWorkspaceContext.permissions.includes("asset.read") &&
+            <p className="asset-inline-hint">Your company role does not permit viewing asset totals.</p>}
+          {user && activeWorkspaceContext?.permissions.includes("asset.read") &&
+            <button className="topbar-button ghost overview-refresh" type="button" disabled={overviewLoading}
+              onClick={() => setOverviewEpoch(value => value + 1)}>Refresh metrics</button>}
           {activeWorkspaceContext && (
             <div className="workspace-access-summary">
               <span><strong>{activeWorkspaceContext.membership.role.name}</strong> access loaded</span>
@@ -559,8 +612,8 @@ function App() {
   );
 }
 
-function Metric({ label, icon, detail }: { label: string; icon: string; detail: string }) {
-  return <article className="stat-card"><div className="stat-card-top"><span className="stat-icon">{icon}</span><span className="stat-placeholder">—</span></div><strong>{label}</strong><p>{detail}</p></article>;
+function Metric({ label, icon, detail, value }: { label: string; icon: string; detail: string; value: number | null }) {
+  return <article className="stat-card"><div className="stat-card-top"><span className="stat-icon">{icon}</span><span className="stat-placeholder">{value === null ? "—" : value.toLocaleString()}</span></div><strong>{label}</strong><p>{detail}</p></article>;
 }
 
 export default App;
