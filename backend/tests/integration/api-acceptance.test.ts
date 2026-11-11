@@ -420,6 +420,64 @@ test("registration, session security, tenant isolation, locations and assets wor
     const assetListBody = await assetList.json() as AssetListResponse;
     assert.ok(assetListBody.data.some((item) => item.id === createdAsset.data.id));
 
+
+    // P0 operational changes: role/location-checked damage and restoration,
+    // atomic bulk assignment, and custodian deactivation safety.
+    const lifecycleChange = (action: string, message: string) => fetch(
+      `${baseUrl}/api/assets/${createdAsset.data.id}/lifecycle`, {
+        method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+          csrfToken:ownerA.csrfToken,json:true,origin:true}),
+        body:JSON.stringify({action,reason:message}),
+      });
+    const damaged = await lifecycleChange("DAMAGE","Damaged for integration acceptance test");
+    assert.equal(damaged.status,200,"Damage must be tracked with authorization and audit.");
+    assert.equal((await damaged.json() as {data:{status:string}}).data.status,"DAMAGED");
+    const restored = await lifecycleChange("RESTORE","Service inspection complete and asset recovered");
+    assert.equal(restored.status,200);
+    assert.equal((await restored.json() as {data:{status:string}}).data.status,"AVAILABLE");
+
+    const testEmployeeResponse = await fetch(`${baseUrl}/api/employees`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({employeeCode:"P0-"+suffix,firstName:"P0",lastName:"Custodian",
+        homeLocationId:createdLocation.data.id}),
+    });
+    assert.equal(testEmployeeResponse.status,201);
+    const testEmployee = await testEmployeeResponse.json() as {data:{id:string}};
+    const bulk = await fetch(`${baseUrl}/api/assets/bulk-assign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({assetIds:[createdAsset.data.id],employeeId:testEmployee.data.id,
+        notes:"Verified employee custody"}),
+    });
+    assert.equal(bulk.status,200,"Bulk assignment should work atomically.");
+    assert.equal((await bulk.json() as {data:{count:number}}).data.count,1);
+    const rejectedInactive = await fetch(`${baseUrl}/api/employees/${testEmployee.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(rejectedInactive.status,409,"Custodians with assigned assets cannot be deactivated.");
+    const bulkRepeat = await fetch(`${baseUrl}/api/assets/bulk-assign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({assetIds:[createdAsset.data.id],employeeId:testEmployee.data.id}),
+    });
+    assert.equal(bulkRepeat.status,409,"A second assignment cannot duplicate custody.");
+    const unassigned = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}/unassign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({notes:"Custody returned after P0 test"}),
+    });
+    assert.equal(unassigned.status,200);
+    const deactivate = await fetch(`${baseUrl}/api/employees/${testEmployee.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(deactivate.status,200);
+    assert.equal((await deactivate.json() as {data:{isActive:boolean}}).data.isActive,false);
+
     // P0 company metadata, supplier/master-data isolation and safe location archiving.
     const profileResponse = await fetch(`${baseUrl}/api/workspace/profile`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
