@@ -443,8 +443,11 @@ test("registration, session security, tenant isolation, locations and assets wor
         currentLocationId:createdLocation.data.id}),
     });
     assert.equal(automaticAsset.status,201,"Automatically numbered assets should be accepted.");
-    const automaticBody = await automaticAsset.json() as {data:{inventoryNumber:string}};
+    const automaticBody = await automaticAsset.json() as {data:{id:string;inventoryNumber:string}};
     assert.match(automaticBody.data.inventoryNumber,/^SL-AM-[0-9]{6,}$/);
+    // Preserve existing integration expectations (two retained test assets).
+    await prisma.assetTransaction.deleteMany({where:{tenantId:ownerA.tenant.id,assetId:automaticBody.data.id}});
+    await prisma.asset.delete({where:{id:automaticBody.data.id}});
 
     const foreignProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
       headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerA.tenant.id}),
