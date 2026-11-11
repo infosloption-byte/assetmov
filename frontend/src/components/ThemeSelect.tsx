@@ -31,7 +31,7 @@ export default function ThemeSelect({ options, value, defaultValue, name, requir
         if (event.key === "Enter" || event.key === "Escape") setOpen(false);
       }}>
       {options.map(option => <button type="button" role="option" aria-selected={option.value === currentValue} key={option.value}
-        className={"theme-select-option " + (option.value === value ? "selected" : "")} disabled={option.disabled}
+        className={"theme-select-option " + (option.value === currentValue ? "selected" : "")} disabled={option.disabled}
         onClick={() => { choose(option.value); setOpen(false); }}>{option.label}</button>)}
     </div>}
   </div>;
