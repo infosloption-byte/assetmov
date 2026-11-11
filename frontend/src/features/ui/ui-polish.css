@@ -1,0 +1,218 @@
+/* P0 responsive design pass: reuse the AssetMov green palette across workflows. */
+:root { --control-height: 42px; --control-line: #dce6dc; --focus-ring: #376a5130; }
+
+:is(.asset-register-page, .asset-modal, .account-sessions-list) button {
+  font-family: inherit;
+}
+:is(.asset-register-page, .asset-modal) :is(button, input, textarea, select):focus-visible,
+.account-menu-trigger:focus-visible, .account-menu-item:focus-visible {
+  outline: 2px solid #376a51;
+  outline-offset: 2px;
+}
+:is(.asset-register-page, .asset-modal) :is(button, input, textarea, select):disabled {
+  cursor: not-allowed;
+}
+.asset-register-page .primary-button, .asset-modal .primary-button {
+  min-height: 39px;
+  justify-content: center;
+  gap: 9px;
+  white-space: nowrap;
+  border: 1px solid var(--green);
+}
+:is(.asset-register-page, .asset-modal) .plain-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 38px; padding: 9px 15px;
+  border: 1px solid var(--control-line); border-radius: 8px;
+  background: #fff; color: #45604c; font-size: 12px; font-weight: 700;
+}
+:is(.asset-register-page, .asset-modal) .plain-button:hover { background: #f1f6ef; }
+:is(.asset-register-page, .asset-modal) .text-button {
+  border: 0; background: transparent; padding: 5px 4px;
+  font-size: 11px; line-height: 1.35; text-decoration: none;
+}
+:is(.asset-register-page, .asset-modal) .text-button:hover { text-decoration: underline; }
+.asset-table .row-open-button { display: inline-grid; place-items: center; width: auto; min-width: 32px; padding: 5px 9px; }
+.asset-table :is(input[type="checkbox"], input[type="radio"]) { width: 16px; height: 16px; margin: 0; accent-color: var(--green); cursor: pointer; }
+.asset-table td:has(> input[type="checkbox"]) { width: 48px; text-align: center; }
+
+/* Existing form rules applied width:100% and padding to checkboxes, creating huge blue squares. */
+:is(.asset-create-form, .asset-edit-form, .asset-custody-form, .company-permissions, .asset-register-page)
+  :is(input[type="checkbox"], input[type="radio"]) {
+  display: inline-block; flex: 0 0 17px; width: 17px !important; min-width: 17px;
+  height: 17px !important; min-height: 17px !important;
+  padding: 0 !important; margin: 0;
+  box-shadow: none; border-radius: 4px; accent-color: var(--green);
+  vertical-align: middle;
+}
+:is(.asset-create-form, .asset-edit-form, .asset-custody-form) label:has(> input[type="checkbox"]),
+:is(.asset-create-form, .asset-edit-form, .asset-custody-form) label:has(> input[type="radio"]),
+.asset-switch-row {
+  display: inline-flex; align-items: center; gap: 10px;
+  width: fit-content; max-width: 100%; min-height: 34px;
+  margin: 10px 0 5px; padding: 0;
+  font-size: 12px; font-weight: 600; line-height: 1.5;
+  cursor: pointer;
+}
+.asset-create-form, .asset-edit-form { gap: 2px; min-width: 0; }
+:is(.asset-create-form, .asset-edit-form) :is(label, textarea, input, select) { min-width: 0; }
+:is(.asset-create-form, .asset-edit-form) > label { line-height: 1.5; }
+:is(.asset-create-form, .asset-edit-form) :is(input, textarea):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.asset-custody-form :is(input:not([type="checkbox"]),textarea),
+.asset-import-panel input[type="file"] {
+  width: 100%; min-height: var(--control-height); border: 1px solid var(--control-line);
+  border-radius: 9px; padding: 10px 12px; background: white; color: #344c3a;
+  font-size: 12px;
+}
+:is(.asset-create-form, .asset-edit-form) :is(input, textarea):not([type="checkbox"]):focus,
+.asset-custody-form textarea:focus {
+  outline: 0; border-color: #7ca287; box-shadow: 0 0 0 3px var(--focus-ring);
+}
+:is(.asset-create-form, .asset-edit-form) input::placeholder,
+.asset-custody-form input::placeholder,
+.asset-register-filters input::placeholder,
+.asset-import-panel input::placeholder { color: #97a49b; opacity: 1; }
+.asset-form-two-col > label { min-width: 0; display: flex; flex-direction: column; }
+.asset-modal { width: min(100%, 620px); padding: 24px; max-height: min(90dvh, 900px); overscroll-behavior: contain; }
+.asset-modal :is(input[type="date"],input[type="datetime-local"]) { color-scheme: light; }
+:is(.asset-modal, .asset-register-page) :is(input[type="date"],input[type="datetime-local"]) {
+  display: block; width: 100%; min-height: var(--control-height);
+  padding: 9px 12px; border: 1px solid var(--control-line);
+  border-radius: 9px; background: #fff; color: #344c3a;
+  font: 500 12px "DM Sans", sans-serif;
+}
+:is(.asset-modal, .asset-register-page) :is(input[type="date"],input[type="datetime-local"]):focus {
+  outline: 0; border-color: #7ca287; box-shadow: 0 0 0 3px var(--focus-ring);
+}
+:is(input[type="date"], input[type="datetime-local"])::-webkit-calendar-picker-indicator {
+  cursor: pointer; opacity: .7; width: 17px; height: 17px;
+}
+:is(input[type="date"], input[type="datetime-local"])::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+.asset-modal-actions { position: sticky; bottom: -24px; z-index: 3; background: #fff; padding: 14px 0 1px; }
+.asset-modal .asset-inline-hint { font-size: 11px; line-height: 1.65; }
+.asset-modal .asset-inline-error { font-size: 11px; }
+
+/* Structured asset search with aligned labels, consistent dropdowns and dates. */
+.asset-register-toolbar { min-width: 0; }
+.asset-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 9px; }
+.asset-search-panel {
+  display: grid; gap: 16px; margin: 0 0 18px;
+  padding: 19px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+}
+.asset-search-panel .asset-search-form { width: 100%; max-width: none; min-height: var(--control-height); }
+.asset-register-filters {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px; align-items: end;
+}
+.asset-register-filters .asset-filter-field {
+  display: flex; flex-direction: column; gap: 7px; min-width: 0;
+  margin: 0; color: #526655; font-size: 11px; font-weight: 700;
+}
+.asset-register-filters .asset-filter-field:first-child { grid-column: span 2; }
+.asset-register-filters .asset-filter-field .theme-select { width: 100%; }
+.asset-register-filters .asset-filter-field .theme-select-trigger,
+.asset-status-filter .theme-select-trigger { min-height: var(--control-height); }
+.asset-status-filter { align-items: stretch; min-width: 0; }
+.asset-status-filter > .theme-select { min-width: 0; }
+.asset-register-filters .asset-filter-field input[type="date"] { min-width: 0; }
+.asset-search-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.asset-bulk-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 17px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: #f8faf7;
+}
+.asset-bulk-bar strong { margin-right: auto; color: #3b5e47; font-size: 12px; }
+.asset-bulk-bar button { flex-shrink: 0; }
+.asset-table-footer { align-items: center; flex-wrap: wrap; }
+.asset-table-footer > div { display: flex; align-items: center; gap: 8px; }
+.asset-table-footer button:disabled { opacity: .45; }
+
+/* One tab per master-data segment; inactive panels are not mounted. */
+.master-data-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 22px; padding: 5px;
+  border: 1px solid var(--line); border-radius: 12px; background: #eaf0e9; }
+.master-data-tabs button { flex: 1 1 155px; min-height: 43px; padding: 10px 14px; border: 0;
+  border-radius: 8px; color: #5f7364; background: transparent; font-size: 12px; font-weight: 700; }
+.master-data-tabs button:hover { background: #f7faf5; }
+.master-data-tabs button[aria-selected="true"] { color: #27533a; background: #fff; box-shadow: 0 2px 9px #223b2c12; }
+.master-data-panel { min-width: 0; }
+.master-data-panel > .asset-register-toolbar { margin-top: 0; }
+.master-data-panel .asset-table { min-width: 580px; }
+.master-data-panel .master-data-count { font-size: 11px; color: #7b8980; }
+
+/* Account identity with consolidated actions, no scattered top-bar buttons. */
+.account-menu { position: relative; min-width: 0; }
+.account-menu-trigger {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  min-height: 42px; max-width: 230px; padding: 5px 10px;
+  border: 1px solid transparent; border-radius: 10px;
+  background: transparent; color: #344a3a; cursor: pointer;
+}
+.account-menu-trigger:hover,.account-menu-trigger[aria-expanded="true"] {
+  border-color: var(--control-line); background: #f3f7f2;
+}
+.account-menu-trigger .signed-in-copy { min-width: 0; }
+.account-menu-trigger .avatar { flex: 0 0 32px; }
+.account-menu-trigger .account-chevron { color: #6a8b72; font-size: 14px; }
+.account-menu-panel {
+  position: absolute; z-index: 100; right: 0; top: calc(100% + 8px);
+  width: min(310px, calc(100vw - 30px)); padding: 8px;
+  background: white; border: 1px solid #dce7dc;
+  border-radius: 13px; box-shadow: 0 20px 50px #213f2a24;
+}
+.account-menu-identity { display: grid; gap: 4px; padding: 12px; border-bottom: 1px solid var(--line); }
+.account-menu-identity strong { font: 700 13px Manrope,sans-serif; }
+.account-menu-identity small { color: #7e8b80; font-size: 11px; overflow-wrap: anywhere; }
+.account-menu-item { display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 12px 11px; border: 0; border-radius: 8px;
+  background: white; text-align: left; font-size: 12px; color: #415849; font-weight: 600; }
+.account-menu-item:hover { background: #edf5ec; color: #285538; }
+.account-menu-item.danger { color: #975446; }
+.account-menu-item.danger:hover { background: #fff2ee; }
+.account-menu-divider { height: 1px; margin: 6px 3px; background: var(--line); }
+.account-menu .account-unverified { color: #a05f3d; font-size: 10px; font-weight: 600; }
+
+/* Same control density for forms, table actions, dialogs at all breakpoints. */
+@media(max-width: 1180px) {
+  .asset-register-filters { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .asset-register-filters .asset-filter-field:first-child { grid-column: span 2; }
+  .topbar-right { gap: 8px; }
+}
+@media(max-width: 900px) {
+  .asset-register-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .asset-register-filters .asset-filter-field:first-child { grid-column: span 2; }
+  .asset-page-heading { align-items: flex-start; }
+  .asset-table { min-width: 710px; }
+  .topbar { gap: 10px; }
+  .breadcrumb { min-width: 0; }
+  .breadcrumb span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+@media(max-width: 780px) {
+  .asset-register-toolbar.asset-bulk-bar { flex-direction: row; align-items: center; }
+  .asset-heading-actions { justify-content: flex-start; }
+  .asset-register-page .asset-page-heading { flex-direction: column; }
+  .account-menu-trigger { max-width: 175px; }
+  .account-menu-trigger .signed-in-copy { display: flex; }
+  .main-area { min-width: 0; }
+}
+@media(max-width: 540px) {
+  .asset-search-panel { padding: 13px; }
+  .asset-register-filters { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .asset-register-filters .asset-filter-field:first-child { grid-column: 1; }
+  .asset-search-panel .asset-search-form { width: 100%; }
+  .asset-search-actions { align-items: stretch; flex-direction: column; }
+  .asset-search-actions > * { width: 100%; }
+  .asset-modal { padding: 16px; max-height: 94dvh; }
+  .asset-modal-actions { bottom: -16px; flex-wrap: wrap; }
+  .asset-modal-actions > button { flex: 1; min-width: 100px; }
+  .asset-bulk-bar { flex-direction: column; align-items: stretch; }
+  .asset-bulk-bar > * { width: 100%; }
+  .master-data-tabs button { flex-basis: calc(50% - 4px); padding: 9px 7px; font-size: 11px; }
+  .topbar { flex-wrap: wrap; height: auto; min-height: 64px; padding: 10px 0; gap: 8px; }
+  .topbar .breadcrumb { flex: 1; min-width: 0; }
+  .topbar-right { min-width: 0; }
+  .api-pill { white-space: nowrap; }
+  .account-menu-trigger { padding: 3px 4px; }
+  .account-menu-trigger .signed-in-copy { display: none; }
+  .account-menu-trigger .avatar { display: grid; }
+  .account-menu-trigger .account-chevron { display: none; }
+  .account-menu-panel { right: 0; }
+}
