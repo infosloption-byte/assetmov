@@ -70,7 +70,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
     finally { setSaving(false); }
   }
 
-  return <section className="asset-register-page">
+  return <section className="asset-register-page company-profile-page">
     <div className="asset-page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> COMPANY SETUP</div>
       <h1 className="asset-page-title">Company profile & preferences</h1>
       <p>Manage your workspace's identity, reporting dates and default regional settings.</p></div>
@@ -81,7 +81,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
     {error && <div className="asset-inline-error" role="alert">{error}</div>}
     {message && <div className="asset-success" role="status">{message}</div>}
     {company && canManage && <form key={company.id} className="asset-create-form" onSubmit={event=>void save(event)}>
-      <label>Company name<input name="name" required minLength={2} maxLength={191} defaultValue={company.name}/></label>
+      <label>Company name<input placeholder="e.g. Head Office Holdings" name="name" required minLength={2} maxLength={191} defaultValue={company.name}/></label>
       <label>Workspace identifier<input readOnly value={company.slug} aria-label="Workspace identifier"/></label>
       <p className="asset-inline-hint">The workspace identifier is immutable to avoid breaking tenant references.</p>
       <div className="asset-form-two-col">
@@ -94,7 +94,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
       </div>
       <div className="asset-form-two-col">
         <label>Currency (ISO 4217)
-          <input name="currency" required minLength={3} maxLength={3} defaultValue={company.currency}/>
+          <input name="currency" placeholder="e.g. LKR" required minLength={3} maxLength={3} defaultValue={company.currency}/>
         </label>
         <div><label>Date format</label>
           <ThemeSelect label="Company date format" value={format} onChange={value=>setFormat(value as Company["dateFormat"])}
@@ -102,7 +102,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
               {value:"MM/DD/YYYY",label:"MM/DD/YYYY"}]}/>
         </div>
       </div>
-      <label>Automatic inventory number prefix<input name="inventoryPrefix" required minLength={2} maxLength={16}
+      <label>Automatic inventory number prefix<input placeholder="e.g. AM" name="inventoryPrefix" required minLength={2} maxLength={16}
         pattern="(?:[A-Za-z0-9_]|-){2,16}" defaultValue={company.inventoryPrefix}/></label>
       <p className="asset-inline-hint">New automatically numbered assets use this prefix. Existing inventory numbers never change.</p>
       <label>Fiscal year starts</label>
