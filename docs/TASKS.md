@@ -197,7 +197,7 @@ Use this as the working implementation checklist. Keep tasks unchecked until imp
 
 ## J. Reports, dashboard and exports — P1
 
-- [ ] Tenant-scoped dashboard cards and operational queues.
+- [ ] Tenant-scoped dashboard cards and operational queues. Company Overview now has role/location-scoped live asset counts in a stacked feature branch; browser and CI acceptance remain pending, and operational queues are still future work.
 - [ ] Asset summary, detail/timeline and location reports.
 - [ ] Employee/user asset reports.
 - [ ] Request/approval and service reports.
