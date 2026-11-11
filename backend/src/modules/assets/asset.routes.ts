@@ -1016,7 +1016,7 @@ assetRouter.post("/:id/lifecycle", requireSession, requireTenant, requireCsrf,
         if (!existing) throw new Error("ASSET_NOT_FOUND");
         if (!request.auth?.allLocationsAccess && (
             !existing.currentLocationId ||
-            !(request.auth.manageableLocationIds ?? []).includes(existing.currentLocationId)
+            !(request.auth?.manageableLocationIds ?? []).includes(existing.currentLocationId)
           )) throw new Error("ASSET_LOCATION_DENIED");
         // Returning assigned assets to stock precedes damage/disposal; prevent
         // silently discarding custody or interrupting in-transit assets.
@@ -1092,7 +1092,7 @@ assetRouter.post("/bulk-assign", requireSession, requireTenant,
         for (const asset of assets) {
           if (!request.auth?.allLocationsAccess && (
               !asset.currentLocationId ||
-              !(request.auth.manageableLocationIds ?? []).includes(asset.currentLocationId)
+              !(request.auth?.manageableLocationIds ?? []).includes(asset.currentLocationId)
             )) throw new Error("ASSET_LOCATION_SCOPE_DENIED");
           if (asset.status !== "AVAILABLE" || asset.assignedEmployeeId ||
               asset.currentLocationId !== employee.homeLocationId) {
