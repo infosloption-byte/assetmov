@@ -212,7 +212,7 @@ locationRouter.patch(
         if (!current) throw new Error("LOCATION_NOT_FOUND");
         const parentId = input.parentId === undefined ? current.parentId : input.parentId;
         if (parentId && !canManage(parentId)) throw new Error("LOCATION_ACCESS_DENIED");
-        if (!parentId && !request.auth?.allLocationsAccess) {
+        if (input.parentId === null && !request.auth?.allLocationsAccess) {
           throw new Error("ROOT_LOCATION_DENIED");
         }
         // Reject self-parenting, inactive/foreign parents and ancestor cycles.
