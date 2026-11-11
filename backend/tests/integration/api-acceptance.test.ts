@@ -432,9 +432,9 @@ test("registration, session security, tenant isolation, locations and assets wor
     const damaged = await lifecycleChange("DAMAGE","Damaged for integration acceptance test");
     assert.equal(damaged.status,200,"Damage must be tracked with authorization and audit.");
     assert.equal((await damaged.json() as {data:{status:string}}).data.status,"DAMAGED");
-    const restored = await lifecycleChange("RESTORE","Service inspection complete and asset recovered");
-    assert.equal(restored.status,200);
-    assert.equal((await restored.json() as {data:{status:string}}).data.status,"AVAILABLE");
+    const lifecycleRestored = await lifecycleChange("RESTORE","Service inspection complete and asset recovered");
+    assert.equal(lifecycleRestored.status,200);
+    assert.equal((await lifecycleRestored.json() as {data:{status:string}}).data.status,"AVAILABLE");
 
     const testEmployeeResponse = await fetch(`${baseUrl}/api/employees`,{
       method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
@@ -507,10 +507,10 @@ test("registration, session security, tenant isolation, locations and assets wor
     await prisma.assetTransaction.deleteMany({where:{tenantId:ownerA.tenant.id,assetId:automaticBody.data.id}});
     await prisma.asset.delete({where:{id:automaticBody.data.id}});
 
-    const foreignProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
+    const foreignCompanyProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
       headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerA.tenant.id}),
     });
-    assert.equal(foreignProfile.status,403);
+    assert.equal(foreignCompanyProfile.status,403);
 
     const supplierResponse = await fetch(`${baseUrl}/api/vendors/suppliers`,{
       method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
