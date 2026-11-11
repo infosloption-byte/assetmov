@@ -155,6 +155,42 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
   }
 });
 
+memberRouter.post("/:id/invitation", requireCsrf, async (request, response, next) => {
+  if (!accountEmailReady()) {
+    response.status(503).json({ error: { code: "EMAIL_UNAVAILABLE", message: "Transactional email is not configured." } });
+    return;
+  }
+  const membershipId = request.params.id;
+  if (typeof membershipId !== "string" || !membershipId) {
+    response.status(400).json({ error: { code: "VALIDATION_ERROR" } }); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const membership = await prisma.membership.findFirst({
+      where: { id: membershipId, tenantId, isActive: true },
+      include: { user: { select: { id: true, email: true, emailVerifiedAt: true, disabledAt: true } } },
+    });
+    if (!membership || membership.user.disabledAt || membership.user.emailVerifiedAt) {
+      response.status(409).json({ error: { code: "INVITATION_NOT_ALLOWED",
+        message: "Only active, unverified company users can receive an invitation." } }); return;
+    }
+    const since = new Date(Date.now() - 15 * 60_000);
+    const previous = await prisma.accountToken.count({
+      where: { userId: membership.user.id, kind: "INVITATION", createdAt: { gt: since } },
+    });
+    if (previous >= 3) {
+      response.status(429).json({ error: { code: "INVITATION_RATE_LIMITED",
+        message: "Invitation limit reached. Try again later." } }); return;
+    }
+    const raw = await issueToken(membership.user.id, "INVITATION", 48 * 60);
+    await sendAccountLink(membership.user.email, "invite", raw);
+    response.status(202).json({ message: "Invitation sent." });
+  } catch (error) {
+    logger.warn("Company user invitation retry failed.");
+    next(error);
+  }
+});
+
 const profileSchema = z.object({ fullName: z.string().trim().min(2).max(191) }).strict();
 
 memberRouter.patch("/:id/profile", requireCsrf, async (request, response, next) => {
