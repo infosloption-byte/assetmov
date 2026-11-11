@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
-import { requireSession } from "../auth/auth-middleware.js";
+import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
 import { requirePermission, requireTenant } from "./tenant-context.js";
 
 export const workspaceRouter = Router();
@@ -79,3 +80,56 @@ workspaceRouter.get("/overview",
     }
   },
 );
+
+const companyProfileSchema = z.object({
+  name: z.string().trim().min(2).max(191),
+  timezone: z.string().trim().min(1).max(64).refine(value => {
+    try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; }
+    catch { return false; }
+  }, "Provide a valid IANA timezone."),
+  locale: z.string().trim().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/).max(24),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  dateFormat: z.enum(["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"]),
+  fiscalYearStartMonth: z.number().int().min(1).max(12),
+}).strict();
+
+workspaceRouter.get("/profile", requireSession, requireTenant,
+  requirePermission("tenant.settings.manage"), async (request, response, next) => {
+  try {
+    const tenantId = request.auth?.tenantId;
+    const company = await prisma.tenant.findUnique({
+      where: { id: tenantId! },
+      select: { id: true, name: true, slug: true, status: true, timezone: true,
+        locale: true, currency: true, dateFormat: true, fiscalYearStartMonth: true },
+    });
+    if (!company) { response.status(404).json({ error: { code: "COMPANY_NOT_FOUND" } }); return; }
+    response.json({ data: company });
+  } catch (error) { next(error); }
+});
+
+workspaceRouter.patch("/profile", requireSession, requireTenant,
+  requirePermission("tenant.settings.manage"), requireCsrf, async (request, response, next) => {
+  const parsed = companyProfileSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: { code: "VALIDATION_ERROR",
+      message: "Check your company profile, timezone and fiscal preferences." } }); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const data = await prisma.$transaction(async tx => {
+      const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+      const company = await tx.tenant.update({ where: { id: tenantId }, data: parsed.data });
+      const snapshot = (record: typeof company) => ({ name: record.name, timezone: record.timezone,
+        locale: record.locale, currency: record.currency, dateFormat: record.dateFormat,
+        fiscalYearStartMonth: record.fiscalYearStartMonth });
+      await tx.auditLog.create({ data: { tenantId, actorUserId: request.auth!.userId,
+        action: "company.profile_updated", entityType: "Tenant", entityId: tenantId,
+        oldData: snapshot(before), newData: snapshot(company),
+        ipAddress: request.ip?.slice(0, 64) } });
+      return company;
+    });
+    response.json({ data: { id: data.id, name: data.name, slug: data.slug,
+      timezone: data.timezone, locale: data.locale, currency: data.currency,
+      dateFormat: data.dateFormat, fiscalYearStartMonth: data.fiscalYearStartMonth } });
+  } catch (error) { next(error); }
+});
