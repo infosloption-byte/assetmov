@@ -28,9 +28,9 @@ async function issueToken(userId: string, purpose: Purpose, minutes: number): Pr
   const raw = createOpaqueToken();
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
   await prisma.$transaction(async tx => {
-    // A new request replaces previous unused tokens for the same purpose.
-    await tx.accountToken.deleteMany({
-      where: { userId, kind: purpose, usedAt: null },
+    // Revoke previous tokens without deleting rate-limit history.
+    await tx.accountToken.updateMany({
+      where: { userId, kind: purpose, usedAt: null }, data: { usedAt: new Date() },
     });
     await tx.accountToken.create({ data: {
       userId, kind: purpose, tokenHash: hashToken(raw), expiresAt,
