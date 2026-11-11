@@ -1,7 +1,7 @@
 # Company Overview — live inventory metrics
 
-**Branch:** `feature/company-live-overview-20261111` (stacked on `feature/dedicated-platform-console`).  
-**Status:** source committed; full WAMP/MySQL and browser acceptance is pending.
+**Merged:** `main` on 2026-11-11 via PR #9, after PRs #6–#8.  
+**Status:** WAMP TypeScript/lint/37 unit tests/build and 1/1 MySQL API integration passed on the original feature; the later mobile navigation and role-only tab adjustments still require browser and final build verification.
 
 ## Scope
 
@@ -66,6 +66,7 @@ missing tenant context and cross-tenant denial. Manually verify the Company
 Overview for a tenant owner, location-limited viewer, non-asset-reader and
 expired subscription, and switch between companies in the same session.
 
-CI currently reports `startup_failure` before jobs run. Do not mark this
-feature or its parent PRs verified until the local checks and browser walkthrough
-pass; do not merge automatically.
+The owner requested immediate merges with the Paddle sandbox and GitHub
+Actions investigations deferred. All four PRs were merged into `main` in order.
+This does **not** imply successful sandbox payment, working GitHub Actions or
+a completed interactive browser walkthrough. See [BROWSER_ACCEPTANCE.md](BROWSER_ACCEPTANCE.md).
