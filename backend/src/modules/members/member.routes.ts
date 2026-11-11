@@ -46,7 +46,7 @@ memberRouter.get("/", async (request, response, next) => {
           id: true, isActive: true, allLocationsAccess: true, createdAt: true,
           locationAssignments: { select: { locationId: true, canManage: true } },
           role: { select: { id: true, key: true, name: true } },
-          user: { select: { id: true, email: true, fullName: true, disabledAt: true } },
+          user: { select: { id: true, email: true, fullName: true, emailVerifiedAt: true, disabledAt: true } },
         },
         orderBy: { createdAt: "asc" },
       }),
