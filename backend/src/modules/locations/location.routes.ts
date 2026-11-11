@@ -17,6 +17,7 @@ const locationCreateSchema = z.object({
 const locationListSchema = z.object({
   q: z.string().trim().max(191).optional(),
   parentId: z.string().trim().min(1).optional(),
+  includeInactive: z.enum(["true", "false"]).default("false"),
 }).strict();
 
 const locationUpdateSchema = z.object({
