@@ -637,7 +637,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       });
       const payload = await response.json().catch(()=>({})) as { data?: AssetSummary; error?: {message?:string} };
       if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Lifecycle update failed.");
-      setSelectedAsset(current => current ? { ...current, ...payload.data } : current);
+      const updatedAsset = payload.data;
+      setSelectedAsset(current => current ? { ...current, ...updatedAsset } : current);
       setLifecycleAction("");setLifecycleReason("");
       setSuccessMessage("Asset lifecycle updated.");
       await loadAssets();
