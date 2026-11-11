@@ -144,6 +144,7 @@ model User {
   updatedAt       DateTime           @updatedAt
   memberships       Membership[]
   sessions          Session[]
+  accountTokens     AccountToken[]
   auditEvents       AuditLog[]          @relation("AuditActor")
   assetEvents       AssetTransaction[]  @relation("TransactionActor")
   submittedRequests AssetRequest[]      @relation("RequestSubmitter")
@@ -151,6 +152,20 @@ model User {
   createdTransfers  AssetTransfer[]     @relation("TransferCreator")
   resolvedTransferLines AssetTransferLine[] @relation("TransferLineResolver")
   platformAuditEvents   PlatformAuditLog[]   @relation("PlatformAuditActor")
+}
+
+model AccountToken {
+  id        String @id @default(cuid()) @db.VarChar(36)
+  userId    String @db.VarChar(36)
+  kind      String @db.VarChar(32)
+  tokenHash String @unique @db.Char(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, expiresAt])
+  @@index([expiresAt, usedAt])
 }
 
 model Session {
