@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
+import AccountRecoveryPage from "./features/auth/AccountRecoveryPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 import LocationsPage from "./features/locations/LocationsPage";
@@ -50,6 +51,8 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
+  const [recoveryMode] = useState(() => ["forgot", "reset", "verify"].includes(new URLSearchParams(window.location.search).get("accountAction") ?? ""));
+  const [accountNotice, setAccountNotice] = useState("");
   const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "profile" | "masterData" | "billing">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [platformMode, setPlatformMode] = useState(false);
@@ -354,6 +357,23 @@ function App() {
     }
   }
 
+  if (recoveryMode) return <AccountRecoveryPage/>;
+
+  async function requestEmailVerification(): Promise<void> {
+    if (!csrfToken) { setActionError("Please sign in again to verify your email."); return; }
+    try {
+      const response = await fetch(apiBaseUrl + "/auth/email/verification/request", {
+        method: "POST", credentials: "include",
+        headers: { "X-CSRF-Token": csrfToken, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const result = await response.json().catch(() => ({})) as {message?:string;error?:{message?:string}};
+      if (!response.ok) throw new Error(result.error?.message ?? "Unable to send verification email.");
+      setAccountNotice(result.message ?? "Please check your inbox.");
+      setActionError("");
+    } catch (error) { setActionError(error instanceof Error ? error.message : "Verification request failed."); }
+  }
+
   if (authMode) {
     return (
       <AuthPage
@@ -442,6 +462,7 @@ function App() {
                 )}
                 <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
                 <div className="avatar" aria-label={user.fullName}>{initials}</div>
+                {!user.emailVerified && <button className="topbar-button ghost" type="button" onClick={() => void requestEmailVerification()}>Verify email</button>}
                 <button className="topbar-button ghost" type="button" onClick={() => { setPasswordError(""); setPasswordDialog(true); }}>Password</button>
                 <button className="topbar-button ghost" type="button" onClick={() => { setSessionsDialog(true); void loadSessions(); }}>Sessions</button>
                 <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
@@ -482,6 +503,7 @@ function App() {
             <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setPasswordDialog(false)}>Cancel</button><button className="primary-button" disabled={passwordBusy} type="submit">Update password</button></div>
           </form></section></div>}
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
+        {accountNotice && <div className="asset-success" role="status">{accountNotice}</div>}
 
         {user && activeTenantId && (billingLoading || !billingStatus && !billingError) ? (
           <div className="billing-gate" role="status"><div className="billing-gate-body">
