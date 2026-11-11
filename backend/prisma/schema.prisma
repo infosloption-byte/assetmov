@@ -108,6 +108,7 @@ model Tenant {
   roles             Role[]
   requestItems      AssetRequestItem[]
   membershipLocations MembershipLocation[]
+  assetNumberSequence AssetNumberSequence?
   locations         Location[]
   employees         Employee[]
   categories        AssetCategory[]
@@ -377,6 +378,13 @@ model Manufacturer {
   @@unique([tenantId, name])
   @@unique([tenantId, id])
   @@index([tenantId, isActive])
+}
+
+model AssetNumberSequence {
+  tenantId  String @id @db.VarChar(36)
+  prefix    String @default("AM") @db.VarChar(16)
+  nextValue Int @default(1)
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Asset {
