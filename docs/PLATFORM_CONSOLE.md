@@ -1,7 +1,7 @@
 # AssetMov Dedicated Platform Console
 
-**Branch:** `feature/dedicated-platform-console` (stacked onto `feature/paddle-saas-billing-admin`)  
-**Status:** implementation committed, **not yet locally verified**. Do not merge until frontend/backend and MySQL acceptance checks pass.
+**Merged:** `main` on 2026-11-11 via PR #8, following #6 and #7.  
+**Status:** WAMP TypeScript/lint/37 unit tests/build and API MySQL acceptance passed on the combined PR #9 stack; browser walkthrough, Paddle sandbox and GitHub Actions were deferred by the owner.
 
 ## Required behavior
 
@@ -102,9 +102,15 @@ Remove-Item Env:ASSETMOV_RUN_DB_INTEGRATION_TESTS
 
 Adjust the connection string for your local MySQL credentials. Restore overrides before starting the real local development API.
 
+The final Platform Console mobile drawer now closes on Escape, exposes
+`aria-expanded`, hides the closed drawer from keyboard focus and marks
+background content inert while open. Company Admin role-only navigation also
+falls back to an authorized tab. Both need real-browser verification using
+[BROWSER_ACCEPTANCE.md](BROWSER_ACCEPTANCE.md).
+
 ## Not yet production accepted
 
-- The newly created branch has not been executed on the user's WAMP machine. Previous parent-branch green tests do not verify it.
+- The merged stack was executed against the user's WAMP setup: all reported typecheck, lint, 37 unit tests, build and API integration checks passed before the latest browser-oriented UX changes. Live mobile/browser acceptance remains open.
 - Platform reports and revenue pages provide factual operational aggregates from current DB records, not downloadable accounting reports, external SIEM events or a ledger.
 - The security page shows sessions and recorded audit actions; it is **not** a complete failed-login, intrusion-detection or breach-monitoring service.
 - Platform support email and internal operator notice are stored configuration; the notice is not a public tenant broadcast.
