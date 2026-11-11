@@ -1,4 +1,9 @@
 import { Router } from "express";
+import { randomBytes } from "node:crypto";
+import { env } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
+import { accountEmailReady, sendAccountLink } from "../auth/account-email.js";
+import { issueToken } from "../auth/account.routes.js";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { hashPassword } from "../auth/password.js";
@@ -10,10 +15,14 @@ export const memberRouter = Router();
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(191),
   fullName: z.string().trim().min(2).max(191),
-  initialPassword: z.string().min(12).max(128),
+  initialPassword: z.string().min(12).max(128).optional(),
+  invite: z.boolean().optional(),
   roleId: z.string().trim().min(1).max(36),
   allLocationsAccess: z.boolean().default(false),
-}).strict();
+}).strict().refine(input => input.invite === true
+  ? input.initialPassword === undefined
+  : Boolean(input.initialPassword),
+  "Select email invitation OR an initial development password.");
 const scopeSchema = z.object({
   allLocationsAccess: z.boolean(),
   locationIds: z.array(z.string().trim().min(1).max(36)).max(500),
@@ -59,15 +68,24 @@ memberRouter.get("/", async (request, response, next) => {
 memberRouter.post("/", requireCsrf, async (request, response, next) => {
   const parsed = createSchema.safeParse(request.body);
   if (!parsed.success) {
-    response.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Check the user's details, role and initial password." } }); return;
+    response.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Check the user details, role and invitation method." } }); return;
   }
   const tenantId = request.auth!.tenantId!;
   const input = parsed.data;
   if (input.allLocationsAccess && !request.auth!.allLocationsAccess) {
     response.status(403).json({ error: { code: "LOCATION_GRANT_DENIED" } }); return;
   }
+  if (input.invite && !accountEmailReady()) {
+    response.status(503).json({ error: { code: "EMAIL_UNAVAILABLE",
+      message: "Configure transactional email before sending invitations." } }); return;
+  }
+  if (!input.invite && env.NODE_ENV === "production") {
+    response.status(403).json({ error: { code: "INVITATION_REQUIRED",
+      message: "Production user creation requires a secure email invitation." } }); return;
+  }
   try {
-    const passwordHash = await hashPassword(input.initialPassword);
+    const passwordHash = await hashPassword(input.invite
+      ? randomBytes(48).toString("base64url") : input.initialPassword!);
     const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM Tenant WHERE id = ${tenantId} FOR UPDATE`;
       const subscription = await tx.tenantSubscription.findUnique({
@@ -108,7 +126,18 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
       } });
       return member;
     });
-    response.status(201).json({ data: result });
+    let invitationDelivery = "not_requested";
+    if (input.invite) {
+      try {
+        const raw = await issueToken(result.user.id, "INVITATION", 48 * 60);
+        await sendAccountLink(result.user.email, "invite", raw);
+        invitationDelivery = "sent";
+      } catch {
+        logger.warn("New company user invitation email failed.");
+        invitationDelivery = "failed";
+      }
+    }
+    response.status(201).json({ data: result, invitationDelivery });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const statuses: Record<string, number> = {
