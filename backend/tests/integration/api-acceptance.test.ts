@@ -1323,6 +1323,25 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers:requestHeaders({cookie:ownerA.cookie}),
     });
     assert.equal(oldSessionAfterReset.status,401);
+    // Invited users set their own password and prove mailbox ownership.
+    const inviteRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerB.userId,kind:"INVITATION",
+      tokenHash:createHash("sha256").update(inviteRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const inviteAccept = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:inviteRaw,newPassword:"Secure-Invitation-Password-2026!"}),
+    });
+    assert.equal(inviteAccept.status,200);
+    assert.ok((await prisma.user.findUniqueOrThrow({where:{id:ownerB.userId}})).emailVerifiedAt);
+    const inviteReplay = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:inviteRaw,newPassword:"Secure-Invitation-Password-2026!"}),
+    });
+    assert.equal(inviteReplay.status,400);
+
 
   } finally {
     try {
