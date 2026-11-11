@@ -141,7 +141,15 @@ assetRouter.get(
         prisma.asset.findMany({
           where,
           include: assetInclude,
-          orderBy: [{ [sortBy]: sortOrder }, { id: "asc" }],
+          orderBy: [
+            sortBy === "title" ? { title: sortOrder } :
+            sortBy === "createdAt" ? { createdAt: sortOrder } :
+            sortBy === "updatedAt" ? { updatedAt: sortOrder } :
+            sortBy === "status" ? { status: sortOrder } :
+            sortBy === "warrantyEnd" ? { warrantyEnd: sortOrder } :
+            { inventoryNumber: sortOrder },
+            { id: "asc" },
+          ],
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
