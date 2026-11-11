@@ -345,14 +345,14 @@ function EmployeePage({
             <div className="asset-modal-heading"><div><span className="module-tag">WORKFORCE DIRECTORY</span><h2 id="employeeEditTitle">Edit employee</h2><p>{editingEmployee.employeeCode}</p></div><button type="button" className="modal-close" aria-label="Close form" onClick={() => setEditingEmployee(null)}>×</button></div>
             <form className="asset-create-form" onSubmit={(event) => void updateEmployee(event)}>
               <label htmlFor="editEmployeeCode">Employee code <span>*</span></label>
-              <input id="editEmployeeCode" name="employeeCode" required maxLength={100} defaultValue={editingEmployee.employeeCode} />
+              <input id="editEmployeeCode" name="employeeCode" required maxLength={100} placeholder="e.g. EMP-001" defaultValue={editingEmployee.employeeCode} />
               <div className="asset-form-two-col">
-                <div><label htmlFor="editEmployeeFirstName">First name <span>*</span></label><input id="editEmployeeFirstName" name="firstName" required maxLength={100} defaultValue={editingEmployee.firstName} /></div>
-                <div><label htmlFor="editEmployeeLastName">Last name <span>*</span></label><input id="editEmployeeLastName" name="lastName" required maxLength={100} defaultValue={editingEmployee.lastName} /></div>
+                <div><label htmlFor="editEmployeeFirstName">First name <span>*</span></label><input id="editEmployeeFirstName" name="firstName" required maxLength={100} placeholder="First name" defaultValue={editingEmployee.firstName} /></div>
+                <div><label htmlFor="editEmployeeLastName">Last name <span>*</span></label><input id="editEmployeeLastName" name="lastName" required maxLength={100} placeholder="Last name" defaultValue={editingEmployee.lastName} /></div>
               </div>
               <div className="asset-form-two-col">
-                <div><label htmlFor="editEmployeeEmail">Email</label><input id="editEmployeeEmail" name="email" type="email" maxLength={191} defaultValue={editingEmployee.email ?? ""} /></div>
-                <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} defaultValue={editingEmployee.phone ?? ""} /></div>
+                <div><label htmlFor="editEmployeeEmail">Email</label><input id="editEmployeeEmail" name="email" type="email" maxLength={191} placeholder="e.g. employee@company.com" defaultValue={editingEmployee.email ?? ""} /></div>
+                <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} placeholder="e.g. +94 77 123 4567" defaultValue={editingEmployee.phone ?? ""} /></div>
               </div>
               <div className="asset-form-two-col">
                 <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer" placeholder="e.g. IT Officer" defaultValue={editingEmployee.designation ?? ""}/></label>
