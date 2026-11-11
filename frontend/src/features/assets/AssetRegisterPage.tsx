@@ -15,7 +15,7 @@ interface LocationSummary {
 }
 
 type CustomField = { key: string; label: string; type: "text" | "longText" | "number" | "date" | "boolean" | "singleSelect" | "multiSelect"; required: boolean; options?: string[] };
-type AssetModelOption = { id: string; name: string; fieldSchema: { version: number; fields: CustomField[] } | null };
+type AssetModelOption = { id: string; name: string; categoryId: string; category?: {id:string;name:string}; fieldSchema: { version: number; fields: CustomField[] } | null };
 type CustomValue = string | number | boolean | string[];
 
 function collectFields(data: FormData, fields: CustomField[]): Record<string, CustomValue> {
@@ -138,6 +138,15 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [modelFilter, setModelFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [warrantyBefore, setWarrantyBefore] = useState("");
+  const [sortBy, setSortBy] = useState("inventoryNumber");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -189,9 +198,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: "1", pageSize: "100" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "20", sortBy, sortOrder });
       if (search) params.set("q", search);
       if (statusFilter) params.set("status", statusFilter);
+      if (modelFilter) params.set("modelId", modelFilter);
+      if (categoryFilter) params.set("categoryId", categoryFilter);
+      if (locationFilter) params.set("locationId", locationFilter);
+      if (warrantyBefore) params.set("warrantyBefore", warrantyBefore);
 
       const response = await fetch(apiBaseUrl + "/assets?" + params.toString(), {
         credentials: "include",
@@ -200,11 +213,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       });
       const payload = await response.json().catch(() => ({})) as {
         data?: AssetSummary[];
+        pagination?: { total: number; pageCount: number };
         error?: { message?: string };
       };
       if (!response.ok) throw new Error(payload.error?.message ?? "Could not load the asset register.");
 
       setAssets(payload.data ?? []);
+      setTotal(payload.pagination?.total ?? 0);
+      setPageCount(Math.max(1, payload.pagination?.pageCount ?? 1));
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
       setError(loadError instanceof Error ? loadError.message : "Could not load the asset register.");
@@ -212,7 +228,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [tenantId, search, statusFilter]);
+  }, [tenantId, search, statusFilter, modelFilter, categoryFilter, locationFilter, warrantyBefore, sortBy, sortOrder, page]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -543,7 +559,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       </div>
 
       <div className="asset-register-toolbar">
-        <form className="asset-search-form" onSubmit={(event) => { event.preventDefault(); setSearch(searchInput.trim()); }}>
+        <form className="asset-search-form" onSubmit={(event) => { event.preventDefault(); setPage(1); setSearch(searchInput.trim()); }}>
           <label className="sr-only" htmlFor="assetSearch">Search assets</label>
           <span className="search-symbol" aria-hidden="true">⌕</span>
           <input id="assetSearch" value={searchInput} onChange={(event) => setSearchInput(event.currentTarget.value)} placeholder="Search inventory no., title or serial no." />
@@ -551,8 +567,41 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </form>
         <label className="asset-status-filter">
           <span>Status</span>
-          <ThemeSelect label="Filter by asset status" value={statusFilter} onChange={setStatusFilter} options={[{value:"",label:"All statuses"}, ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[]).map(status => ({value:status,label:statusLabel(status)}))]}/>
+          <ThemeSelect label="Filter by asset status" value={statusFilter} onChange={value => {setPage(1);setStatusFilter(value);}} options={[{value:"",label:"All statuses"}, ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[]).map(status => ({value:status,label:statusLabel(status)}))]}/>
         </label>
+        <div className="asset-register-filters" style={{display:"flex",flexWrap:"wrap",gap:"12px",alignItems:"end"}}>
+          <label>Category
+            <ThemeSelect label="Filter by category" value={categoryFilter}
+              onChange={value => {setPage(1);setCategoryFilter(value);setModelFilter("");}}
+              options={[{value:"",label:"All categories"}, ...Array.from(new Map(models.filter(m => m.category).map(m => [m.categoryId, {value:m.categoryId,label:m.category!.name}])).values())]}/>
+          </label>
+          <label>Model
+            <ThemeSelect label="Filter by asset model" value={modelFilter}
+              onChange={value => {setPage(1);setModelFilter(value);}}
+              options={[{value:"",label:"All models"}, ...models.filter(m => !categoryFilter || m.categoryId === categoryFilter).map(m => ({value:m.id,label:m.name}))]}/>
+          </label>
+          {canReadLocations && <label>Location
+            <ThemeSelect label="Filter by location" value={locationFilter}
+              onChange={value => {setPage(1);setLocationFilter(value);}}
+              options={[{value:"",label:"All accessible locations"}, ...locations.map(l => ({value:l.id,label:l.name}))]}/>
+          </label>}
+          <label>Warranty before
+            <input aria-label="Warranty ending by date" type="date" value={warrantyBefore}
+              onChange={event => {setPage(1);setWarrantyBefore(event.target.value);}}/>
+          </label>
+          <label>Sort by
+            <ThemeSelect label="Sort asset register" value={sortBy}
+              onChange={value => {setPage(1);setSortBy(value);}}
+              options={[{value:"inventoryNumber",label:"Inventory number"},{value:"title",label:"Title"},
+                {value:"createdAt",label:"Created date"},{value:"updatedAt",label:"Updated date"},
+                {value:"warrantyEnd",label:"Warranty date"},{value:"status",label:"Status"}]}/>
+          </label>
+          <label>Direction
+            <ThemeSelect label="Sort direction" value={sortOrder}
+              onChange={value => {setPage(1);setSortOrder(value);}}
+              options={[{value:"asc",label:"Ascending"},{value:"desc",label:"Descending"}]}/>
+          </label>
+        </div>
       </div>
 
       {successMessage && <div className="asset-success" role="status">{successMessage}</div>}
@@ -584,7 +633,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </table>
       </div>
 
-      <div className="asset-table-footer"><span>Showing {assets.length} asset{assets.length === 1 ? "" : "s"} from this workspace</span><span>List currently capped at 100 records per query</span></div>
+      <div className="asset-table-footer">
+        <span>Showing {assets.length} of {total} matching assets · Page {page} of {pageCount}</span>
+        <div style={{display:"flex",gap:"8px"}}>
+          <button className="topbar-button ghost" type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1,p-1))}>Previous</button>
+          <button className="topbar-button ghost" type="button" disabled={page >= pageCount || loading} onClick={() => setPage(p => p+1)}>Next</button>
+        </div>
+      </div>
 
       {showCreate && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
