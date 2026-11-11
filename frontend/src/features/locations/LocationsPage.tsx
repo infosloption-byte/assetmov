@@ -213,7 +213,7 @@ function LocationsPage({
               <label htmlFor="locationName">Location name <span>*</span></label>
               <input id="locationName" name="name" minLength={2} maxLength={191} required defaultValue={editingLocation?.name ?? ""} placeholder="e.g. Colombo Head Office" />
               <div className="asset-form-two-col">
-                <div><label htmlFor="locationCode">Location code <span>*</span></label><input id="locationCode" name="code" maxLength={100} pattern="[a-zA-Z0-9][a-zA-Z0-9._/-]*" required defaultValue={editingLocation?.code ?? ""} placeholder="e.g. CMB-HQ" /></div>
+                <div><label htmlFor="locationCode">Location code <span>*</span></label><input id="locationCode" name="code" maxLength={100} pattern="[a-zA-Z0-9](?:[a-zA-Z0-9._]|-|/)*" required defaultValue={editingLocation?.code ?? ""} placeholder="e.g. CMB-HQ" /></div>
                 <div><label htmlFor="locationType">Location type <span>*</span></label><ThemeSelect label="Location type" name="type" defaultValue={editingLocation?.type ?? "BRANCH"} required options={[{value:"HEAD_OFFICE",label:"Head office"},{value:"REGION",label:"Region"},{value:"BRANCH",label:"Branch"},{value:"DEPARTMENT",label:"Department"},{value:"ROOM",label:"Room"},{value:"WAREHOUSE",label:"Warehouse"}]}/></div>
               </div>
               <label htmlFor="parentId">Parent location</label>
