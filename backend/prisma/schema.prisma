@@ -289,6 +289,8 @@ model Employee {
   employeeCode   String   @db.VarChar(100)
   firstName      String   @db.VarChar(100)
   lastName       String   @db.VarChar(100)
+  designation    String?  @db.VarChar(100)
+  employeeType   String?  @db.VarChar(100)
   email          String?  @db.VarChar(191)
   phone          String?  @db.VarChar(50)
   homeLocationId String? @db.VarChar(36)
