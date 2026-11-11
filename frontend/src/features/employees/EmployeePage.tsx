@@ -362,7 +362,7 @@ function EmployeePage({
               <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
               <label><input type="checkbox" name="isActive" defaultChecked={editingEmployee.isActive}/> Active employee</label>
               <p className="asset-inline-hint">Employees with assigned assets cannot be deactivated until custody is transferred or returned.</p>
-              {editError && <div className="asset-inline-error" role="alert">{editError}</div>
+              {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setEditingEmployee(null)}>Cancel</button><button className="primary-button" type="submit" disabled={savingEdit || locationsLoading}>{savingEdit ? "Saving…" : "Save changes"} {!savingEdit && <span>↗</span>}</button></div>
             </form>
           </section>
