@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { randomUUID, createHmac } from "node:crypto";
+import { randomUUID, randomBytes, createHmac, createHash } from "node:crypto";
 import test from "node:test";
 import type { Server } from "node:http";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/lib/prisma.js";
-import { hashPassword } from "../../src/modules/auth/password.js";
+import { hashPassword, verifyPassword } from "../../src/modules/auth/password.js";
 
 if (process.env.ASSETMOV_RUN_DB_INTEGRATION_TESTS !== "1") {
   throw new Error(
@@ -1207,6 +1207,51 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: loginCookie }),
     });
     assert.equal(revokedSession.status, 401);
+
+    // One-time email verification and password recovery must reject replay
+    // and revoke all active sessions, without requiring a live email provider.
+    const verifyRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerA.userId,kind:"EMAIL_VERIFY",
+      tokenHash:createHash("sha256").update(verifyRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const confirmation = await fetch(`${baseUrl}/api/auth/email/verification/confirm`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:verifyRaw}),
+    });
+    assert.equal(confirmation.status,200);
+    assert.ok((await prisma.user.findUniqueOrThrow({where:{id:ownerA.userId}})).emailVerifiedAt);
+    const verificationReplay = await fetch(`${baseUrl}/api/auth/email/verification/confirm`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:verifyRaw}),
+    });
+    assert.equal(verificationReplay.status,400);
+
+    const resetRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerA.userId,kind:"PASSWORD_RESET",
+      tokenHash:createHash("sha256").update(resetRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const newPassword = "Secure-Recovery-Password-2026!";
+    const recovered = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:resetRaw,newPassword}),
+    });
+    assert.equal(recovered.status,200);
+    const savedPassword = (await prisma.user.findUniqueOrThrow({where:{id:ownerA.userId}})).passwordHash;
+    assert.ok(await verifyPassword(newPassword,savedPassword));
+    const resetReplay = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:resetRaw,newPassword}),
+    });
+    assert.equal(resetReplay.status,400);
+    const oldSessionAfterReset = await fetch(`${baseUrl}/api/auth/me`,{
+      headers:requestHeaders({cookie:ownerA.cookie}),
+    });
+    assert.equal(oldSessionAfterReset.status,401);
+
   } finally {
     try {
       if (originalSettings) await prisma.platformSetting.upsert({
