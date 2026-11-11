@@ -59,7 +59,8 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
       const text = (await file.text()).replace(/^\uFEFF/, "");
       const data = parseCsv(text);
       const head = data.shift()?.map(cell => cell.trim().replace(/^\uFEFF/,"")) ?? [];
-      if (!head.includes("title") || head.some(h => h && !keys.includes(h as keyof RowData))) {
+      if (!head.includes("title") || head.some(h => !keys.includes(h as keyof RowData)) ||
+          new Set(head).size !== head.length) {
         throw new Error("CSV headers must include title and only: " + keys.join(", "));
       }
       if (data.length > 100) throw new Error("This early import accepts at most 100 assets per file.");
@@ -70,7 +71,8 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
           inventoryNumber: get("inventoryNumber"), title: get("title"),
           serialNumber: get("serialNumber"), notes: get("notes"), currentLocationId: get("currentLocationId"),
         };
-        let problem = !row.title ? "Missing asset title." : "";
+        let problem = columns.length !== head.length ? "CSV column count differs from header." :
+          !row.title ? "Missing asset title." : "";
         const key = row.inventoryNumber.toUpperCase();
         if (!problem && key && seen.has(key)) problem = "Duplicate inventory number in CSV.";
         if (key) seen.add(key);
