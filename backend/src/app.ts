@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { accountRecoveryRouter } from "./modules/auth/account.routes.js";
 import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
 import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 import { assetRouter } from "./modules/assets/asset.routes.js";
@@ -79,6 +80,7 @@ app.get("/api/health", async (_request, response, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/auth", accountRecoveryRouter);
 app.use("/api/platform", platformRouter);
 app.use("/api/platform-console", platformConsoleRouter);
 app.use("/api/members", memberRouter);
