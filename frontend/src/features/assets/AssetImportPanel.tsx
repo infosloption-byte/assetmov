@@ -98,7 +98,7 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
         const currentLocationId = row.data.currentLocationId || fallbackLocation;
         if (!currentLocationId && !allLocationsAccess) {
           setRows(old => old.map(x => x.index === row.index ?
-            { ...x, result:"failed", detail:"Choose a location for this row." } : x));
+            { ...x, result:"failed" as const, detail:"Choose a location for this row." } : x));
           continue;
         }
         try {
@@ -113,10 +113,10 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
           const payload = await response.json().catch(()=>({})) as {error?:{message?:string}};
           if (!response.ok) throw new Error(payload.error?.message ?? "Server rejected this asset.");
           setRows(old => old.map(x => x.index === row.index ?
-            { ...x, result:"imported", detail:"Created" } : x));
+            { ...x, result:"imported" as const, detail:"Created" } : x));
         } catch (error) {
           setRows(old => old.map(x => x.index === row.index ?
-            { ...x, result:"failed", detail:error instanceof Error ? error.message : "Import failed." } : x));
+            { ...x, result:"failed" as const, detail:error instanceof Error ? error.message : "Import failed." } : x));
         }
         finished++;
         setProgress(finished);
