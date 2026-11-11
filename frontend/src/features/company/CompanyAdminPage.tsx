@@ -5,7 +5,7 @@ const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").r
 type Role = { id: string; key: string; name: string; description: string | null; isSystem: boolean; memberCount: number; permissionKeys: string[] };
 type Permission = { key: string; description: string | null };
 type Location = { id: string; name: string; code: string };
-type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string } };
+type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string; emailVerifiedAt?: string | null } };
 type Usage = { activeUsers: number; maxActiveUsers: number | null };
 type SubscriptionUsage = { assets: number; activeUsers: number; storageUsedBytes: string; subscription: null | { status: string; trialEndsAt: string | null; plan: { name: string; maxAssets: number | null; maxActiveUsers: number | null; storageLimitBytes: string | null; trialDurationDays: number } } };
 type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[]; currentUserId: string | null; isOwner: boolean; allLocationsAccess: boolean };
@@ -26,6 +26,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [newUserRoleId, setNewUserRoleId] = useState("");
+  const [inviteByEmail, setInviteByEmail] = useState(true);
   const [confirmation, setConfirmation] = useState<{ title: string; message: string; execute: () => Promise<unknown>; success: string } | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -108,13 +109,19 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const ok = await run(() => call("/members", "POST", {
-      fullName: String(data.get("fullName") ?? "").trim(),
-      email: String(data.get("email") ?? "").trim(),
-      initialPassword: String(data.get("initialPassword") ?? ""),
-      roleId: newUserRoleId,
-      allLocationsAccess: data.get("allLocationsAccess") === "on",
-    }), "Company user created.");
+    const ok = await run(async () => {
+      const result = await call<{ invitationDelivery?: string }>("/members", "POST", {
+        fullName: String(data.get("fullName") ?? "").trim(),
+        email: String(data.get("email") ?? "").trim(),
+        ...(inviteByEmail ? { invite: true } :
+          { initialPassword: String(data.get("initialPassword") ?? "") }),
+        roleId: newUserRoleId,
+        allLocationsAccess: data.get("allLocationsAccess") === "on",
+      });
+      if (inviteByEmail && result.invitationDelivery !== "sent") {
+        throw new Error("User created, but email delivery failed. Close this form and resend invitation from the user list.");
+      }
+    }, inviteByEmail ? "Company user invited." : "Company user created with an initial development password.");
     if (ok) setUserFormOpen(false);
   }
 
@@ -149,7 +156,14 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       </div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
-          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div><button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button></td><td>
+          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div>
+            <button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button>
+            {!member.user.emailVerifiedAt && member.isActive &&
+              <button type="button" className="text-button" disabled={busy} onClick={() => {
+                void run(() => call("/members/" + member.id + "/invitation", "POST", {}),
+                  "An invitation email was sent.");
+              }}>Resend invitation</button>}
+          </td><td>
             {canRoles ? <ThemeSelect label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId}
               options={roles.map(role => ({ value: role.id, label: role.name, disabled: !assignableRoles.some(item => item.id === role.id) }))}
               onChange={nextRole => {
@@ -230,8 +244,13 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       <form className="asset-create-form" onSubmit={event => void submitUser(event)}>
         <label>Full name<input name="fullName" required minLength={2} maxLength={191} /></label>
         <label>Email<input name="email" type="email" required maxLength={191} /></label>
-        <label>Initial password<input name="initialPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password" /></label>
-        <p className="asset-inline-hint">Development onboarding: arrange secure delivery of the initial password. One-time password setup is planned before launch.</p>
+        <label><input type="checkbox" checked={inviteByEmail} onChange={event=>setInviteByEmail(event.target.checked)}/>
+          Send secure invitation by email</label>
+        {inviteByEmail ?
+          <p className="asset-inline-hint">Recommended. The new user sets their own password from a one-time email link (requires configured transactional email).</p> :
+          <><label>Initial password (development only)
+            <input name="initialPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password"/>
+          </label><p className="asset-inline-hint">Development fallback only. Production requires email invitation.</p></>}
         <label>Role</label><ThemeSelect label="New user role" value={newUserRoleId} onChange={setNewUserRoleId} options={assignableRoles.map(role => ({ value: role.id, label: role.name }))}/>
         {allLocationsAccess && <label><input type="checkbox" name="allLocationsAccess" /> Access all company locations</label>}
         <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId} type="submit">Create user</button></div>
