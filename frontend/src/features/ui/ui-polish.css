@@ -373,3 +373,22 @@
 :is(.asset-create-form, .asset-edit-form, .vendor-directory) label.status-toggle > input[type="checkbox"]:focus-visible {
   outline: 2px solid #376a51; outline-offset: 3px;
 }
+
+
+/* CSV import uses the same control density as registration dialogs. */
+.asset-import-panel > label,
+.asset-import-panel .import-location-control { display: grid; gap: 8px; margin: 14px 0; color: #516b58; font-size: 12px; font-weight: 700; }
+.asset-import-panel input[type="file"] {
+  display: block; width: 100%; min-height: 44px;
+  border: 1px dashed #c8d9c8; border-radius: 9px;
+  padding: 9px 11px; background: #f9fbf8;
+  color: #506b56; font-size: 12px;
+}
+.asset-import-panel input[type="file"]::file-selector-button {
+  padding: 8px 12px; margin-right: 12px;
+  border: 1px solid #d5e3d3; border-radius: 7px;
+  background: #edf5ec; color: #315f40;
+  font-weight: 700; cursor: pointer;
+}
+.asset-import-panel .asset-table { min-width: 640px; }
+:is(.asset-create-form,.asset-edit-form,.vendor-directory) .status-toggle > span { color: #4b6351; }
