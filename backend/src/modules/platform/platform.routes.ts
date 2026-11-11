@@ -114,7 +114,7 @@ function errorCode(error: unknown): string | undefined {
  * Re-read the flag for every platform request so removing an operator's access
  * takes effect without waiting for their browser session to expire.
  */
-const requirePlatformAdmin: RequestHandler = async (request, response, next) => {
+export const requirePlatformAdmin: RequestHandler = async (request, response, next) => {
   try {
     const userId = request.auth?.userId;
     if (!userId) {

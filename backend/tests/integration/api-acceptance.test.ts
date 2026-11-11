@@ -5,6 +5,7 @@ import test from "node:test";
 import type { Server } from "node:http";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/lib/prisma.js";
+import { hashPassword } from "../../src/modules/auth/password.js";
 
 if (process.env.ASSETMOV_RUN_DB_INTEGRATION_TESTS !== "1") {
   throw new Error(
@@ -113,9 +114,11 @@ test("registration, session security, tenant isolation, locations and assets wor
   const password = "AssetMov-Test-Password-2026!";
   const managedEmail = `it.managed.${suffix}@example.test`;
   const anotherMemberEmail = `it.extra.${suffix}@example.test`;
+  const platformOnlyEmail = `it.platform.${suffix}@example.test`;
   let server: Server | undefined;
   let baseUrl = "";
   let createdPlanId: string | undefined;
+  let originalSettings: { companyRegistrationOpen: boolean; supportEmail: string | null; announcement: string | null } | null = null;
   const createdWebhookEventIds: string[] = [];
   const savedPaddleEnvironment = Object.fromEntries(
     ["PADDLE_ENVIRONMENT", "PADDLE_API_KEY", "PADDLE_WEBHOOK_SECRET", "APP_PUBLIC_URL"].map(key => [key, process.env[key]]),
@@ -123,6 +126,8 @@ test("registration, session security, tenant isolation, locations and assets wor
 
   try {
     await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`;
+    originalSettings = await prisma.platformSetting.findUnique({ where: { id: "global" },
+      select: { companyRegistrationOpen: true, supportEmail: true, announcement: true } });
     const trialPlan = await prisma.subscriptionPlan.findUnique({ where: { key: "trial" } });
     if (!trialPlan || !trialPlan.isActive || trialPlan.trialDurationDays <= 0) {
       assert.fail("Seed the active Trial plan into assetmov_test before running acceptance tests.");
@@ -587,8 +592,35 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     assert.equal(deniedTenantList.status, 403);
 
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/users`, {
+      headers: requestHeaders({ cookie: ownerB.cookie }),
+    })).status, 403, "Company admins may not access platform user lists.");
+
     // Controlled test-only bootstrap: never expose platform promotion through signup or tenant APIs.
     await prisma.user.update({ where: { id: ownerA.userId }, data: { isPlatformAdmin: true } });
+
+    // A Platform Super Admin can exist with no company membership at all.
+    const operator = await prisma.user.create({ data: {
+      email: platformOnlyEmail, fullName: "Platform-Only Operator",
+      passwordHash: await hashPassword(password), isPlatformAdmin: true,
+    } });
+    const operatorLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST", headers: requestHeaders({json:true,origin:true}),
+      body: JSON.stringify({email:platformOnlyEmail,password}),
+    });
+    assert.equal(operatorLogin.status, 200);
+    assert.equal((await operatorLogin.json() as LoginResponse).user.id, operator.id);
+    assert.equal(await prisma.membership.count({where:{userId:operator.id}}),0);
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/users`, {
+      headers: requestHeaders({cookie:sessionCookie(operatorLogin)}),
+    })).status,200);
+
+    for (const path of ["users","reports","activities","security","billing","settings"]) {
+      const screenData = await fetch(`${baseUrl}/api/platform-console/${path}`, {
+        headers: requestHeaders({cookie:ownerA.cookie}),
+      });
+      assert.equal(screenData.status,200,"Platform console screen API "+path+" must load.");
+    }
 
     const platformPlans = await fetch(`${baseUrl}/api/platform/plans`, {
       headers: requestHeaders({ cookie: ownerA.cookie }),
@@ -601,6 +633,59 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(typeof (await platformOverview.json() as { data: { companyCount: number } }).data.companyCount, "number");
     const plansBody = await platformPlans.json() as { data: Array<{ id: string; key: string }> };
     assert.ok(plansBody.data.some((plan) => plan.key === "trial"));
+
+    const denySelf = await fetch(`${baseUrl}/api/platform-console/users/${ownerA.userId}/status`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({disabled:true,reason:"Self suspension must not be possible"}),
+    });
+    assert.equal(denySelf.status,409);
+    const denyOtherOperator = await fetch(`${baseUrl}/api/platform-console/users/${operator.id}/status`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({disabled:true,reason:"Second platform administrator must be protected"}),
+    });
+    assert.equal(denyOtherOperator.status,409);
+    const disableMember = await fetch(`${baseUrl}/api/platform-console/users/${updatedProfile.id}/status`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({disabled:true,reason:"Integration test revokes active sessions"}),
+    });
+    assert.equal(disableMember.status,200);
+    assert.equal((await fetch(`${baseUrl}/api/auth/me`, {
+      headers:requestHeaders({cookie:managedCookie}),
+    })).status,401,"Suspension must revoke live sessions.");
+    const restoreMember = await fetch(`${baseUrl}/api/platform-console/users/${updatedProfile.id}/status`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({disabled:false,reason:"Integration test restores account access"}),
+    });
+    assert.equal(restoreMember.status,200);
+
+    const settingsBody = (companyRegistrationOpen: boolean) => JSON.stringify({
+      companyRegistrationOpen, supportEmail:"support@assetmov.example",
+      announcement:"Internal acceptance test", reason:"Platform registration acceptance check",
+    });
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,json:true,origin:true}),
+      body:settingsBody(false),
+    })).status,403,"Global settings require CSRF.");
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:settingsBody(false),
+    })).status,200);
+    const blockedSignup = await fetch(`${baseUrl}/api/auth/register`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({ tenantName:"Blocked company",tenantSlug:"blocked-"+suffix,
+        fullName:"Blocked Owner",email:"blocked."+suffix+"@example.test",password }),
+    });
+    assert.equal(blockedSignup.status,403);
+    assert.equal((await blockedSignup.json() as ErrorResponse).error?.code,"REGISTRATION_CLOSED");
+    assert.equal((await fetch(`${baseUrl}/api/platform-console/settings`, {
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:settingsBody(true),
+    })).status,200);
+    const configurationAudit = await prisma.platformAuditLog.findFirst({
+      where:{action:"platform.settings_changed",actorUserId:ownerA.userId},
+      orderBy:{createdAt:"desc"},
+    });
+    assert.ok(configurationAudit?.reason);
 
     const noCsrfPlan = await fetch(`${baseUrl}/api/platform/plans`, {
       method: "POST",
@@ -1010,6 +1095,9 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(revokedSession.status, 401);
   } finally {
     try {
+      if (originalSettings) await prisma.platformSetting.upsert({
+        where:{id:"global"},create:{id:"global",...originalSettings},update:originalSettings,
+      });
       const tenants = await prisma.tenant.findMany({
         where: { slug: { in: tenantSlugs } },
         select: { id: true },
@@ -1028,7 +1116,7 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
         await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
       }
-      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail, anotherMemberEmail] } } });
+      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail, anotherMemberEmail, platformOnlyEmail] } } });
     } finally {
       if (server) {
         await new Promise<void>((resolve, reject) => {

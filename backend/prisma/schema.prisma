@@ -781,3 +781,12 @@ model PaddleWebhookEvent {
   @@index([status, receivedAt])
   @@index([tenantId, receivedAt])
 }
+
+/** Global platform control plane. Separate from tenant-owned configuration. */
+model PlatformSetting {
+  id                      String   @id @default("global") @db.VarChar(32)
+  companyRegistrationOpen Boolean  @default(true)
+  supportEmail            String?  @db.VarChar(191)
+  announcement            String?  @db.VarChar(500)
+  updatedAt               DateTime @updatedAt
+}

@@ -7,7 +7,7 @@ import TransferPage from "./features/transfers/TransferPage";
 import EmployeePage from "./features/employees/EmployeePage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
 import MasterDataPage from "./features/master-data/MasterDataPage";
-import PlatformAdminPage from "./features/platform/PlatformAdminPage";
+import PlatformConsole from "./features/platform/PlatformConsole";
 import CompanyBillingPage from "./features/billing/CompanyBillingPage";
 import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
@@ -48,8 +48,9 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "masterData" | "platform" | "billing">("overview");
+  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "masterData" | "billing">("overview");
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [platformMode, setPlatformMode] = useState(false);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -114,6 +115,12 @@ function App() {
         if (!payload.user) return;
 
         setUser(payload.user);
+        // Platform administrators default to their own control plane, not a
+        // tenant/company dashboard. A checkout return stays in company billing.
+        setPlatformMode(payload.user.isPlatformAdmin && !(
+          new URLSearchParams(window.location.search).get("billing") === "pending" &&
+          payload.user.memberships.length > 0
+        ));
         setActiveTenantId(payload.user.memberships[0]?.tenant.id ?? null);
 
         const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", {
@@ -286,6 +293,7 @@ function App() {
       if (!response.ok) throw new Error(payload.error?.message ?? "Could not sign out.");
 
       setUser(null);
+      setPlatformMode(false);
       setCsrfToken(null);
       setActiveTenantId(null);
       setWorkspaceContext(null);
@@ -306,6 +314,7 @@ function App() {
         onCancel={() => setAuthMode(null)}
         onAuthenticated={(authenticatedUser, token) => {
           setUser(authenticatedUser);
+          setPlatformMode(authenticatedUser.isPlatformAdmin);
           setCsrfToken(token);
           setActiveTenantId(authenticatedUser.memberships[0]?.tenant.id ?? null);
           setWorkspaceContext(null);
@@ -315,6 +324,15 @@ function App() {
         }}
       />
     );
+  }
+
+  if (user?.isPlatformAdmin && platformMode) {
+    return <PlatformConsole
+      user={user} csrfToken={csrfToken} apiHealth={apiHealth}
+      error={actionError}
+      onSignOut={() => { void handleLogout(); }}
+      onCompanySwitch={() => { setPlatformMode(false); setActivePage("overview"); setActionError(""); }}
+    />;
   }
 
   const selectedMembership = user?.memberships.find((membership) => membership.tenant.id === activeTenantId)
@@ -341,7 +359,7 @@ function App() {
           <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
           <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
           </>}
-          {user?.isPlatformAdmin && <button className={"nav-item " + (activePage === "platform" ? "active" : "")} type="button" onClick={() => setActivePage("platform")}><span className="nav-icon">◇</span> Platform Admin</button>}
+          {user?.isPlatformAdmin && <button className="nav-item" type="button" onClick={() => setPlatformMode(true)}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></button>}
           {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
           {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
           {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
@@ -359,7 +377,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "masterData" ? "Categories & models" : activePage === "platform" ? "Platform administration" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "masterData" ? "Categories & models" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -421,7 +439,7 @@ function App() {
             <h2>Checking company subscription…</h2><p>Verifying active trial or Paddle billing status with the API.</p>
           </div></div>
         ) : user && activeTenantId && (billingError || billingStatus?.allowed === false) &&
-          activePage !== "platform" && activePage !== "billing" ? (
+          activePage !== "billing" ? (
           <section className="billing-gate" aria-label="Subscription attention required">
             <div className="billing-gate-body">
               <span className="billing-state">{billingStatus?.status ?? "Subscription required"}</span>
@@ -438,8 +456,6 @@ function App() {
           <CompanyBillingPage tenantId={activeTenantId} csrfToken={csrfToken}
             isCompanyAdmin={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER"}
             onChanged={refreshBilling}/>
-        ) : activePage === "platform" ? (
-          <PlatformAdminPage csrfToken={csrfToken} isPlatformAdmin={user?.isPlatformAdmin === true} />
         ) : activePage === "masterData" ? (
           <MasterDataPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} />
         ) : activePage === "company" ? (

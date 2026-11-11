@@ -158,6 +158,8 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
     const now = new Date();
 
     const result = await prisma.$transaction(async (tx) => {
+      const settings = await tx.platformSetting.findUnique({ where: { id: "global" } });
+      if (settings?.companyRegistrationOpen === false) throw new Error("REGISTRATION_CLOSED");
       const user = await tx.user.create({
         data: {
           email: input.email,
@@ -282,6 +284,11 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
       csrfToken,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "REGISTRATION_CLOSED") {
+      sendError(response, 403, "REGISTRATION_CLOSED",
+        "New company registration is temporarily closed. Contact platform support.");
+      return;
+    }
     if (error instanceof Error && error.message === "TRIAL_PLAN_NOT_CONFIGURED") {
       sendError(response, 503, "TRIAL_PLAN_NOT_CONFIGURED", "Company registration is not available until the Trial plan is configured.");
       return;
