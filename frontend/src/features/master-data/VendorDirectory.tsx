@@ -137,7 +137,7 @@ export default function VendorDirectory({ tenantId, csrfToken, permissions, kind
             <label>Phone<input name="phone" placeholder="e.g. +94 11 200 0000" maxLength={60} defaultValue={editing?.phone ?? ""}/></label>
             <label>Address<textarea name="address" placeholder="Office or supplier address" rows={3} maxLength={2000} defaultValue={editing?.address ?? ""}/></label>
           </>}
-          {editing && <label className="checkbox-field"><input type="checkbox" name="isActive" defaultChecked={editing.isActive}/><span>Active {modal === "suppliers" ? "supplier" : "manufacturer"}</span></label>}
+          {editing && <label className="checkbox-field status-toggle"><input type="checkbox" role="switch" name="isActive" defaultChecked={editing.isActive}/><span>Active {modal === "suppliers" ? "supplier" : "manufacturer"}</span></label>}
           <div className="asset-modal-actions">
             <button className="plain-button" type="button" onClick={() => setModal(null)}>Cancel</button>
             <button className="primary-button" disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button>
