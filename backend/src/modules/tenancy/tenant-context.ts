@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { env } from "../../config/env.js";
 import { expandLocationScope } from "./location-scope.js";
 import { subscriptionDecision } from "../billing/subscription-access.js";
 
@@ -28,6 +29,20 @@ export const requireTenant: RequestHandler = async (
     if (!request.auth?.userId) {
       sendError(response, 401, "UNAUTHENTICATED", "Please sign in to continue.");
       return;
+    }
+
+    // A logged-in but unverified registrant may request a verification link
+    // through /api/auth, but may not access tenant operations while the
+    // installation's verified-email gate is enabled.
+    if (env.REQUIRE_VERIFIED_EMAIL === "true") {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: request.auth.userId }, select: { emailVerifiedAt: true },
+      });
+      if (!currentUser?.emailVerifiedAt) {
+        sendError(response, 403, "EMAIL_VERIFICATION_REQUIRED",
+          "Verify your account email before accessing company data.");
+        return;
+      }
     }
 
     const tenantId = request.get("x-tenant-id")?.trim();
