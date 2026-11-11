@@ -18,6 +18,7 @@ import { platformConsoleRouter } from "./modules/platform/platform-console.route
 import { memberRouter } from "./modules/members/member.routes.js";
 import { roleRouter } from "./modules/roles/role.routes.js";
 import { masterDataRouter } from "./modules/master-data/master-data.routes.js";
+import { vendorRouter } from "./modules/master-data/vendor.routes.js";
 import { fileRouter } from "./modules/storage/file.routes.js";
 import { billingRouter } from "./modules/billing/billing.routes.js";
 import { paddleWebhookRouter } from "./modules/billing/paddle-webhook.routes.js";
@@ -83,6 +84,7 @@ app.use("/api/platform-console", platformConsoleRouter);
 app.use("/api/members", memberRouter);
 app.use("/api/roles", roleRouter);
 app.use("/api/master-data", masterDataRouter);
+app.use("/api/vendors", vendorRouter);
 app.use("/api/files", fileRouter);
 app.use("/api/billing", billingRouter);
 app.use("/api/workspace", workspaceRouter);
