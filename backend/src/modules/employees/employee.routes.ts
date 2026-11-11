@@ -30,6 +30,7 @@ const employeeUpdateSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(191).optional(),
   phone: z.string().trim().max(50).optional(),
   homeLocationId: z.string().trim().min(1).optional(),
+  isActive: z.boolean().optional(),
 }).strict().refine((input) => Object.values(input).some((value) => value !== undefined), {
   message: "Provide at least one field to update.",
 });
@@ -247,6 +248,10 @@ employeeRouter.post(
 
       response.status(201).json({ data: result });
     } catch (error) {
+      if (error instanceof Error && error.message === "EMPLOYEE_HAS_ASSIGNED_ASSETS") {
+        sendError(response, 409, "EMPLOYEE_HAS_ASSIGNED_ASSETS", "Return or reassign the employee's assets before deactivation.");
+        return;
+      }
       if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_INVALID") {
         sendError(response, 400, "INVALID_LOCATION", "Choose an active location in this workspace.");
         return;
@@ -309,6 +314,21 @@ employeeRouter.patch(
           if (!location) throw new Error("EMPLOYEE_LOCATION_INVALID");
         }
 
+        // Deactivation cannot silently orphan custody. Return the employee's
+        // assets to stock (or transfer custody) before making them inactive.
+        if (input.isActive === false && existing.isActive) {
+          const assigned = await tx.asset.count({ where: { tenantId, assignedEmployeeId: existing.id } });
+          if (assigned > 0) throw new Error("EMPLOYEE_HAS_ASSIGNED_ASSETS");
+        }
+        if (input.isActive === true) {
+          const homeLocationId = input.homeLocationId ?? existing.homeLocationId;
+          if (homeLocationId) {
+            const home = await tx.location.findFirst({
+              where: { id: homeLocationId, tenantId, isActive: true }, select: { id: true },
+            });
+            if (!home) throw new Error("EMPLOYEE_LOCATION_INVALID");
+          }
+        }
         const updated = await tx.employee.update({
           where: { id: existing.id },
           data: {
@@ -318,6 +338,7 @@ employeeRouter.patch(
             ...(input.email !== undefined ? { email: input.email || null } : {}),
             ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
             ...(input.homeLocationId !== undefined ? { homeLocationId: input.homeLocationId } : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           },
           include: employeeInclude,
         });
@@ -336,6 +357,7 @@ employeeRouter.patch(
               email: existing.email,
               phone: existing.phone,
               homeLocationId: existing.homeLocationId,
+              isActive: existing.isActive,
             },
             newData: {
               employeeCode: updated.employeeCode,
@@ -344,6 +366,7 @@ employeeRouter.patch(
               email: updated.email,
               phone: updated.phone,
               homeLocationId: updated.homeLocationId,
+              isActive: updated.isActive,
             },
             ipAddress: request.ip?.slice(0, 64),
           },
