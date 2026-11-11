@@ -7,9 +7,9 @@ type Vendor = {
   id: string; name: string; isActive: boolean;
   email?: string | null; phone?: string | null; address?: string | null;
 };
-type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[] };
+type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[]; kind: VendorType };
 
-export default function VendorDirectory({ tenantId, csrfToken, permissions }: Props) {
+export default function VendorDirectory({ tenantId, csrfToken, permissions, kind }: Props) {
   const [suppliers, setSuppliers] = useState<Vendor[]>([]);
   const [manufacturers, setManufacturers] = useState<Vendor[]>([]);
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -81,38 +81,49 @@ export default function VendorDirectory({ tenantId, csrfToken, permissions }: Pr
     setModal(kind); setEditing(selected); setError(""); setMessage("");
   };
 
-  return <section className="asset-register-page" aria-label="Suppliers and manufacturers">
-    <div className="asset-page-heading">
-      <div><div className="eyebrow"><span className="eyebrow-line"/> TENANT MASTER DATA</div>
-        <h2 className="asset-page-title">Suppliers & manufacturers</h2>
-        <p>Maintain your company's purchasing partners. Inactive entries remain attached to historical assets.</p>
+  return <section className="vendor-directory" aria-label={kind === "suppliers" ? "Suppliers" : "Manufacturers"}>
+    <div className="asset-register-toolbar master-section-heading">
+      <div>
+        <h2>{kind === "suppliers" ? "Suppliers" : "Manufacturers"}</h2>
+        <p>{kind === "suppliers" ? "Manage purchasing partners and vendor contact details." :
+          "Manage product and equipment manufacturers for your company."}</p>
       </div>
-      <button className="topbar-button ghost" type="button" onClick={() => void reload()}>Refresh</button>
+      <div className="master-section-actions">
+        <button className="topbar-button ghost" type="button" onClick={() => void reload()}>Refresh</button>
+        {canManage && <button className="primary-button" type="button" onClick={() => open(kind)}>
+          Add {kind === "suppliers" ? "supplier" : "manufacturer"} ＋
+        </button>}
+      </div>
     </div>
-    {canManage && <label><input type="checkbox" checked={includeInactive} onChange={event => setIncludeInactive(event.target.checked)}/> Include inactive records</label>}
+    {canManage && <label className="checkbox-field vendor-inactive-toggle">
+      <input type="checkbox" checked={includeInactive} onChange={event => setIncludeInactive(event.target.checked)}/>
+      <span>Show inactive {kind}</span>
+    </label>}
     {error && <div className="asset-inline-error" role="alert">{error}</div>}
     {message && <div className="asset-success" role="status">{message}</div>}
-    {!canRead && <p>Asset read permission is required to view suppliers and manufacturers.</p>}
-    {canRead && (["suppliers", "manufacturers"] as VendorType[]).map(kind =>
-      <section key={kind}>
-        <div className="asset-register-toolbar">
-          <strong>{kind === "suppliers" ? "Suppliers" : "Manufacturers"}</strong>
-          {canManage && <button className="primary-button" type="button" onClick={() => open(kind)}>Add {kind === "suppliers" ? "supplier" : "manufacturer"} ＋</button>}
-        </div>
-        <div className="asset-table-wrap"><table className="asset-table">
-          <thead><tr><th>Name</th>{kind === "suppliers" && <><th>Email</th><th>Phone</th></>}
-            <th>Status</th><th>Actions</th></tr></thead>
-          <tbody>{loading ? <tr><td colSpan={kind === "suppliers" ? 5 : 3}>Loading…</td></tr> :
-            (kind === "suppliers" ? suppliers : manufacturers).length === 0 ?
-            <tr><td colSpan={kind === "suppliers" ? 5 : 3}>No records found.</td></tr> :
-            (kind === "suppliers" ? suppliers : manufacturers).map(record => <tr key={record.id}>
-              <td><strong>{record.name}</strong></td>
-              {kind === "suppliers" && <><td>{record.email || "—"}</td><td>{record.phone || "—"}</td></>}
-              <td>{record.isActive ? "Active" : "Inactive"}</td>
-              <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => open(kind, record)}>Edit</button>}</td>
-            </tr>)}
-          </tbody></table></div>
-      </section>)}
+    {!canRead && <p>Asset read permission is required to view these records.</p>}
+    {canRead && <div className="asset-table-wrap">
+      <table className="asset-table master-data-table">
+        <thead><tr><th>Name</th>
+          {kind === "suppliers" && <><th>Email</th><th>Phone</th></>}
+          <th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>{loading ?
+          <tr><td colSpan={kind === "suppliers" ? 5 : 3} className="asset-table-message">Loading records…</td></tr> :
+          (kind === "suppliers" ? suppliers : manufacturers).length === 0 ?
+          <tr><td colSpan={kind === "suppliers" ? 5 : 3} className="asset-table-message">
+            <strong>No {kind} yet</strong><span>Add the first {kind === "suppliers" ? "supplier" : "manufacturer"} to your company catalogue.</span>
+          </td></tr> :
+          (kind === "suppliers" ? suppliers : manufacturers).map(record => <tr key={record.id}>
+            <td><strong>{record.name}</strong></td>
+            {kind === "suppliers" && <><td>{record.email || "—"}</td><td>{record.phone || "—"}</td></>}
+            <td><span className={"asset-status-badge " + (record.isActive ? "available" : "retired")}>
+              {record.isActive ? "Active" : "Inactive"}</span></td>
+            <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => open(kind, record)}>Edit</button>}</td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>}
     {modal && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setModal(null); }}>
       <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="vendorTitle">
         <div className="asset-modal-heading">
@@ -120,13 +131,13 @@ export default function VendorDirectory({ tenantId, csrfToken, permissions }: Pr
           <button type="button" className="modal-close" aria-label="Close" onClick={() => setModal(null)}>×</button>
         </div>
         <form key={modal + (editing?.id ?? "new")} className="asset-create-form" onSubmit={event => void save(event)}>
-          <label>Name<input name="name" required minLength={2} maxLength={191} defaultValue={editing?.name ?? ""}/></label>
+          <label>Name<input name="name" placeholder="Company or brand name" required minLength={2} maxLength={191} defaultValue={editing?.name ?? ""}/></label>
           {modal === "suppliers" && <>
-            <label>Email<input type="email" name="email" maxLength={191} defaultValue={editing?.email ?? ""}/></label>
-            <label>Phone<input name="phone" maxLength={60} defaultValue={editing?.phone ?? ""}/></label>
-            <label>Address<textarea name="address" rows={3} maxLength={2000} defaultValue={editing?.address ?? ""}/></label>
+            <label>Email<input type="email" name="email" placeholder="e.g. purchases@company.com" maxLength={191} defaultValue={editing?.email ?? ""}/></label>
+            <label>Phone<input name="phone" placeholder="e.g. +94 11 200 0000" maxLength={60} defaultValue={editing?.phone ?? ""}/></label>
+            <label>Address<textarea name="address" placeholder="Office or supplier address" rows={3} maxLength={2000} defaultValue={editing?.address ?? ""}/></label>
           </>}
-          {editing && <label><input type="checkbox" name="isActive" defaultChecked={editing.isActive}/> Active</label>}
+          {editing && <label className="checkbox-field"><input type="checkbox" name="isActive" defaultChecked={editing.isActive}/><span>Active {modal === "suppliers" ? "supplier" : "manufacturer"}</span></label>}
           <div className="asset-modal-actions">
             <button className="plain-button" type="button" onClick={() => setModal(null)}>Cancel</button>
             <button className="primary-button" disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button>
