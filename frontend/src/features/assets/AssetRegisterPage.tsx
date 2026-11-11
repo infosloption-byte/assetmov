@@ -130,6 +130,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
   const [models, setModels] = useState<AssetModelOption[]>([]);
+  const [suppliers, setSuppliers] = useState<Array<{id:string;name:string}>>([]);
+  const [manufacturers, setManufacturers] = useState<Array<{id:string;name:string}>>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [modelError, setModelError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -181,6 +183,26 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       return response.json() as Promise<{ data: AssetModelOption[] }>;
     }).then(payload => { if (!controller.signal.aborted) { setModels(payload.data); setModelError(""); } })
       .catch(error => { if (!controller.signal.aborted) setModelError(error instanceof Error ? error.message : "Could not load models."); });
+    return () => controller.abort();
+  }, [tenantId, canReadAssets]);
+  useEffect(() => {
+    if (!tenantId || !canReadAssets) { setSuppliers([]); setManufacturers([]); return; }
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const [a, b] = await Promise.all(["suppliers", "manufacturers"].map(kind =>
+          fetch(apiBaseUrl + "/vendors/" + kind, {
+            credentials: "include", headers: { "X-Tenant-Id": tenantId }, signal: controller.signal,
+          }).then(async response => {
+            if (!response.ok) throw new Error("Could not load supplier/manufacturer data.");
+            return response.json() as Promise<{data:Array<{id:string;name:string}>}>;
+          })));
+        if (!controller.signal.aborted) { setSuppliers(a.data); setManufacturers(b.data); }
+      } catch {
+        if (!controller.signal.aborted) { setSuppliers([]); setManufacturers([]); }
+      }
+    };
+    void load();
     return () => controller.abort();
   }, [tenantId, canReadAssets]);
   const canEditFinancial = permissions.includes("asset.financial.update");
@@ -426,7 +448,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       body.modelId = selectedModelId;
       body.customFields = collectFields(formData, selectedModel?.fieldSchema?.fields ?? []);
     }
-    const optionalFields = ["assetNumber", "serialNumber", "currentLocationId", "notes"] as const;
+    const optionalFields = ["assetNumber", "serialNumber", "currentLocationId", "notes", "supplierId", "manufacturerId"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
@@ -488,7 +510,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     if (selectedAsset.model) {
       body.customFields = collectFields(formData, selectedAsset.model.fieldSchema?.fields ?? []);
     }
-    const optionalFields = ["assetNumber", "serialNumber", "description", "notes"] as const;
+    const optionalFields = ["assetNumber", "serialNumber", "description", "notes", "supplierId", "manufacturerId"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
@@ -660,6 +682,12 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                 </div>
                 {canEditFinancial && <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>}
               </div>
+              <div className="asset-form-two-col">
+                <div><label>Supplier</label><ThemeSelect label="Asset supplier" name="supplierId" defaultValue=""
+                  options={[{value:"",label:"No supplier"},...suppliers.map(v=>({value:v.id,label:v.name}))]}/></div>
+                <div><label>Manufacturer</label><ThemeSelect label="Asset manufacturer" name="manufacturerId" defaultValue=""
+                  options={[{value:"",label:"No manufacturer"},...manufacturers.map(v=>({value:v.id,label:v.name}))]}/></div>
+              </div>
               <label>Asset model</label>
               <ThemeSelect label="Asset model" value={selectedModelId} onChange={setSelectedModelId}
                 options={[{value:"",label:"No model selected"}, ...models.map(model => ({value:model.id,label:model.name}))]}/>
@@ -705,6 +733,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                 <div className="asset-form-two-col">
                   <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} defaultValue={selectedAsset.assetNumber ?? ""} /></div>
                   <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} defaultValue={selectedAsset.serialNumber ?? ""} /></div>
+                </div>
+                <div className="asset-form-two-col">
+                  <div><label>Supplier</label><ThemeSelect label="Edit supplier" name="supplierId"
+                    defaultValue={selectedAsset.supplier?.id ?? ""}
+                    options={[{value:"",label:"Keep or no supplier"},...suppliers.map(v=>({value:v.id,label:v.name}))]}/></div>
+                  <div><label>Manufacturer</label><ThemeSelect label="Edit manufacturer" name="manufacturerId"
+                    defaultValue={selectedAsset.manufacturer?.id ?? ""}
+                    options={[{value:"",label:"Keep or no manufacturer"},...manufacturers.map(v=>({value:v.id,label:v.name}))]}/></div>
                 </div>
                 {selectedAsset.model && <CustomFieldInputs fields={selectedAsset.model.fieldSchema?.fields ?? []}
                   values={selectedAsset.customFields ?? {}}/>}
