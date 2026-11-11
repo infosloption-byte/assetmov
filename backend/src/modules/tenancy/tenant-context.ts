@@ -61,6 +61,33 @@ export const requireTenant: RequestHandler = async (
       return;
     }
 
+    // Expired/inactive companies remain readable for authorized users but
+    // cannot mutate operational records. Deactivation is allowed so owners
+    // can reduce usage or revoke access even when their plan has expired.
+    const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
+    const isMemberDeactivation =
+      request.baseUrl === "/api/members" && request.method === "PATCH" &&
+      request.path.startsWith("/") && request.path.endsWith("/status") && request.path.split("/").length === 3 && request.body?.isActive === false;
+    const isAttachmentRemoval = request.baseUrl === "/api/files" && request.method === "DELETE";
+    if (isWrite && !isMemberDeactivation && !isAttachmentRemoval) {
+      const subscription = await prisma.tenantSubscription.findUnique({
+        where: { tenantId }, select: { status: true, trialEndsAt: true },
+      });
+      if (!subscription) {
+        sendError(response, 409, "SUBSCRIPTION_NOT_CONFIGURED", "This workspace does not have a subscription.");
+        return;
+      }
+      if (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING") {
+        sendError(response, 403, "SUBSCRIPTION_INACTIVE", "This subscription is not active.");
+        return;
+      }
+      if (subscription.status === "TRIALING" &&
+          (!subscription.trialEndsAt || subscription.trialEndsAt <= new Date())) {
+        sendError(response, 403, "SUBSCRIPTION_EXPIRED", "The workspace trial has expired.");
+        return;
+      }
+    }
+
     const locations = await prisma.location.findMany({
       where: { tenantId, isActive: true },
       select: { id: true, parentId: true },

@@ -7,6 +7,7 @@ type Permission = { key: string; description: string | null };
 type Location = { id: string; name: string; code: string };
 type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string } };
 type Usage = { activeUsers: number; maxActiveUsers: number | null };
+type SubscriptionUsage = { assets: number; activeUsers: number; storageUsedBytes: string; subscription: null | { status: string; trialEndsAt: string | null; plan: { name: string; maxAssets: number | null; maxActiveUsers: number | null; storageLimitBytes: string | null; trialDurationDays: number } } };
 type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[]; currentUserId: string | null; isOwner: boolean; allLocationsAccess: boolean };
 
 export default function CompanyAdminPage({ tenantId, csrfToken, permissions, currentUserId, isOwner, allLocationsAccess }: Props) {
@@ -20,6 +21,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [scopeAll, setScopeAll] = useState(false);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage>({ activeUsers: 0, maxActiveUsers: null });
+  const [subscriptionUsage, setSubscriptionUsage] = useState<SubscriptionUsage | null>(null);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
@@ -64,6 +66,10 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
       setMembers(results[2].data);
       setUsage(results[2].usage);
       setLocations(results[3].data);
+      if (permissions.includes("tenant.settings.manage")) {
+        const summary = await call<{ data: SubscriptionUsage }>("/files/usage");
+        setSubscriptionUsage(summary.data);
+      } else setSubscriptionUsage(null);
       setError("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load administration data."); }
     finally { setLoading(false); }
@@ -118,6 +124,13 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         <p>Manage company accounts and define exactly which actions each role can perform.</p></div>
       <button type="button" className="topbar-button ghost" onClick={() => void reload()}>Refresh ↻</button>
     </div>
+    {subscriptionUsage && <div className="transfer-summary-strip" aria-label="Subscription usage">
+      <div><span>Current plan</span><strong>{subscriptionUsage.subscription?.plan.name ?? "Not configured"}</strong><small>{subscriptionUsage.subscription?.status ?? "Unassigned"}</small></div>
+      <div><span>Assets</span><strong>{subscriptionUsage.assets} / {subscriptionUsage.subscription?.plan.maxAssets ?? "Unlimited"}</strong></div>
+      <div><span>Active users</span><strong>{subscriptionUsage.activeUsers} / {subscriptionUsage.subscription?.plan.maxActiveUsers ?? "Unlimited"}</strong></div>
+      <div><span>Storage</span><strong>{(Number(subscriptionUsage.storageUsedBytes) / 1024 ** 2).toFixed(2)} MiB</strong><small>of {subscriptionUsage.subscription?.plan.storageLimitBytes === null || !subscriptionUsage.subscription ? "Unlimited" : (Number(subscriptionUsage.subscription.plan.storageLimitBytes) / 1024 ** 3).toFixed(2) + " GiB"}</small></div>
+      <div><span>Trial expires</span><strong>{subscriptionUsage.subscription?.trialEndsAt ? new Date(subscriptionUsage.subscription.trialEndsAt).toLocaleDateString() : "—"}</strong></div>
+    </div>}
     <div className="company-admin-tabs">
       {canMembers && <button className={tab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}>Users</button>}
       {canRoles && <button className={tab === "roles" ? "active" : ""} type="button" onClick={() => setTab("roles")}>Roles & permissions</button>}

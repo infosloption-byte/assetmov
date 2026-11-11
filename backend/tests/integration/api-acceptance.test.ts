@@ -112,6 +112,7 @@ test("registration, session security, tenant isolation, locations and assets wor
   const emails: [string, string] = [`it.a.${suffix}@example.test`, `it.b.${suffix}@example.test`];
   const password = "AssetMov-Test-Password-2026!";
   const managedEmail = `it.managed.${suffix}@example.test`;
+  const anotherMemberEmail = `it.extra.${suffix}@example.test`;
   let server: Server | undefined;
   let baseUrl = "";
   let createdPlanId: string | undefined;
@@ -362,6 +363,41 @@ test("registration, session security, tenant isolation, locations and assets wor
     const createdAsset = await assetResponse.json() as AssetResponse;
     assert.ok(createdAsset.data.id);
 
+    // Dynamic custom values are validated server-side, including tenant ownership.
+    const createModelAsset = async (values: unknown, code: string) => fetch(`${baseUrl}/api/assets`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ inventoryNumber: code, title: "Model validated asset",
+        currentLocationId: createdLocation.data.id, modelId: model.data.id, customFields: values }),
+    });
+    const missingCustom = await createModelAsset({}, `IT-MISS-${suffix}`);
+    assert.equal(missingCustom.status, 400);
+    assert.equal((await missingCustom.json() as ErrorResponse).error?.code, "CUSTOM_FIELD_INVALID");
+    assert.equal((await createModelAsset({ ramGb: "bad" }, `IT-BAD-${suffix}`)).status, 400);
+    assert.equal((await createModelAsset({ ramGb: 16, foreign: true }, `IT-UNKNOWN-${suffix}`)).status, 400);
+    const validCustom = await createModelAsset({ ramGb: 16 }, `IT-CUSTOM-${suffix}`);
+    assert.equal(validCustom.status, 201);
+    assert.equal((await validCustom.json() as { data: { customFields: { ramGb: number } } }).data.customFields.ramGb, 16);
+    const foreignModelAsset = await fetch(`${baseUrl}/api/assets`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ inventoryNumber: `IT-FOREIGN-${suffix}`,
+        title: "Cross tenant model", modelId: model.data.id, customFields: { ramGb: 16 } }),
+    });
+    assert.equal(foreignModelAsset.status, 400);
+    const editModel = (fields: unknown) => fetch(`${baseUrl}/api/master-data/models/${model.data.id}`, {
+      method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ categoryId: category.data.id, name: "Updated integration model", fields }),
+    });
+    const unsafeEdit = await editModel([]);
+    assert.equal(unsafeEdit.status, 409);
+    assert.equal((await unsafeEdit.json() as ErrorResponse).error?.code, "MODEL_IN_USE");
+    const safeEdit = await editModel([{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }]);
+    if (safeEdit.status !== 200) {
+      assert.fail(`Unchanged field definition must allow model rename (${safeEdit.status}): ${await safeEdit.text()}`);
+    }
+
     const assetDetail = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
     });
@@ -419,6 +455,27 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     if (createMember.status !== 201) assert.fail(`User creation failed: ${createMember.status} ${await createMember.text()}`);
     const managed = await createMember.json() as { data: { id: string } };
+    // Trial user capacity: creation and reactivation share tenant locking.
+    const createExtraUser = (email: string) => fetch(`${baseUrl}/api/members`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ email, fullName: "Quota Test User", initialPassword: password,
+        roleId: customRole.data.id, allLocationsAccess: false }),
+    });
+    const extraUser = await createExtraUser(anotherMemberEmail);
+    assert.equal(extraUser.status, 201);
+    const extraMember = await extraUser.json() as { data: { id: string } };
+    const fourthMember = await createExtraUser(`it.denied.${suffix}@example.test`);
+    assert.equal(fourthMember.status, 409);
+    assert.equal((await fourthMember.json() as ErrorResponse).error?.code, "USER_PLAN_LIMIT_REACHED");
+    const changeMemberActive = (active: boolean) => fetch(`${baseUrl}/api/members/${extraMember.data.id}/status`, {
+      method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ isActive: active, reason: "Integration test changes membership active status" }),
+    });
+    assert.equal((await changeMemberActive(false)).status, 200);
+    assert.equal((await changeMemberActive(true)).status, 200);
+
     const editProfile = await fetch(`${baseUrl}/api/members/${managed.data.id}/profile`, {
       method: "PATCH",
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
@@ -644,9 +701,12 @@ test("registration, session security, tenant isolation, locations and assets wor
         title: `Subscription limit test asset ${index}`,
       }),
     });
+    let limitedAssetId = "";
     for (let index = 0; index < 4; index += 1) {
       const allowed = await registerLimitedAsset(index);
-      assert.equal(allowed.status, 201, `Asset ${index + 1} should fit the plan cap: ${await allowed.text()}`);
+      if (allowed.status !== 201) assert.fail(`Asset ${index + 1} creation failed: ${await allowed.text()}`);
+      const registered = await allowed.json() as { data: { id: string } };
+      if (index === 0) limitedAssetId = registered.data.id;
     }
     const blockedByCap = await registerLimitedAsset(4);
     assert.equal(blockedByCap.status, 409);
@@ -658,6 +718,56 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal(capBody.error.maximum, 4);
     assert.equal(capBody.error.limit, "assets");
     assert.equal(await prisma.asset.count({ where: { tenantId: ownerB.tenant.id } }), 4);
+    // Transactional storage usage: two 400 KiB uploads fit a 1 MiB plan; the third does not.
+    const testPayload = Buffer.alloc(400 * 1024, 65).toString("base64");
+    const uploadFile = () => fetch(`${baseUrl}/api/files`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ assetId: limitedAssetId, filename: "attachment.txt",
+        mimeType: "text/plain", contentBase64: testPayload }),
+    });
+    const firstUpload = await uploadFile();
+    assert.equal(firstUpload.status, 201);
+    const firstFile = await firstUpload.json() as { data: { id: string; sizeBytes: number } };
+    assert.equal(firstFile.data.sizeBytes, 400 * 1024);
+    const authorizedDownload = await fetch(`${baseUrl}/api/files/${firstFile.data.id}/download`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(authorizedDownload.status, 200);
+    assert.equal((await authorizedDownload.arrayBuffer()).byteLength, 400 * 1024);
+    const noCsrfUpload = await fetch(`${baseUrl}/api/files`, {
+      method: "POST", headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        json: true, origin: true }),
+      body: JSON.stringify({ assetId: limitedAssetId, filename: "must-not-persist.txt",
+        mimeType: "text/plain", contentBase64: testPayload }),
+    });
+    assert.equal(noCsrfUpload.status, 403);
+
+    assert.equal((await uploadFile()).status, 201);
+    const blockedUpload = await uploadFile();
+    assert.equal(blockedUpload.status, 409);
+    assert.equal((await blockedUpload.json() as ErrorResponse).error?.code, "STORAGE_LIMIT_REACHED");
+
+    const otherTenantFiles = await fetch(`${baseUrl}/api/files/assets/${limitedAssetId}`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(otherTenantFiles.status, 404);
+    const otherTenantDownload = await fetch(`${baseUrl}/api/files/${firstFile.data.id}/download`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(otherTenantDownload.status, 404);
+    const usage = await fetch(`${baseUrl}/api/files/usage`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(usage.status, 200);
+    assert.equal(Number((await usage.json() as { data: { storageUsedBytes: string } }).data.storageUsedBytes), 800 * 1024);
+    const deletedFile = await fetch(`${baseUrl}/api/files/${firstFile.data.id}`, {
+      method: "DELETE", headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id,
+        csrfToken: ownerB.csrfToken, origin: true }),
+    });
+    assert.equal(deletedFile.status, 204);
+    assert.equal((await uploadFile()).status, 201, "Delete must restore storage allowance.");
+
 
     // Trial expiry and suspension are checked by the API, not just by UI controls.
     await prisma.tenantSubscription.update({
@@ -678,6 +788,18 @@ test("registration, session security, tenant isolation, locations and assets wor
     const expiredTrial = await attemptOwnerAAsset("expired");
     assert.equal(expiredTrial.status, 403);
     assert.equal((await expiredTrial.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+    const expiredModelEdit = await fetch(`${baseUrl}/api/master-data/models/${model.data.id}`, {
+      method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
+        csrfToken: ownerA.csrfToken, json: true, origin: true }),
+      body: JSON.stringify({ categoryId: category.data.id, name: "No write after trial",
+        fields: [{ key: "ramGb", label: "RAM (GB)", type: "number", required: true }] }),
+    });
+    assert.equal(expiredModelEdit.status, 403);
+    assert.equal((await expiredModelEdit.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+    const readableAfterExpiry = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(readableAfterExpiry.status, 200);
 
     await prisma.tenantSubscription.update({
       where: { tenantId: ownerA.tenant.id },
@@ -686,7 +808,7 @@ test("registration, session security, tenant isolation, locations and assets wor
     const suspended = await attemptOwnerAAsset("suspended");
     assert.equal(suspended.status, 403);
     assert.equal((await suspended.json() as ErrorResponse).error?.code, "SUBSCRIPTION_INACTIVE");
-    assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 1);
+    assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 2);
 
     const auditActions = await prisma.platformAuditLog.findMany({
       where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
@@ -752,7 +874,7 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
         await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
       }
-      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail] } } });
+      await prisma.user.deleteMany({ where: { email: { in: [...emails, managedEmail, anotherMemberEmail] } } });
     } finally {
       if (server) {
         await new Promise<void>((resolve, reject) => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import AssetFilesPanel from "./AssetFilesPanel";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -13,6 +14,52 @@ interface LocationSummary {
   parentId?: string | null;
 }
 
+type CustomField = { key: string; label: string; type: "text" | "longText" | "number" | "date" | "boolean" | "singleSelect" | "multiSelect"; required: boolean; options?: string[] };
+type AssetModelOption = { id: string; name: string; fieldSchema: { version: number; fields: CustomField[] } | null };
+type CustomValue = string | number | boolean | string[];
+
+function collectFields(data: FormData, fields: CustomField[]): Record<string, CustomValue> {
+  const result: Record<string, CustomValue> = {};
+  for (const field of fields) {
+    const name = "custom:" + field.key;
+    const text = String(data.get(name) ?? "").trim();
+    if (field.type === "boolean") { result[field.key] = data.has(name); continue; }
+    if (field.type === "multiSelect") {
+      const values = data.getAll(name).map(v => String(v));
+      if (values.length) result[field.key] = values;
+      continue;
+    }
+    if (text) result[field.key] = field.type === "number" ? Number(text) : text;
+  }
+  return result;
+}
+
+function CustomFieldInputs({ fields, values = {} }: { fields: CustomField[]; values?: Record<string, CustomValue> }) {
+  return <div className="asset-custom-fields">
+    {fields.length > 0 && <h3>Model-specific information</h3>}
+    {fields.map(field => {
+      const name = "custom:" + field.key;
+      const value = values[field.key];
+      if (field.type === "boolean") return <label className="master-field-check" key={field.key}>
+        <input name={name} type="checkbox" defaultChecked={value === true}/> {field.label}
+      </label>;
+      if (field.type === "singleSelect") return <div key={field.key}>
+        <label>{field.label}{field.required && " *"}</label>
+        <ThemeSelect name={name} required={field.required} label={field.label} defaultValue={typeof value === "string" ? value : ""}
+          options={[{value:"",label:"Choose an option"}, ...(field.options ?? []).map(option => ({value:option,label:option}))]}/>
+      </div>;
+      if (field.type === "multiSelect") return <div key={field.key}><label>{field.label}{field.required && " *"}</label>
+        {(field.options ?? []).map(option => <label key={option} className="master-field-check">
+          <input type="checkbox" name={name} value={option} defaultChecked={Array.isArray(value) && value.includes(option)}/> {option}
+        </label>)}</div>;
+      return <label key={field.key}>{field.label}{field.required && " *"}
+        <input name={name} type={field.type === "date" ? "date" : field.type === "number" ? "number" : "text"}
+          step={field.type === "number" ? "any" : undefined} maxLength={field.type === "text" ? 500 : 10000}
+          required={field.required} defaultValue={typeof value === "string" || typeof value === "number" ? value : ""}/>
+      </label>;
+    })}
+  </div>;
+}
 interface AssetSummary {
   id: string;
   inventoryNumber: string;
@@ -30,7 +77,8 @@ interface AssetSummary {
   currentLocation: LocationSummary | null;
   assignedEmployeeId?: string | null;
   custodian?: { id: string; employeeCode: string; firstName: string; lastName: string } | null;
-  model?: { id: string; name: string; category?: { name: string } } | null;
+  model?: { id: string; name: string; category?: { name: string }; fieldSchema?: { version: number; fields: CustomField[] } | null } | null;
+  customFields?: Record<string, CustomValue> | null;
   manufacturer?: { id: string; name: string } | null;
   supplier?: { id: string; name: string } | null;
   notes?: string | null;
@@ -81,6 +129,9 @@ function statusLabel(status: AssetStatus): string {
 function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAccess, manageableLocationIds }: AssetPageProps) {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
+  const [models, setModels] = useState<AssetModelOption[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [modelError, setModelError] = useState("");
   const [loading, setLoading] = useState(true);
   const [locationsError, setLocationsError] = useState("");
   const [error, setError] = useState("");
@@ -108,6 +159,21 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
 
   const canCreate = permissions.includes("asset.create");
   const canReadLocations = permissions.includes("location.read");
+  const canReadAssets = permissions.includes("asset.read");
+  const selectedModel = models.find(item => item.id === selectedModelId);
+  useEffect(() => {
+    setSelectedModelId("");
+    if (!tenantId || !canReadAssets) { setModels([]); return; }
+    const controller = new AbortController();
+    void fetch(apiBaseUrl + "/master-data/models", {
+      credentials: "include", headers: { "X-Tenant-Id": tenantId }, signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) throw new Error("Could not load asset models.");
+      return response.json() as Promise<{ data: AssetModelOption[] }>;
+    }).then(payload => { if (!controller.signal.aborted) { setModels(payload.data); setModelError(""); } })
+      .catch(error => { if (!controller.signal.aborted) setModelError(error instanceof Error ? error.message : "Could not load models."); });
+    return () => controller.abort();
+  }, [tenantId, canReadAssets]);
   const canEditFinancial = permissions.includes("asset.financial.update");
   const canAssignAssets = permissions.includes("asset.assign");
   const canReadEmployees = permissions.includes("employee.read");
@@ -336,10 +402,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     setSuccessMessage("");
 
     const formData = new FormData(event.currentTarget);
-    const body: Record<string, string | number> = {
+    const body: Record<string, unknown> = {
       inventoryNumber: String(formData.get("inventoryNumber") ?? "").trim(),
       title: String(formData.get("title") ?? "").trim(),
     };
+    if (selectedModelId) {
+      body.modelId = selectedModelId;
+      body.customFields = collectFields(formData, selectedModel?.fieldSchema?.fields ?? []);
+    }
     const optionalFields = ["assetNumber", "serialNumber", "currentLocationId", "notes"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
@@ -395,10 +465,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     setEditSaving(true);
     setEditError("");
     const formData = new FormData(event.currentTarget);
-    const body: Record<string, string | number> = {
+    const body: Record<string, unknown> = {
       title: String(formData.get("title") ?? "").trim(),
     };
 
+    if (selectedAsset.model) {
+      body.customFields = collectFields(formData, selectedAsset.model.fieldSchema?.fields ?? []);
+    }
     const optionalFields = ["assetNumber", "serialNumber", "description", "notes"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
@@ -532,6 +605,11 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                 </div>
                 {canEditFinancial && <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>}
               </div>
+              <label>Asset model</label>
+              <ThemeSelect label="Asset model" value={selectedModelId} onChange={setSelectedModelId}
+                options={[{value:"",label:"No model selected"}, ...models.map(model => ({value:model.id,label:model.name}))]}/>
+              {modelError && <div className="asset-inline-hint">{modelError}</div>}
+              <CustomFieldInputs key={selectedModelId} fields={selectedModel?.fieldSchema?.fields ?? []}/>
               <label htmlFor="assetNotes">Notes</label><textarea id="assetNotes" name="notes" rows={3} maxLength={20000} placeholder="Optional description or notes" />
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
               {!allLocationsAccess && !locationsError && locations.length === 0 && <p className="asset-inline-hint">This role needs an accessible location to register an asset. Ask an administrator to grant location access or create a location.</p>}
@@ -554,6 +632,17 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
             </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading asset history…</div>}
             {detailError && <div className="asset-inline-error" role="alert">{detailError}</div>}
+            {selectedAsset && !editingAsset && (selectedAsset.model?.fieldSchema?.fields.length ?? 0) > 0 && <section className="asset-history-section" aria-label="Model custom field values">
+              <h3>Model-specific information</h3>
+              {selectedAsset.model?.fieldSchema?.fields.map(field => {
+                const value = selectedAsset.customFields?.[field.key];
+                return <div className="account-session" key={field.key}>
+                  <strong>{field.label}</strong><span>{Array.isArray(value) ? value.join(", ")
+                    : value === true ? "Yes" : value === false ? "No" : String(value ?? "—")}</span>
+                </div>;
+              })}
+            </section>}
+            {selectedAsset && !editingAsset && <AssetFilesPanel assetId={selectedAsset.id} tenantId={tenantId} csrfToken={csrfToken} canEdit={permissions.includes("asset.update") && (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId)))}/> }
             {selectedAsset && (editingAsset ? (
               <form className="asset-edit-form" onSubmit={(event) => void saveAssetEdit(event)}>
                 <label htmlFor="editAssetTitle">Asset name <span>*</span></label>
@@ -562,6 +651,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} defaultValue={selectedAsset.assetNumber ?? ""} /></div>
                   <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} defaultValue={selectedAsset.serialNumber ?? ""} /></div>
                 </div>
+                {selectedAsset.model && <CustomFieldInputs fields={selectedAsset.model.fieldSchema?.fields ?? []}
+                  values={selectedAsset.customFields ?? {}}/>}
                 <label htmlFor="editDescription">Description</label>
                 <textarea id="editDescription" name="description" rows={3} maxLength={20000} defaultValue={selectedAsset.description ?? ""} />
                 <label htmlFor="editNotes">Notes</label>

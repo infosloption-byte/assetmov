@@ -281,6 +281,15 @@ platformRouter.get(
       const activeUsersByTenant = new Map(
         activeMembershipCounts.map((item) => [item.tenantId, item._count._all]),
       );
+      const storageCounts = tenantIds.length
+        ? await prisma.tenantStorageObject.groupBy({
+            by: ["tenantId"], where: { tenantId: { in: tenantIds } },
+            _sum: { sizeBytes: true },
+          })
+        : [];
+      const storageByTenant = new Map(
+        storageCounts.map(item => [item.tenantId, String(item._sum.sizeBytes ?? 0)]),
+      );
 
       response.status(200).json({
         data: tenants.map((tenant) => ({
@@ -291,6 +300,7 @@ platformRouter.get(
           createdAt: tenant.createdAt,
           assetCount: tenant._count.assets,
           activeUserCount: activeUsersByTenant.get(tenant.id) ?? 0,
+          storageUsedBytes: storageByTenant.get(tenant.id) ?? "0",
           subscription: tenant.subscription
             ? {
                 ...tenant.subscription,

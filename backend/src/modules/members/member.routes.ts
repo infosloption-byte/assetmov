@@ -80,6 +80,12 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
       if (subscription.plan.maxActiveUsers !== null && count >= subscription.plan.maxActiveUsers) throw new Error("USER_PLAN_LIMIT_REACHED");
       const role = await tx.role.findFirst({ where: { id: input.roleId, tenantId } });
       if (!role) throw new Error("ROLE_NOT_FOUND");
+      const assignedPermissionKeys = await tx.rolePermission.findMany({
+        where: { roleId: role.id }, select: { permission: { select: { key: true } } },
+      });
+      if (assignedPermissionKeys.some(entry => !request.auth!.permissions?.includes(entry.permission.key))) {
+        throw new Error("ROLE_ASSIGNMENT_DENIED");
+      }
       // Creating a company owner or privileged operator is restricted to an owner.
       if ((role.isSystem || await tx.rolePermission.count({
         where: { roleId: role.id, permission: { key: { in: ["members.manage", "roles.manage", "tenant.settings.manage"] } } },
@@ -179,6 +185,12 @@ memberRouter.patch("/:id/role", requireCsrf, async (request, response, next) => 
       ]);
       if (!member) throw new Error("MEMBER_NOT_FOUND");
       if (!role) throw new Error("ROLE_NOT_FOUND");
+      const targetPermissions = await tx.rolePermission.findMany({
+        where: { roleId: role.id }, select: { permission: { select: { key: true } } },
+      });
+      if (targetPermissions.some(entry => !request.auth!.permissions?.includes(entry.permission.key))) {
+        throw new Error("ROLE_ASSIGNMENT_DENIED");
+      }
       if (member.role.key === "TENANT_OWNER" && role.key !== "TENANT_OWNER") {
         const count = await tx.membership.count({ where: { tenantId, isActive: true, role: { key: "TENANT_OWNER" } } });
         if (count <= 1) throw new Error("LAST_OWNER_REQUIRED");

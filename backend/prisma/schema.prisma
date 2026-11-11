@@ -120,6 +120,7 @@ model Tenant {
   assetTags         AssetTag[]
   licenseAssignments LicenseAssignment[]
   subscription      TenantSubscription?
+  files             TenantStorageObject[]
 }
 
 model User {
@@ -392,6 +393,7 @@ model Asset {
   transferLines       AssetTransferLine[]
   serviceRecords      ServiceRecord[]
   tags                AssetTag[]
+  files               TenantStorageObject[]
 
   @@unique([tenantId, inventoryNumber])
   @@unique([tenantId, id])
@@ -673,4 +675,19 @@ model PlatformAuditLog {
   @@index([createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([actorUserId, createdAt])
+}
+
+model TenantStorageObject {
+  id          String   @id @default(cuid()) @db.VarChar(36)
+  tenantId    String   @db.VarChar(36)
+  assetId     String   @db.VarChar(36)
+  filename    String   @db.VarChar(191)
+  mimeType    String   @db.VarChar(100)
+  sizeBytes   Int
+  content     Bytes    @db.LongBlob
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asset       Asset    @relation(fields: [tenantId, assetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId, assetId, createdAt])
 }
