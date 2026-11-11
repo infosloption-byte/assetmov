@@ -172,7 +172,7 @@ function LocationsPage({
           <button type="button" onClick={() => void loadLocations()}>Refresh</button>
         </form>
         <span className="module-count">{locations.length} LOCATIONS</span>
-        {canManage && <label><input type="checkbox" checked={includeInactive} onChange={event => setIncludeInactive(event.target.checked)}/> Include inactive</label>}
+        {canManage && <label className="checkbox-field"><input type="checkbox" checked={includeInactive} onChange={event => setIncludeInactive(event.target.checked)}/> Include inactive</label>}
       </div>
 
       {success && <div className="asset-success" role="status">{success}</div>}
