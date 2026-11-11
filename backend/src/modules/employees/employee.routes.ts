@@ -18,6 +18,8 @@ const employeeCreateSchema = z.object({
   employeeCode: z.string().trim().min(1).max(100),
   firstName: z.string().trim().min(1).max(100),
   lastName: z.string().trim().min(1).max(100),
+  designation: z.string().trim().max(100).optional(),
+  employeeType: z.string().trim().max(100).optional(),
   email: z.string().trim().toLowerCase().email().max(191).optional(),
   phone: z.string().trim().max(50).optional(),
   homeLocationId: z.string().trim().min(1).optional(),
@@ -27,6 +29,8 @@ const employeeUpdateSchema = z.object({
   employeeCode: z.string().trim().min(1).max(100).optional(),
   firstName: z.string().trim().min(1).max(100).optional(),
   lastName: z.string().trim().min(1).max(100).optional(),
+  designation: z.string().trim().max(100).optional(),
+  employeeType: z.string().trim().max(100).optional(),
   email: z.string().trim().toLowerCase().email().max(191).optional(),
   phone: z.string().trim().max(50).optional(),
   homeLocationId: z.string().trim().min(1).optional(),
@@ -219,6 +223,8 @@ employeeRouter.post(
             employeeCode: input.employeeCode,
             firstName: input.firstName,
             lastName: input.lastName,
+            designation: input.designation || undefined,
+            employeeType: input.employeeType || undefined,
             email: input.email || undefined,
             phone: input.phone || undefined,
             homeLocationId: input.homeLocationId || undefined,
@@ -237,6 +243,8 @@ employeeRouter.post(
               employeeCode: employee.employeeCode,
               firstName: employee.firstName,
               lastName: employee.lastName,
+              designation: employee.designation,
+              employeeType: employee.employeeType,
               homeLocationId: employee.homeLocationId,
             },
             ipAddress: request.ip?.slice(0, 64),
@@ -248,10 +256,6 @@ employeeRouter.post(
 
       response.status(201).json({ data: result });
     } catch (error) {
-      if (error instanceof Error && error.message === "EMPLOYEE_HAS_ASSIGNED_ASSETS") {
-        sendError(response, 409, "EMPLOYEE_HAS_ASSIGNED_ASSETS", "Return or reassign the employee's assets before deactivation.");
-        return;
-      }
       if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_INVALID") {
         sendError(response, 400, "INVALID_LOCATION", "Choose an active location in this workspace.");
         return;
@@ -335,6 +339,8 @@ employeeRouter.patch(
             ...(input.employeeCode !== undefined ? { employeeCode: input.employeeCode } : {}),
             ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
             ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+            ...(input.designation !== undefined ? { designation: input.designation || null } : {}),
+            ...(input.employeeType !== undefined ? { employeeType: input.employeeType || null } : {}),
             ...(input.email !== undefined ? { email: input.email || null } : {}),
             ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
             ...(input.homeLocationId !== undefined ? { homeLocationId: input.homeLocationId } : {}),
@@ -354,6 +360,8 @@ employeeRouter.patch(
               employeeCode: existing.employeeCode,
               firstName: existing.firstName,
               lastName: existing.lastName,
+              designation: existing.designation,
+              employeeType: existing.employeeType,
               email: existing.email,
               phone: existing.phone,
               homeLocationId: existing.homeLocationId,
@@ -363,6 +371,8 @@ employeeRouter.patch(
               employeeCode: updated.employeeCode,
               firstName: updated.firstName,
               lastName: updated.lastName,
+              designation: updated.designation,
+              employeeType: updated.employeeType,
               email: updated.email,
               phone: updated.phone,
               homeLocationId: updated.homeLocationId,
@@ -383,6 +393,10 @@ employeeRouter.patch(
       }
       if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_SCOPE_DENIED") {
         sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage both the current and new location to move an employee.");
+        return;
+      }
+      if (error instanceof Error && error.message === "EMPLOYEE_HAS_ASSIGNED_ASSETS") {
+        sendError(response, 409, "EMPLOYEE_HAS_ASSIGNED_ASSETS", "Return or reassign the employee's assets before deactivation.");
         return;
       }
       if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_INVALID") {
