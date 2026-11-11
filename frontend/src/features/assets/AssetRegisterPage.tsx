@@ -167,6 +167,10 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [assignmentError, setAssignmentError] = useState("");
   const [assignmentSuccess, setAssignmentSuccess] = useState("");
+  const [lifecycleAction, setLifecycleAction] = useState<"DAMAGE" | "RESTORE" | "DISPOSE" | "RETIRE" | "">("");
+  const [lifecycleReason, setLifecycleReason] = useState("");
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState("");
 
   const canCreate = permissions.includes("asset.create");
   const canReadLocations = permissions.includes("location.read");
@@ -295,6 +299,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     if (!tenantId) return;
     setDetailLoading(true);
     setDetailError("");
+    setLifecycleAction(""); setLifecycleReason(""); setLifecycleError("");
     setEditingAsset(false);
     setEditError("");
     setAssignmentError("");
@@ -569,6 +574,26 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     }
   }
 
+  async function applyLifecycle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !selectedAsset || !lifecycleAction || lifecycleBusy) return;
+    setLifecycleBusy(true);setLifecycleError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/" + encodeURIComponent(selectedAsset.id) + "/lifecycle", {
+        method: "POST", credentials:"include",
+        headers: { "Content-Type":"application/json","X-Tenant-Id":tenantId,"X-CSRF-Token":csrfToken },
+        body: JSON.stringify({ action:lifecycleAction, reason:lifecycleReason.trim() }),
+      });
+      const payload = await response.json().catch(()=>({})) as { data?: AssetSummary; error?: {message?:string} };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Lifecycle update failed.");
+      setSelectedAsset(current => current ? { ...current, ...payload.data } : current);
+      setLifecycleAction("");setLifecycleReason("");
+      setSuccessMessage("Asset lifecycle updated.");
+      await loadAssets();
+    } catch (error) { setLifecycleError(error instanceof Error ? error.message : "Lifecycle update failed."); }
+    finally { setLifecycleBusy(false); }
+  }
+
   return (
     <section className="asset-register-page">
       <div className="asset-page-heading">
@@ -808,6 +833,35 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   {assignmentError && <div className="asset-inline-error" role="alert">{assignmentError}</div>}
                   {assignmentSuccess && <div className="asset-success" role="status">{assignmentSuccess}</div>}
                 </div>
+                {(permissions.includes("asset.update") || permissions.includes("asset.dispose")) &&
+                  (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId))) &&
+                  <section className="asset-custody-panel" aria-label="Asset lifecycle controls">
+                    <strong>Lifecycle actions</strong>
+                    <p className="asset-inline-hint">Changes are permanent history events. Return assigned equipment before changing its condition.</p>
+                    <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                      {permissions.includes("asset.update") && selectedAsset.status === "AVAILABLE" &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("DAMAGE")}>Mark damaged</button>}
+                      {permissions.includes("asset.update") && selectedAsset.status === "DAMAGED" &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("RESTORE")}>Restore to available</button>}
+                      {permissions.includes("asset.dispose") && ["AVAILABLE","DAMAGED"].includes(selectedAsset.status) &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("DISPOSE")}>Dispose asset</button>}
+                      {permissions.includes("asset.dispose") && ["DRAFT","AVAILABLE","DAMAGED"].includes(selectedAsset.status) &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("RETIRE")}>Retire asset</button>}
+                    </div>
+                    {lifecycleAction && <form className="asset-custody-form" onSubmit={event=>void applyLifecycle(event)}>
+                      <label>Reason for {lifecycleAction.toLowerCase()} (required)
+                        <textarea value={lifecycleReason} onChange={event=>setLifecycleReason(event.target.value)}
+                          minLength={8} maxLength={4000} rows={3} required placeholder="Describe the condition and approval context"/>
+                      </label>
+                      <div style={{display:"flex",gap:"8px"}}>
+                        <button className="plain-button" type="button" onClick={()=>setLifecycleAction("")}>Cancel</button>
+                        <button className="primary-button" type="submit" disabled={lifecycleBusy || lifecycleReason.trim().length < 8}>
+                          {lifecycleBusy ? "Saving…" : "Confirm lifecycle change"}
+                        </button>
+                      </div>
+                    </form>}
+                    {lifecycleError && <div role="alert" className="asset-inline-error">{lifecycleError}</div>}
+                  </section>}
                 <div className="asset-detail-grid">
                   <Detail label="Status"><span className={"asset-status-badge " + selectedAsset.status.toLowerCase().replaceAll("_", "-")}>{statusLabel(selectedAsset.status)}</span></Detail>
                   <Detail label="Serial number">{selectedAsset.serialNumber || "—"}</Detail>
