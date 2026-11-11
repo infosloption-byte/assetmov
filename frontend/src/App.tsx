@@ -13,6 +13,7 @@ import PlatformConsole from "./features/platform/PlatformConsole";
 import CompanyBillingPage from "./features/billing/CompanyBillingPage";
 import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
+import AccountMenu from "./components/AccountMenu";
 
 type ApiHealth = "checking" | "online" | "offline";
 type BillingStatus = { allowed: boolean; reason: string | null; isCompanyAdmin: boolean; status: string | null; planName: string | null; trialEndsAt: string | null; periodEndsAt: string | null };
@@ -460,12 +461,13 @@ function App() {
                       value: membership.tenant.id, label: membership.tenant.name,
                     }))}/>
                 )}
-                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
-                <div className="avatar" aria-label={user.fullName}>{initials}</div>
-                {!user.emailVerified && <button className="topbar-button ghost" type="button" onClick={() => void requestEmailVerification()}>Verify email</button>}
-                <button className="topbar-button ghost" type="button" onClick={() => { setPasswordError(""); setPasswordDialog(true); }}>Password</button>
-                <button className="topbar-button ghost" type="button" onClick={() => { setSessionsDialog(true); void loadSessions(); }}>Sessions</button>
-                <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
+                <AccountMenu user={user} initials={initials}
+                  roleLabel={workspaceLoading ? "Loading workspace…" :
+                    activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}
+                  onVerifyEmail={() => void requestEmailVerification()}
+                  onPassword={() => { setPasswordError(""); setPasswordDialog(true); }}
+                  onSessions={() => { setSessionsDialog(true); void loadSessions(); }}
+                  onSignOut={() => void handleLogout()}/>
               </>
             ) : (
               <>
