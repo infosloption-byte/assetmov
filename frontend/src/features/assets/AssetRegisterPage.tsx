@@ -867,10 +867,10 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
             {selectedAsset && (editingAsset ? (
               <form className="asset-edit-form" onSubmit={(event) => void saveAssetEdit(event)}>
                 <label htmlFor="editAssetTitle">Asset name <span>*</span></label>
-                <input id="editAssetTitle" name="title" required maxLength={191} defaultValue={selectedAsset.title} />
+                <input id="editAssetTitle" name="title" required maxLength={191} placeholder="e.g. Dell Latitude 7450" defaultValue={selectedAsset.title} />
                 <div className="asset-form-two-col">
-                  <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} defaultValue={selectedAsset.assetNumber ?? ""} /></div>
-                  <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} defaultValue={selectedAsset.serialNumber ?? ""} /></div>
+                  <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} placeholder="Optional reference" defaultValue={selectedAsset.assetNumber ?? ""} /></div>
+                  <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} placeholder="e.g. SN123456" defaultValue={selectedAsset.serialNumber ?? ""} /></div>
                 </div>
                 <div className="asset-form-two-col">
                   <div><label>Supplier</label><ThemeSelect label="Edit supplier" name="supplierId"
@@ -890,11 +890,11 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   <>
                     <div className="asset-edit-section-label">Financial and warranty details</div>
                     <div className="asset-form-two-col">
-                      <div><label htmlFor="editPurchaseCost">Purchase cost</label><input id="editPurchaseCost" name="purchaseCost" type="number" min="0" step="0.01" defaultValue={selectedAsset.purchaseCost == null ? "" : String(selectedAsset.purchaseCost)} /></div>
-                      <div><label htmlFor="editAccountCode">Account code</label><input id="editAccountCode" name="accountCode" maxLength={100} defaultValue={selectedAsset.accountCode ?? ""} /></div>
+                      <div><label htmlFor="editPurchaseCost">Purchase cost</label><input id="editPurchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="0.00" defaultValue={selectedAsset.purchaseCost == null ? "" : String(selectedAsset.purchaseCost)} /></div>
+                      <div><label htmlFor="editAccountCode">Account code</label><input id="editAccountCode" name="accountCode" maxLength={100} placeholder="Optional" defaultValue={selectedAsset.accountCode ?? ""} /></div>
                     </div>
                     <div className="asset-form-two-col">
-                      <div><label htmlFor="editPurchaseOrder">Purchase order</label><input id="editPurchaseOrder" name="purchaseOrderNumber" maxLength={191} defaultValue={selectedAsset.purchaseOrderNumber ?? ""} /></div>
+                      <div><label htmlFor="editPurchaseOrder">Purchase order</label><input id="editPurchaseOrder" name="purchaseOrderNumber" maxLength={191} placeholder="e.g. PO-2026-001" defaultValue={selectedAsset.purchaseOrderNumber ?? ""} /></div>
                       <div><label htmlFor="editWarrantyEnd">Warranty end</label><input id="editWarrantyEnd" name="warrantyEnd" type="date" defaultValue={selectedAsset.warrantyEnd?.slice(0, 10) ?? ""} /></div>
                     </div>
                   </>
