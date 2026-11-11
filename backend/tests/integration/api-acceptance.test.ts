@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
 import test from "node:test";
 import type { Server } from "node:http";
 import { app } from "../../src/app.js";
@@ -116,6 +116,10 @@ test("registration, session security, tenant isolation, locations and assets wor
   let server: Server | undefined;
   let baseUrl = "";
   let createdPlanId: string | undefined;
+  const createdWebhookEventIds: string[] = [];
+  const savedPaddleEnvironment = Object.fromEntries(
+    ["PADDLE_ENVIRONMENT", "PADDLE_API_KEY", "PADDLE_WEBHOOK_SECRET", "APP_PUBLIC_URL"].map(key => [key, process.env[key]]),
+  );
 
   try {
     await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`;
@@ -529,6 +533,10 @@ test("registration, session security, tenant isolation, locations and assets wor
     const managedBody = await managedContext.json() as WorkspaceResponse;
     assert.ok(managedBody.permissions.includes("asset.read"));
     assert.ok(!managedBody.permissions.includes("members.manage"));
+    const deniedMemberBilling = await fetch(`${baseUrl}/api/billing/history`, {
+      headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(deniedMemberBilling.status, 403, "Custom roles cannot see billing history.");
     const deniedRoleCreation = await fetch(`${baseUrl}/api/roles`, {
       method: "POST",
       headers: requestHeaders({ cookie: managedCookie, tenantId: ownerA.tenant.id,
@@ -586,6 +594,11 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: ownerA.cookie }),
     });
     assert.equal(platformPlans.status, 200);
+    const platformOverview = await fetch(`${baseUrl}/api/platform/overview`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(platformOverview.status, 200);
+    assert.equal(typeof (await platformOverview.json() as { data: { companyCount: number } }).data.companyCount, "number");
     const plansBody = await platformPlans.json() as { data: Array<{ id: string; key: string }> };
     assert.ok(plansBody.data.some((plan) => plan.key === "trial"));
 
@@ -769,6 +782,134 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal((await uploadFile()).status, 201, "Delete must restore storage allowance.");
 
 
+    // Sandboxed signed provider events: fulfillment is authorized only after a verified subscription.
+    const sandboxProductId = "pro_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const sandboxPriceId = "pri_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const sandboxCustomerId = "ctm_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const sandboxTransactionId = "txn_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const sandboxSubscriptionId = "sub_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const webhookSecret = "assetmov-test-webhook-secret";
+    process.env.PADDLE_ENVIRONMENT = "sandbox";
+    process.env.PADDLE_API_KEY = "test-only-no-network";
+    process.env.PADDLE_WEBHOOK_SECRET = webhookSecret;
+    process.env.APP_PUBLIC_URL = "https://assetmov-sandbox.example.test";
+    await prisma.subscriptionPlan.update({ where: { id: createdPlanId! },
+      data: { paddleProductId: sandboxProductId, paddleSandboxMonthlyPriceId: sandboxPriceId } });
+    const customer = await prisma.paddleBillingCustomer.create({ data: {
+      tenantId: ownerB.tenant.id, email: ownerB.email, name: ownerB.tenant.name,
+      environment: "sandbox", paddleCustomerId: sandboxCustomerId,
+    } });
+    const attempt = await prisma.paddleCheckoutAttempt.create({ data: {
+      tenantId: ownerB.tenant.id, planId: createdPlanId!, customerId: customer.id,
+      environment: "sandbox", interval: "MONTH", priceId: sandboxPriceId,
+      transactionId: sandboxTransactionId, status: "READY",
+    } });
+    const nowForEvents = Date.now();
+    const eventAt = (offsetMs: number) => new Date(nowForEvents + offsetMs).toISOString();
+    const subscriptionData = (status: string) => ({
+      id: sandboxSubscriptionId, customer_id: sandboxCustomerId,
+      status, transaction_id: sandboxTransactionId,
+      custom_data: { assetmov_tenant_id: ownerB.tenant.id, assetmov_billing_attempt_id: attempt.id },
+      items: [{ price: { id: sandboxPriceId, product_id: sandboxProductId }, quantity: 1 }],
+      current_billing_period: { starts_at: new Date(nowForEvents - 86_400_000).toISOString(),
+        ends_at: new Date(nowForEvents + 30 * 86_400_000).toISOString() },
+    });
+    const sendProviderEvent = (eventType: string, data: unknown, when: string, eventId?: string) => {
+      const id = eventId ?? "evt_" + randomUUID().replaceAll("-", "").slice(0, 26);
+      createdWebhookEventIds.push(id);
+      const raw = JSON.stringify({ event_id: id, event_type: eventType, occurred_at: when, data });
+      const ts = Math.floor(Date.now() / 1000);
+      const sig = createHmac("sha256", webhookSecret).update(String(ts) + ":" + raw).digest("hex");
+      return fetch(`${baseUrl}/api/webhooks/paddle`, {
+        method: "POST", headers: { "Content-Type": "application/json",
+          "Paddle-Signature": `ts=${ts};h1=${sig}` }, body: raw,
+      });
+    };
+    const forged = await fetch(`${baseUrl}/api/webhooks/paddle`, {
+      method: "POST", headers: { "Content-Type": "application/json", "Paddle-Signature": "ts=1;h1=invalid" },
+      body: JSON.stringify({ event_type: "subscription.created" }),
+    });
+    assert.equal(forged.status, 400);
+    const firstProviderEventId = "evt_" + randomUUID().replaceAll("-", "").slice(0, 26);
+    const confirmed = await sendProviderEvent("subscription.created", subscriptionData("active"), eventAt(0), firstProviderEventId);
+    assert.equal(confirmed.status, 200, await confirmed.text());
+    const paidAccess = await fetch(`${baseUrl}/api/assets`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(paidAccess.status, 200);
+    const paidState = await prisma.tenantSubscription.findUniqueOrThrow({ where: { tenantId: ownerB.tenant.id } });
+    assert.equal(paidState.billingSource, "PADDLE");
+    assert.equal(paidState.paddleSubscriptionId, sandboxSubscriptionId);
+    const replay = await sendProviderEvent("subscription.created", subscriptionData("active"), eventAt(0), firstProviderEventId);
+    assert.equal(replay.status, 200, "Exact duplicated signed event must be idempotent.");
+    assert.equal(await prisma.paddleWebhookEvent.count({ where: { eventId: firstProviderEventId } }), 1);
+    const blockedManualPlan = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/subscription`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ planId: createdPlanId, mode: "activate",
+          reason: "Do not replace an existing Paddle subscription" }),
+      },
+    );
+    assert.equal(blockedManualPlan.status, 409, "Platform operator must not forge paid access.");
+    const manualError = await blockedManualPlan.json() as ErrorResponse;
+    assert.equal(manualError.error?.code, "PADDLE_SUBSCRIPTION_MANAGED");
+
+    const platformSuspension = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/status`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ status: "SUSPENDED",
+          reason: "Test platform suspension independently of Paddle status" }),
+      },
+    );
+    assert.equal(platformSuspension.status, 200);
+    const whileSuspended = await fetch(`${baseUrl}/api/assets`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(whileSuspended.status, 403);
+    const reinstate = await fetch(
+      `${baseUrl}/api/platform/tenants/${ownerB.tenant.id}/status`, {
+        method: "PATCH", headers: requestHeaders({ cookie: ownerA.cookie,
+          csrfToken: ownerA.csrfToken, json: true, origin: true }),
+        body: JSON.stringify({ status: "ACTIVE",
+          reason: "Restore independent platform access after support review" }),
+      },
+    );
+    assert.equal(reinstate.status, 200);
+
+    const receipt = await sendProviderEvent("transaction.completed", {
+      id: sandboxTransactionId, subscription_id: sandboxSubscriptionId,
+      custom_data: { assetmov_tenant_id: ownerB.tenant.id, assetmov_billing_attempt_id: attempt.id },
+      currency_code: "USD", invoice_number: "INV-TEST",
+      details: { totals: { total: "7900" } },
+    }, eventAt(1000));
+    assert.equal(receipt.status, 200, await receipt.text());
+    assert.equal((await prisma.paddlePayment.findUniqueOrThrow({ where: { transactionId: sandboxTransactionId } })).amountMinor, 7900);
+
+    const overdue = await sendProviderEvent("subscription.past_due", subscriptionData("past_due"), eventAt(2000));
+    assert.equal(overdue.status, 200, await overdue.text());
+    const afterFailedPayment = await fetch(`${baseUrl}/api/assets`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(afterFailedPayment.status, 403, "Paddle past-due must block company API reads.");
+    const stillCanPay = await fetch(`${baseUrl}/api/billing/status`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(stillCanPay.status, 200);
+
+    const older = await sendProviderEvent("subscription.updated", subscriptionData("active"), eventAt(1000));
+    assert.equal(older.status, 200);
+    assert.equal((await prisma.tenantSubscription.findUniqueOrThrow({
+      where: { tenantId: ownerB.tenant.id },
+    })).status, "PAST_DUE", "Older events must not restore unpaid access.");
+    const renewed = await sendProviderEvent("subscription.updated", subscriptionData("active"), eventAt(3000));
+    assert.equal(renewed.status, 200, await renewed.text());
+    const restored = await fetch(`${baseUrl}/api/assets`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(restored.status, 200);
+
     // Trial expiry and suspension are checked by the API, not just by UI controls.
     await prisma.tenantSubscription.update({
       where: { tenantId: ownerA.tenant.id },
@@ -799,7 +940,17 @@ test("registration, session security, tenant isolation, locations and assets wor
     const readableAfterExpiry = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
     });
-    assert.equal(readableAfterExpiry.status, 200);
+    assert.equal(readableAfterExpiry.status, 403, "Expired company members must not bypass billing via read-only APIs.");
+    assert.equal((await readableAfterExpiry.json() as ErrorResponse).error?.code, "SUBSCRIPTION_EXPIRED");
+    const recoveryStatus = await fetch(`${baseUrl}/api/billing/status`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(recoveryStatus.status, 200);
+    assert.equal((await recoveryStatus.json() as { data: { allowed: boolean; isCompanyAdmin: boolean } }).data.allowed, false);
+    const recoveryBilling = await fetch(`${baseUrl}/api/billing/history`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(recoveryBilling.status, 200, "Owner billing recovery remains available after expiry.");
 
     await prisma.tenantSubscription.update({
       where: { tenantId: ownerA.tenant.id },
@@ -870,6 +1021,9 @@ test("registration, session security, tenant isolation, locations and assets wor
         await prisma.location.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
       }
+      if (createdWebhookEventIds.length) {
+        await prisma.paddleWebhookEvent.deleteMany({ where: { eventId: { in: createdWebhookEventIds } } });
+      }
       if (createdPlanId) {
         await prisma.platformAuditLog.deleteMany({ where: { actorUserId: { in: await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }).then((users) => users.map((user) => user.id)) } } });
         await prisma.subscriptionPlan.delete({ where: { id: createdPlanId } });
@@ -880,6 +1034,10 @@ test("registration, session security, tenant isolation, locations and assets wor
         await new Promise<void>((resolve, reject) => {
           server!.close((error) => error ? reject(error) : resolve());
         });
+      }
+      for (const [key, value] of Object.entries(savedPaddleEnvironment)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
       }
       await prisma.$disconnect();
     }

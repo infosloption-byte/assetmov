@@ -1,5 +1,26 @@
 # AssetMov Task Checklist
 
+## BuildHire-pattern SaaS billing, company roles and Paddle (stacked PR; implementation, acceptance pending)
+
+- [x] Preserve AssetMov's per-company configurable roles and full-access system Company Administrator; no BuildHire fixed-role migration.
+- [x] Keep Platform Super Admin privilege separate from company roles and allow audited company suspension/overview.
+- [x] Add Paddle sandbox provider client, exact-byte signature verification, provider/tenant identity checks, price verification, and backend error safety.
+- [x] Add additive migration for Paddle-specific company customer, payment, checkout attempt, webhook events and plan price mappings.
+- [x] Add Company Billing & Plan UI, pricing from verified AssetMov prices, Paddle checkout page, payment history and customer portal.
+- [x] Add explicit owner-only billing recovery while expired/overdue/suspended, blocking all operational GET and mutation endpoints.
+- [x] Add subscription change quote and amount confirmation endpoints with webhook-only provider entitlement reconciliation.
+- [x] Add Platform Admin overview, provider revenue pulse and AssetMov product/price ID management; prevent manual overriding of paid Paddle entitlements.
+- [x] Add HMAC, replay, subscription status, pricing and quote pure tests, plus MySQL signed webhook integration fixtures.
+- [x] Document sandbox settings, rollout requirements and all-in-one acceptance in [PADDLE_BILLING_ASSETMOV.md](PADDLE_BILLING_ASSETMOV.md).
+- [ ] **Validate new Prisma migration and client locally on WAMP**; do not reset existing DB.
+- [ ] Run frontend and backend lint, typecheck, unit tests, all MySQL acceptance tests, and builds on this stacked branch.
+- [ ] Set up separate **AssetMov Paddle sandbox** products/prices and approved HTTPS domain; verify real transactions and signed provider event fixtures.
+- [ ] Validate overdue, renewal, cancellation, portal, company isolation, no double trial and provider plan-change scenarios in browser.
+- [ ] Complete provider reconciliation/alerting, CI startup failure remediation, Linux portability, and production launch audit.
+- [ ] Keep **live Paddle mode disabled** until an independently approved release with live merchant account details.
+
+See [PADDLE_BILLING_ASSETMOV.md](PADDLE_BILLING_ASSETMOV.md). Existing validated administration PR #6 remains separate; merge neither branch until its own acceptance gates are met.
+
 ## Coordinated SaaS administration and quota batch (PR #6; acceptance pending)
 
 - [x] Commit platform-admin React plan and company management screens with audited subscription action controls.

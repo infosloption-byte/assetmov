@@ -205,8 +205,8 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         data: {
           tenantId: tenant.id,
           key: "TENANT_OWNER",
-          name: "Organization owner",
-          description: "Full access to this organization's asset operations and settings.",
+          name: "Company Administrator",
+          description: "Full company access including user management, configurable roles, assets and company billing.",
           isSystem: true,
         },
       });

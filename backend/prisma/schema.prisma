@@ -121,6 +121,10 @@ model Tenant {
   licenseAssignments LicenseAssignment[]
   subscription      TenantSubscription?
   files             TenantStorageObject[]
+  paddleBillingCustomer PaddleBillingCustomer?
+  paddleCheckoutAttempts PaddleCheckoutAttempt[]
+  paddlePayments PaddlePayment[]
+  paddleWebhookEvents PaddleWebhookEvent[]
 }
 
 model User {
@@ -634,6 +638,12 @@ model SubscriptionPlan {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   subscriptions     TenantSubscription[]
+  paddleCheckoutAttempts PaddleCheckoutAttempt[]
+  paddleProductId String? @db.VarChar(80)
+  paddleSandboxMonthlyPriceId String? @db.VarChar(80)
+  paddleSandboxYearlyPriceId  String? @db.VarChar(80)
+  paddleLiveMonthlyPriceId    String? @db.VarChar(80)
+  paddleLiveYearlyPriceId     String? @db.VarChar(80)
 
   @@index([isActive, name])
 }
@@ -648,6 +658,14 @@ model TenantSubscription {
   currentPeriodStartsAt DateTime?
   currentPeriodEndsAt   DateTime?
   cancelAtPeriodEnd     Boolean            @default(false)
+  billingSource        String             @default("PLATFORM") @db.VarChar(20)
+  paddleSubscriptionId String?            @unique @db.VarChar(80)
+  paddleCustomerId     String?            @db.VarChar(80)
+  paddlePriceId        String?            @db.VarChar(80)
+  paddleEnvironment    String?            @db.VarChar(16)
+  paddleInterval       String?            @db.VarChar(10)
+  paddleLastEventAt    DateTime?
+  paddlePendingPriceId String?            @db.VarChar(80)
   cancelledAt           DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -690,4 +708,76 @@ model TenantStorageObject {
   asset       Asset    @relation(fields: [tenantId, assetId], references: [tenantId, id], onDelete: Cascade)
 
   @@index([tenantId, assetId, createdAt])
+}
+
+model PaddleBillingCustomer {
+  id               String   @id @default(cuid()) @db.VarChar(36)
+  tenantId         String   @unique @db.VarChar(36)
+  email            String   @db.VarChar(191)
+  name             String   @db.VarChar(191)
+  paddleCustomerId String?  @unique @db.VarChar(80)
+  environment      String   @db.VarChar(16)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attempts         PaddleCheckoutAttempt[]
+
+  @@index([environment, email])
+}
+
+model PaddleCheckoutAttempt {
+  id             String   @id @default(cuid()) @db.VarChar(36)
+  tenantId       String   @db.VarChar(36)
+  planId         String   @db.VarChar(36)
+  customerId     String   @db.VarChar(36)
+  environment    String   @db.VarChar(16)
+  interval       String   @db.VarChar(10)
+  priceId        String   @db.VarChar(80)
+  transactionId  String?  @unique @db.VarChar(80)
+  checkoutUrl    String?  @db.VarChar(1500)
+  status         String   @default("PENDING") @db.VarChar(30)
+  lastError      String?  @db.VarChar(500)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  customer       PaddleBillingCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, environment, status, createdAt])
+  @@index([tenantId, transactionId])
+}
+
+model PaddlePayment {
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
+  transactionId  String @unique @db.VarChar(80)
+  subscriptionId String? @db.VarChar(80)
+  status         String @db.VarChar(30)
+  amountMinor    Int
+  currency       String @db.VarChar(3)
+  invoiceNumber  String? @db.VarChar(80)
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, status])
+}
+
+model PaddleWebhookEvent {
+  id          String @id @default(cuid()) @db.VarChar(36)
+  eventId     String @unique @db.VarChar(100)
+  tenantId    String? @db.VarChar(36)
+  environment String @db.VarChar(16)
+  eventType   String @db.VarChar(100)
+  occurredAt  DateTime
+  status      String @default("RECEIVED") @db.VarChar(25)
+  lastError   String? @db.VarChar(500)
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+  @@index([tenantId, receivedAt])
 }

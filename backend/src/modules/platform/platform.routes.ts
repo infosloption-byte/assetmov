@@ -12,6 +12,8 @@ const storageLimitSchema = z.string()
   .transform((value) => BigInt(value))
   .refine((value) => value <= MAX_SIGNED_BIGINT, "Storage limit is too large.")
   .nullable();
+const paddleId = z.string().trim().regex(/^pri_[a-z\d]{26}$/).nullable();
+const paddleProduct = z.string().trim().regex(/^pro_[a-z\d]{26}$/).nullable();
 const reasonSchema = z.string().trim().min(8).max(1000);
 
 const planCreateSchema = z.object({
@@ -23,6 +25,11 @@ const planCreateSchema = z.object({
   storageLimitBytes: storageLimitSchema,
   trialDurationDays: z.number().int().min(0).max(3650),
   isActive: z.boolean(),
+  paddleProductId: paddleProduct.optional(),
+  paddleSandboxMonthlyPriceId: paddleId.optional(),
+  paddleSandboxYearlyPriceId: paddleId.optional(),
+  paddleLiveMonthlyPriceId: paddleId.optional(),
+  paddleLiveYearlyPriceId: paddleId.optional(),
   reason: reasonSchema,
 }).strict();
 
@@ -34,6 +41,11 @@ const planUpdateSchema = z.object({
   storageLimitBytes: storageLimitSchema.optional(),
   trialDurationDays: z.number().int().min(0).max(3650).optional(),
   isActive: z.boolean().optional(),
+  paddleProductId: paddleProduct.optional(),
+  paddleSandboxMonthlyPriceId: paddleId.optional(),
+  paddleSandboxYearlyPriceId: paddleId.optional(),
+  paddleLiveMonthlyPriceId: paddleId.optional(),
+  paddleLiveYearlyPriceId: paddleId.optional(),
   reason: reasonSchema,
 }).strict().refine(
   (value) => Object.keys(value).some((key) => key !== "reason"),
@@ -62,6 +74,11 @@ type SerializablePlan = {
   storageLimitBytes: bigint | null;
   trialDurationDays: number;
   isActive: boolean;
+  paddleProductId: string | null;
+  paddleSandboxMonthlyPriceId: string | null;
+  paddleSandboxYearlyPriceId: string | null;
+  paddleLiveMonthlyPriceId: string | null;
+  paddleLiveYearlyPriceId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -151,6 +168,14 @@ platformRouter.post(
       }
 
       const { reason, ...input } = parsed.data;
+      const chosenPrices = [
+        input.paddleSandboxMonthlyPriceId, input.paddleSandboxYearlyPriceId,
+        input.paddleLiveMonthlyPriceId, input.paddleLiveYearlyPriceId,
+      ].filter((value): value is string => typeof value === "string");
+      if (new Set(chosenPrices).size !== chosenPrices.length ||
+          (chosenPrices.length > 0 && !input.paddleProductId)) {
+        sendError(response, 400, "PADDLE_CATALOG_INVALID", "Choose one AssetMov product and distinct Paddle prices."); return;
+      }
       const plan = await prisma.$transaction(async (tx) => {
         const created = await tx.subscriptionPlan.create({
           data: {
@@ -207,6 +232,24 @@ platformRouter.patch(
       const plan = await prisma.$transaction(async (tx) => {
         const current = await tx.subscriptionPlan.findUnique({ where: { id: planId } });
         if (!current) throw new Error("PLAN_NOT_FOUND");
+        const finalProduct = changes.paddleProductId === undefined ? current.paddleProductId : changes.paddleProductId;
+        const fields = [
+          "paddleSandboxMonthlyPriceId", "paddleSandboxYearlyPriceId",
+          "paddleLiveMonthlyPriceId", "paddleLiveYearlyPriceId",
+        ] as const;
+        const finalPrices = fields.map(field => changes[field] === undefined ? current[field] : changes[field])
+          .filter((price): price is string => typeof price === "string");
+        if (new Set(finalPrices).size !== finalPrices.length ||
+            (finalPrices.length > 0 && !finalProduct)) throw new Error("PADDLE_CATALOG_INVALID");
+        if (current.paddleProductId !== finalProduct ||
+            fields.some(field => (changes[field] ?? null) !== current[field] && changes[field] !== undefined)) {
+          const boundSubscribers = await tx.tenantSubscription.count({
+            where: { planId: current.id, billingSource: "PADDLE" },
+          });
+          if (boundSubscribers > 0) {
+            throw new Error("PADDLE_PRICE_MAPPING_LOCKED");
+          }
+        }
 
         const updated = await tx.subscriptionPlan.update({
           where: { id: current.id },
@@ -230,6 +273,14 @@ platformRouter.patch(
 
       response.status(200).json({ data: serializePlan(plan) });
     } catch (error) {
+      if (error instanceof Error && error.message === "PADDLE_PRICE_MAPPING_LOCKED") {
+        sendError(response, 409, "PADDLE_PRICE_MAPPING_LOCKED",
+          "Existing Paddle subscriptions rely on this product/price mapping. Contact support for a planned migration.");
+        return;
+      }
+      if (error instanceof Error && error.message === "PADDLE_CATALOG_INVALID") {
+        sendError(response, 400, "PADDLE_CATALOG_INVALID", "Paddle plan needs one AssetMov product and distinct prices."); return;
+      }
       if (error instanceof Error && error.message === "PLAN_NOT_FOUND") {
         sendError(response, 404, "PLAN_NOT_FOUND", "The requested plan was not found.");
         return;
@@ -348,6 +399,9 @@ platformRouter.patch(
           where: { tenantId: tenant.id },
           include: { plan: true },
         });
+        if (current?.billingSource === "PADDLE" || current?.paddleSubscriptionId) {
+          throw new Error("PADDLE_SUBSCRIPTION_MANAGED");
+        }
         const now = new Date();
         const trialEndsAt = new Date(now.getTime() + plan.trialDurationDays * 24 * 60 * 60 * 1000);
         const status = mode === "trial" ? "TRIALING" : mode === "activate" ? "ACTIVE" : "SUSPENDED";
@@ -408,6 +462,11 @@ platformRouter.patch(
         },
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "PADDLE_SUBSCRIPTION_MANAGED") {
+        sendError(response, 409, "PADDLE_SUBSCRIPTION_MANAGED",
+          "Paddle subscriptions may be changed only by the provider. Suspend or unsuspend company access separately.");
+        return;
+      }
       if (error instanceof Error && error.message === "TENANT_NOT_FOUND") {
         sendError(response, 404, "TENANT_NOT_FOUND", "The requested company was not found.");
         return;
@@ -424,3 +483,80 @@ platformRouter.patch(
     }
   },
 );
+
+/** Platform-only operational and billing pulse; no tenant-scoped permissions apply. */
+platformRouter.get("/overview", requireSession, requirePlatformAdmin, async (_request, response, next) => {
+  try {
+    const [
+      companyCount, planCount, subscriptionStatuses, assetCount, activeUserCount,
+      stored, payments, failedWebhooks, latestPayments,
+    ] = await Promise.all([
+      prisma.tenant.count(),
+      prisma.subscriptionPlan.count(),
+      prisma.tenantSubscription.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.asset.count(),
+      prisma.membership.count({ where: { isActive: true } }),
+      prisma.tenantStorageObject.aggregate({ _sum: { sizeBytes: true } }),
+      prisma.paddlePayment.aggregate({
+        where: { status: "PAID" }, _sum: { amountMinor: true }, _count: { _all: true },
+      }),
+      prisma.paddleWebhookEvent.count({ where: { status: "FAILED" } }),
+      prisma.paddlePayment.findMany({
+        orderBy: { occurredAt: "desc" }, take: 15,
+        include: { tenant: { select: { id: true, name: true } } },
+      }),
+    ]);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json({ data: {
+      companyCount, planCount,
+      subscriptionStatuses: subscriptionStatuses.map(entry => ({
+        status: entry.status, count: entry._count._all,
+      })),
+      assetCount, activeUserCount, storageUsedBytes: String(stored._sum.sizeBytes ?? 0),
+      paddle: {
+        paidTransactionCount: payments._count._all,
+        paidAmountMinor: payments._sum.amountMinor ?? 0,
+        failedWebhookCount: failedWebhooks,
+        latestPayments: latestPayments.map(item => ({
+          tenantId: item.tenantId, tenantName: item.tenant.name,
+          transactionId: item.transactionId, status: item.status,
+          amountMinor: item.amountMinor, currency: item.currency, occurredAt: item.occurredAt,
+        })),
+      },
+    } });
+  } catch (error) { next(error); }
+});
+
+const platformTenantStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED"]),
+  reason: reasonSchema,
+}).strict();
+
+/** Platform suspension never forges a successful Paddle payment. */
+platformRouter.patch("/tenants/:tenantId/status", requireSession, requirePlatformAdmin,
+  requireCsrf, async (request, response, next) => {
+  const parsed = platformTenantStatusSchema.safeParse(request.body);
+  const id = request.params.tenantId;
+  if (!parsed.success || typeof id !== "string" || !id) {
+    sendError(response, 400, "VALIDATION_ERROR", "Provide a company status and audit reason."); return;
+  }
+  try {
+    const result = await prisma.$transaction(async tx => {
+      const tenant = await tx.tenant.findUnique({ where: { id } });
+      if (!tenant) throw new Error("TENANT_NOT_FOUND");
+      const updated = await tx.tenant.update({ where: { id }, data: { status: parsed.data.status } });
+      await tx.platformAuditLog.create({ data: {
+        actorUserId: request.auth!.userId, action: "tenant.platform_status_changed",
+        entityType: "Tenant", entityId: id, reason: parsed.data.reason,
+        oldData: { status: tenant.status }, newData: { status: updated.status },
+      } });
+      return updated;
+    });
+    response.json({ data: { id: result.id, status: result.status } });
+  } catch (error) {
+    if (error instanceof Error && error.message === "TENANT_NOT_FOUND") {
+      sendError(response, 404, "TENANT_NOT_FOUND", "Company not found."); return;
+    }
+    next(error);
+  }
+});

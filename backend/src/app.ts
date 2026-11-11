@@ -18,6 +18,8 @@ import { memberRouter } from "./modules/members/member.routes.js";
 import { roleRouter } from "./modules/roles/role.routes.js";
 import { masterDataRouter } from "./modules/master-data/master-data.routes.js";
 import { fileRouter } from "./modules/storage/file.routes.js";
+import { billingRouter } from "./modules/billing/billing.routes.js";
+import { paddleWebhookRouter } from "./modules/billing/paddle-webhook.routes.js";
 
 export const app = express();
 
@@ -27,6 +29,8 @@ app.use(cors({
   origin: env.FRONTEND_ORIGIN,
   credentials: true,
 }));
+// Verify Paddle signatures using the exact raw bytes, before any JSON parsing.
+app.use("/api/webhooks/paddle", paddleWebhookRouter);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
@@ -78,6 +82,7 @@ app.use("/api/members", memberRouter);
 app.use("/api/roles", roleRouter);
 app.use("/api/master-data", masterDataRouter);
 app.use("/api/files", fileRouter);
+app.use("/api/billing", billingRouter);
 app.use("/api/workspace", workspaceRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
