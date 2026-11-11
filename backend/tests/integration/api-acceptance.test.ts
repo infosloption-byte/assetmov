@@ -420,6 +420,34 @@ test("registration, session security, tenant isolation, locations and assets wor
     const assetListBody = await assetList.json() as AssetListResponse;
     assert.ok(assetListBody.data.some((item) => item.id === createdAsset.data.id));
 
+    // The company overview shows real counts, never another tenant's inventory.
+    const ownerOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(ownerOverview.status, 200);
+    const ownerOverviewBody = await ownerOverview.json() as {
+      data: { total: number; assigned: number; inService: number; inTransit: number };
+    };
+    assert.equal(ownerOverviewBody.data.total, 2);
+    assert.equal(ownerOverviewBody.data.assigned, 0);
+    assert.equal(ownerOverviewBody.data.inService, 0);
+    assert.equal(ownerOverviewBody.data.inTransit, 0);
+
+    const otherCompanyOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerB.tenant.id }),
+    });
+    assert.equal(otherCompanyOverview.status, 200);
+    assert.equal((await otherCompanyOverview.json() as { data: { total: number } }).data.total, 0);
+
+    const missingOverviewTenant = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerA.cookie }),
+    });
+    assert.equal(missingOverviewTenant.status, 400);
+    const crossTenantOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
+      headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(crossTenantOverview.status, 403);
+
     const crossTenantAsset = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}`, {
       headers: requestHeaders({ cookie: ownerB.cookie, tenantId: ownerA.tenant.id }),
     });
