@@ -1033,3 +1033,75 @@ assetRouter.post("/:id/lifecycle", requireSession, requireTenant, requireCsrf,
     }
   },
 );
+
+const bulkAssignmentSchema = z.object({
+  assetIds: z.array(z.string().min(1).max(36)).min(1).max(50),
+  employeeId: z.string().trim().min(1).max(36),
+  notes: z.string().trim().max(4000).optional(),
+}).strict().refine(input => new Set(input.assetIds).size === input.assetIds.length,
+  "Assets must be unique in bulk assignment.");
+
+/** Atomic bulk handover. If any asset is invalid or has changed, no assignments commit. */
+assetRouter.post("/bulk-assign", requireSession, requireTenant,
+  requirePermission("asset.assign"), requireCsrf, async (request, response, next) => {
+    const parsed = bulkAssignmentSchema.safeParse(request.body);
+    const tenantId = request.auth?.tenantId, actorUserId = request.auth?.userId;
+    if (!parsed.success || !tenantId || !actorUserId) {
+      sendError(response, 400, "VALIDATION_ERROR", "Choose up to 50 distinct assets and an employee."); return;
+    }
+    const { assetIds, employeeId, notes } = parsed.data;
+    try {
+      const data = await prisma.$transaction(async tx => {
+        const employee = await tx.employee.findFirst({
+          where: { tenantId, id: employeeId, isActive: true },
+        });
+        if (!employee || !employee.homeLocationId) throw new Error("EMPLOYEE_NOT_ELIGIBLE");
+        const assets = await tx.asset.findMany({
+          where: { tenantId, id: { in: assetIds } }, orderBy: { id: "asc" },
+        });
+        if (assets.length !== assetIds.length) throw new Error("ASSET_NOT_FOUND");
+        for (const asset of assets) {
+          if (!request.auth?.allLocationsAccess && (
+              !asset.currentLocationId ||
+              !(request.auth.manageableLocationIds ?? []).includes(asset.currentLocationId)
+            )) throw new Error("ASSET_LOCATION_SCOPE_DENIED");
+          if (asset.status !== "AVAILABLE" || asset.assignedEmployeeId ||
+              asset.currentLocationId !== employee.homeLocationId) {
+            throw new Error("ASSET_NOT_ASSIGNABLE");
+          }
+          const result = await tx.asset.updateMany({
+            where: { id: asset.id, tenantId, status: "AVAILABLE", assignedEmployeeId: null,
+              currentLocationId: employee.homeLocationId },
+            data: { status: "ASSIGNED", assignedEmployeeId: employeeId },
+          });
+          if (result.count !== 1) throw new Error("ASSET_CONCURRENT_CHANGE");
+          await tx.assetTransaction.create({ data: {
+            tenantId, assetId: asset.id, eventType: "ASSIGNED",
+            fromLocationId: asset.currentLocationId, toLocationId: asset.currentLocationId,
+            toEmployeeId: employee.id, actorUserId,
+            notes: "Bulk assignment to " + employee.firstName + " " + employee.lastName +
+              (notes ? ". " + notes : ""),
+          } });
+          await tx.auditLog.create({ data: {
+            tenantId, actorUserId, action: "asset.assigned", entityType: "Asset", entityId: asset.id,
+            oldData: { status: asset.status, assignedEmployeeId: null },
+            newData: { status: "ASSIGNED", assignedEmployeeId: employee.id, bulk: true },
+            ipAddress: request.ip?.slice(0, 64),
+          } });
+        }
+        return { count: assets.length, assetIds: assets.map(asset => asset.id), employeeId };
+      });
+      response.json({ data });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      if (["EMPLOYEE_NOT_ELIGIBLE", "ASSET_NOT_FOUND", "ASSET_NOT_ASSIGNABLE",
+        "ASSET_LOCATION_SCOPE_DENIED", "ASSET_CONCURRENT_CHANGE"].includes(code)) {
+        sendError(response, code === "ASSET_NOT_FOUND" ? 404 :
+          code === "ASSET_LOCATION_SCOPE_DENIED" ? 403 : code === "EMPLOYEE_NOT_ELIGIBLE" ? 400 : 409,
+          code, code.replaceAll("_", " ").toLowerCase() + ". Refresh the register.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
