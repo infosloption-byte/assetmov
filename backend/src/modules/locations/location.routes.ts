@@ -53,7 +53,7 @@ locationRouter.get(
       }
 
       const { q, parentId, includeInactive } = parsed.data;
-      const allowInactive = includeInactive === "true" && (request.auth.permissions ?? []).includes("location.manage");
+      const allowInactive = includeInactive === "true" && (request.auth?.permissions ?? []).includes("location.manage");
       const where = {
         tenantId,
         ...(allowInactive ? {} : { isActive: true }),
