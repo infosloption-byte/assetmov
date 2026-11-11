@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import VendorDirectory from "./VendorDirectory";
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type Category = { id: string; name: string; code: string; description: string | null };
 type Field = { key: string; label: string; type: "text"|"longText"|"number"|"date"|"boolean"|"singleSelect"|"multiSelect"; required: boolean; options?: string[] };
@@ -98,6 +99,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
             <td>{model.fieldSchema?.fields?.map(field => field.label).join(", ") || "None"}</td>
             <td>{canManage && <button className="topbar-button ghost" type="button" onClick={() => {setEditingModel(model);setSelectedCategory(model.categoryId);setFields(model.fieldSchema?.fields ?? []);setModal("model");}}>Edit</button>}</td></tr>)}</tbody></table></div>
     </>}
+    {canRead && <VendorDirectory tenantId={tenantId} csrfToken={csrfToken} permissions={permissions}/>}
     {modal === "category" && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="categoryTitle">
       <div className="asset-modal-heading"><h2 id="categoryTitle">{category ? "Edit category" : "New category"}</h2><button type="button" className="modal-close" onClick={() => setModal(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void saveCategory(event)}>
