@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import ThemeSelect from "../../components/ThemeSelect";
 
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type RowData = { inventoryNumber: string; title: string; serialNumber: string; notes: string; currentLocationId: string };
@@ -129,7 +130,7 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
 
   const ready = rows.filter(row => row.result !== "imported" && !row.problem).length;
   return <div className="modal-backdrop" role="presentation">
-    <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetImportTitle"
+    <section className="asset-modal asset-import-panel" role="dialog" aria-modal="true" aria-labelledby="assetImportTitle"
       style={{width:"min(96vw,1100px)",maxHeight:"90vh",overflow:"auto"}}>
       <div className="asset-modal-heading">
         <h2 id="assetImportTitle">Import asset register (CSV)</h2>
@@ -139,12 +140,13 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
       <label>CSV file (.csv, 512 KiB maximum)
         <input type="file" accept=".csv,text/csv" disabled={busy} onChange={event=>void pick(event)}/>
       </label>
-      <label>Default location for rows without currentLocationId
-        <select value={fallbackLocation} onChange={event=>setFallbackLocation(event.target.value)} disabled={busy}>
-          <option value="">{allLocationsAccess ? "No location" : "Choose a location"}</option>
-          {locations.map(l=><option key={l.id} value={l.id}>{l.name} ({l.code})</option>)}
-        </select>
-      </label>
+      <div className="import-location-control">
+        <label>Default location for rows without currentLocationId</label>
+        <ThemeSelect label="Default CSV asset location" value={fallbackLocation}
+          disabled={busy} onChange={setFallbackLocation}
+          options={[{value:"",label:allLocationsAccess ? "No default location" : "Choose a location"},
+            ...locations.map(location => ({value:location.id,label:location.name + " (" + location.code + ")"}))]}/>
+      </div>
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {rows.length > 0 && <>
         <p role="status">{rows.length} rows reviewed. {ready} ready or retryable. {rows.filter(r=>r.result==="imported").length} imported. {progress} processed this run.</p>
