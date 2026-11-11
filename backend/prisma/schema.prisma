@@ -96,6 +96,11 @@ model Tenant {
   id                String @id @default(cuid()) @db.VarChar(36)
   name              String               @db.VarChar(191)
   slug              String               @unique @db.VarChar(100)
+  timezone          String               @default("UTC") @db.VarChar(64)
+  locale            String               @default("en-US") @db.VarChar(24)
+  currency          String               @default("USD") @db.VarChar(3)
+  dateFormat        String               @default("YYYY-MM-DD") @db.VarChar(20)
+  fiscalYearStartMonth Int                @default(1)
   status            TenantStatus         @default(TRIAL)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
