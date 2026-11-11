@@ -171,6 +171,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [lifecycleReason, setLifecycleReason] = useState("");
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleError, setLifecycleError] = useState("");
+  const [bulkSelected, setBulkSelected] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [bulkEmployees, setBulkEmployees] = useState<Array<{id:string;firstName:string;lastName:string;employeeCode:string}>>([]);
+  const [bulkEmployeeId, setBulkEmployeeId] = useState("");
+  const [bulkNotes, setBulkNotes] = useState("");
 
   const canCreate = permissions.includes("asset.create");
   const canReadLocations = permissions.includes("location.read");
@@ -574,6 +581,47 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     }
   }
 
+  async function openBulkAssignment() {
+    if (!tenantId || !canAssignAssets || !canReadEmployees) {
+      setBulkError("Assignment requires asset and employee permissions."); return;
+    }
+    const selected = assets.filter(a => bulkSelected.includes(a.id) && a.status === "AVAILABLE");
+    const locationId = selected[0]?.currentLocationId;
+    if (!selected.length || !locationId || selected.some(a => a.currentLocationId !== locationId)) {
+      setBulkError("Select available assets at one location for bulk assignment."); return;
+    }
+    setBulkOpen(true);setBulkError("");setBulkEmployeeId("");setBulkEmployees([]);
+    try {
+      const params = new URLSearchParams({locationId,page:"1",pageSize:"100"});
+      const response = await fetch(apiBaseUrl + "/employees?" + params, {
+        credentials:"include",headers:{"X-Tenant-Id":tenantId},
+      });
+      const payload = await response.json().catch(()=>({})) as {data?:typeof bulkEmployees;error?:{message?:string}};
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not load employees.");
+      setBulkEmployees(payload.data ?? []);
+    } catch (error) { setBulkError(error instanceof Error ? error.message : "Employee lookup failed."); }
+  }
+
+  async function applyBulkAssignment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !bulkEmployeeId || bulkBusy) return;
+    const ids = assets.filter(a => bulkSelected.includes(a.id) && a.status === "AVAILABLE").map(a => a.id);
+    setBulkBusy(true);setBulkError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/bulk-assign", {
+        method:"POST",credentials:"include",
+        headers:{"X-Tenant-Id":tenantId,"X-CSRF-Token":csrfToken,"Content-Type":"application/json"},
+        body:JSON.stringify({assetIds:ids,employeeId:bulkEmployeeId,notes:bulkNotes}),
+      });
+      const payload = await response.json().catch(()=>({})) as {data?:{count:number};error?:{message?:string}};
+      if (!response.ok) throw new Error(payload.error?.message ?? "Bulk assignment failed.");
+      setBulkOpen(false);setBulkSelected([]);setBulkNotes("");
+      setSuccessMessage("Assigned " + (payload.data?.count ?? ids.length) + " assets.");
+      await loadAssets();
+    } catch (error) { setBulkError(error instanceof Error ? error.message : "Bulk assignment failed."); }
+    finally { setBulkBusy(false); }
+  }
+
   async function applyLifecycle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tenantId || !csrfToken || !selectedAsset || !lifecycleAction || lifecycleBusy) return;
@@ -651,6 +699,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </div>
       </div>
 
+      {canAssignAssets && canReadEmployees && <div className="asset-register-toolbar">
+        <strong>{bulkSelected.length} asset(s) selected for assignment</strong>
+        <button className="primary-button" type="button" disabled={bulkSelected.length === 0} onClick={() => void openBulkAssignment()}>
+          Assign selected assets
+        </button>
+        {bulkSelected.length > 0 && <button className="topbar-button ghost" type="button" onClick={() => setBulkSelected([])}>Clear selection</button>}
+      </div>}
+      {!bulkOpen && bulkError && <div role="alert" className="asset-inline-error">{bulkError}</div>}
       {successMessage && <div className="asset-success" role="status">{successMessage}</div>}
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && <div className="asset-inline-hint" role="status">Location choices could not be loaded: {locationsError}</div>}
@@ -658,15 +714,21 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       <div className="asset-table-wrap">
         <table className="asset-table">
           <thead>
-            <tr><th>Asset</th><th>Serial number</th><th>Category / model</th><th>Location</th><th>Purchase cost</th><th>Status</th><th><span className="sr-only">Open details</span></th></tr>
+            <tr>{canAssignAssets && <th><span className="sr-only">Select for bulk assignment</span></th>}<th>Asset</th><th>Serial number</th><th>Category / model</th><th>Location</th><th>Purchase cost</th><th>Status</th><th><span className="sr-only">Open details</span></th></tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="asset-table-message"><span className="table-loader" /> Loading assets…</td></tr>
+              <tr><td colSpan={canAssignAssets ? 8 : 7} className="asset-table-message"><span className="table-loader" /> Loading assets…</td></tr>
             ) : assets.length === 0 ? (
-              <tr><td colSpan={7} className="asset-table-message"><span className="empty-icon">◫</span><strong>No assets found</strong><span>Try another search or register the first asset in this workspace.</span>{canCreate && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Register an asset ↗</button>}</td></tr>
+              <tr><td colSpan={canAssignAssets ? 8 : 7} className="asset-table-message"><span className="empty-icon">◫</span><strong>No assets found</strong><span>Try another search or register the first asset in this workspace.</span>{canCreate && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Register an asset ↗</button>}</td></tr>
             ) : assets.map((asset) => (
               <tr key={asset.id}>
+                {canAssignAssets && <td><input type="checkbox" aria-label={"Select " + asset.inventoryNumber}
+                  disabled={asset.status !== "AVAILABLE" || !asset.currentLocationId ||
+                    (!allLocationsAccess && !manageableLocationIds.includes(asset.currentLocationId))}
+                  checked={bulkSelected.includes(asset.id)}
+                  onChange={event => setBulkSelected(previous => event.target.checked ?
+                    [...previous.filter(id => id !== asset.id), asset.id] : previous.filter(id => id !== asset.id))}/></td>}
                 <td><button className="asset-name-button" type="button" onClick={() => void openAsset(asset.id)}>{asset.title}</button><span className="asset-number">{asset.inventoryNumber}</span></td>
                 <td>{asset.serialNumber || "—"}</td>
                 <td>{asset.model ? <>{asset.model.category?.name ?? "—"}<span className="asset-number">{asset.model.name}</span></> : "—"}</td>
@@ -688,6 +750,22 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </div>
       </div>
 
+      {bulkOpen && <div className="modal-backdrop" role="presentation">
+        <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="bulkAssignTitle">
+          <div className="asset-modal-heading"><h2 id="bulkAssignTitle">Bulk assign {bulkSelected.length} assets</h2>
+            <button className="modal-close" aria-label="Close bulk assignment" type="button" onClick={()=>setBulkOpen(false)}>×</button></div>
+          <p className="asset-inline-hint">All selected assets must be available at the employee's home location. The server assigns all or none.</p>
+          <form className="asset-create-form" onSubmit={event=>void applyBulkAssignment(event)}>
+            <label>Employee</label>
+            <ThemeSelect label="Bulk assignment employee" value={bulkEmployeeId} onChange={setBulkEmployeeId} required
+              options={[{value:"",label:"Choose employee"},...bulkEmployees.map(e=>({value:e.id,label:e.firstName+" "+e.lastName+" ("+e.employeeCode+")"}))]}/>
+            <label>Handover note<textarea rows={3} maxLength={4000} value={bulkNotes} onChange={event=>setBulkNotes(event.target.value)}/></label>
+            {bulkError && <div className="asset-inline-error" role="alert">{bulkError}</div>}
+            <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={()=>setBulkOpen(false)}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={bulkBusy || !bulkEmployeeId}>
+                {bulkBusy ? "Assigning…" : "Confirm bulk assignment"}</button></div>
+          </form>
+        </section></div>}
       {showCreate && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
           <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetCreateTitle">
