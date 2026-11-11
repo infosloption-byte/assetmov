@@ -15,6 +15,10 @@ export default function AccountMenu({user, roleLabel, initials, onVerifyEmail, o
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) panel.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, [open]);
   useEffect(() => {
     function onPointer(event: PointerEvent) {
       if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
@@ -47,10 +51,17 @@ export default function AccountMenu({user, roleLabel, initials, onVerifyEmail, o
       <span className="avatar" aria-hidden="true">{initials}</span>
       <span className="account-chevron" aria-hidden="true">⌄</span>
     </button>
-    {open && <div id="assetmov-account-menu" className="account-menu-panel" role="menu"
+    {open && <div ref={panel} id="assetmov-account-menu" className="account-menu-panel" role="menu"
       aria-label="Account actions" onKeyDown={event => {
-        if (event.key === "Tab" && !event.shiftKey &&
-            event.target === event.currentTarget.lastElementChild) setOpen(false);
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+        const position = items.findIndex(item => item === document.activeElement);
+        if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+          event.preventDefault();
+          const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 :
+            (position + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }
+        if (event.key === "Tab") setOpen(false);
       }}>
       <div className="account-menu-identity" role="presentation">
         <strong>{user.fullName}</strong>
