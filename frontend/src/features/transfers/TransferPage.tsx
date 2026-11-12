@@ -560,7 +560,7 @@ function TransferPage({
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && <div className="asset-inline-hint" role="status">{locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table transfers-table">
           <thead><tr><th>Transfer</th><th>Origin</th><th>Destination</th><th>Assets</th><th>Dispatched</th><th>Status</th><th><span className="sr-only">View transfer</span></th></tr></thead>
           <tbody>
