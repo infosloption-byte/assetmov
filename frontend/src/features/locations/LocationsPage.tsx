@@ -178,7 +178,7 @@ function LocationsPage({
       {success && <div className="asset-success" role="status">{success}</div>}
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table locations-table">
           <thead><tr><th>Location</th><th>Code</th><th>Type</th><th>Parent location</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
