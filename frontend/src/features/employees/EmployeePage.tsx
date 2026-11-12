@@ -296,7 +296,7 @@ function EmployeePage({
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && canManage && <div className="asset-inline-hint" role="status">Location choices: {locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table employees-table">
           <thead><tr><th>Employee</th><th>Contact</th><th>Home location</th><th>Assigned assets</th><th>Status</th><th><span className="sr-only">Edit employee</span></th></tr></thead>
           <tbody>
