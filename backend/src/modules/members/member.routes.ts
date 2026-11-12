@@ -191,6 +191,66 @@ memberRouter.post("/:id/invitation", requireCsrf, async (request, response, next
   }
 });
 
+const memberPasswordResetSchema = z.object({
+  temporaryPassword: z.string().min(12).max(128),
+  reason: z.string().trim().min(8).max(1000),
+}).strict();
+
+/** Company-managed recovery when outbound email has not been configured.
+ * Never return or record plaintext passwords; revoke ALL target sessions.
+ */
+memberRouter.post("/:id/password/reset", requireCsrf, async (request, response, next) => {
+  const parsed = memberPasswordResetSchema.safeParse(request.body);
+  const memberId = request.params.id;
+  if (!parsed.success || typeof memberId !== "string" || !memberId) {
+    response.status(400).json({error:{code:"VALIDATION_ERROR",
+      message:"Provide a temporary password (12+ characters) and an audit reason."}}); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const actorUserId = request.auth!.userId;
+    const passwordHash = await hashPassword(parsed.data.temporaryPassword);
+    await prisma.$transaction(async tx => {
+      const membership = await tx.membership.findFirst({
+        where: { id: memberId, tenantId, isActive: true },
+        include: {
+          role: { select: { key: true } },
+          user: { select: { id: true, disabledAt: true,
+            memberships: { select: { tenantId: true } } } },
+        },
+      });
+      if (!membership || membership.user.disabledAt) throw new Error("MEMBER_NOT_FOUND");
+      if (membership.userId === actorUserId) throw new Error("RESET_SELF_DENIED");
+      if (membership.role.key === "TENANT_OWNER") throw new Error("RESET_OWNER_DENIED");
+      if (membership.user.memberships.length !== 1) throw new Error("RESET_SHARED_IDENTITY_DENIED");
+      await tx.user.update({ where: { id: membership.userId }, data: { passwordHash } });
+      await tx.session.deleteMany({ where: { userId: membership.userId } });
+      await tx.accountToken.updateMany({
+        where: { userId: membership.userId, usedAt: null }, data: { usedAt: new Date() },
+      });
+      await tx.auditLog.create({data:{
+        tenantId, actorUserId, action:"member.password_reset",
+        entityType:"Membership", entityId:membership.id,
+        newData:{sessionRevoked:true, reason:parsed.data.reason},
+        ipAddress:request.ip?.slice(0,64),
+      }});
+    });
+    response.json({message:"Password reset. All sessions were revoked. Deliver the temporary password privately."});
+  } catch (error) {
+    const code=error instanceof Error ? error.message : "";
+    if (["MEMBER_NOT_FOUND","RESET_SELF_DENIED","RESET_OWNER_DENIED",
+      "RESET_SHARED_IDENTITY_DENIED"].includes(code)) {
+      response.status(code==="MEMBER_NOT_FOUND" ? 404 : 403).json({
+        error:{code, message:code==="RESET_SHARED_IDENTITY_DENIED"
+          ? "Account also belongs to another company. Use the account recovery process."
+          : code==="RESET_OWNER_DENIED" ? "Owner passwords cannot be reset by company administration."
+          : "This account is not eligible for company-managed password reset."},
+      }); return;
+    }
+    next(error);
+  }
+});
+
 const profileSchema = z.object({ fullName: z.string().trim().min(2).max(191) }).strict();
 
 memberRouter.patch("/:id/profile", requireCsrf, async (request, response, next) => {
