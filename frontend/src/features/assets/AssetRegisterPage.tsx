@@ -739,7 +739,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && <div className="asset-inline-hint" role="status">Location choices could not be loaded: {locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table">
           <thead>
             <tr>{canAssignAssets && <th><span className="sr-only">Select for bulk assignment</span></th>}<th>Asset</th><th>Serial number</th><th>Category / model</th><th>Location</th><th>Purchase cost</th><th>Status</th><th><span className="sr-only">Open details</span></th></tr>
