@@ -19,6 +19,7 @@ const createSchema = z.object({
   invite: z.boolean().optional(),
   roleId: z.string().trim().min(1).max(36),
   allLocationsAccess: z.boolean().default(false),
+  locationIds: z.array(z.string().trim().min(1).max(36)).max(500).default([]),
 }).strict().refine(input => input.invite === true
   ? input.initialPassword === undefined
   : Boolean(input.initialPassword),
@@ -72,6 +73,11 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
   }
   const tenantId = request.auth!.tenantId!;
   const input = parsed.data;
+  if ((!input.allLocationsAccess && input.locationIds.length === 0) ||
+      (input.allLocationsAccess && input.locationIds.length > 0)) {
+    response.status(400).json({ error: { code: "LOCATION_SELECTION_REQUIRED",
+      message: "Select at least one location or explicitly grant all-location access." } }); return;
+  }
   if (input.allLocationsAccess && !request.auth!.allLocationsAccess) {
     response.status(403).json({ error: { code: "LOCATION_GRANT_DENIED" } }); return;
   }
@@ -108,6 +114,18 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
       if ((role.isSystem || await tx.rolePermission.count({
         where: { roleId: role.id, permission: { key: { in: ["members.manage", "roles.manage", "tenant.settings.manage"] } } },
       }) > 0) && request.auth!.roleKey !== "TENANT_OWNER") throw new Error("ROLE_ASSIGNMENT_DENIED");
+      if (!input.allLocationsAccess) {
+        const uniqueIds = [...new Set(input.locationIds)];
+        if (uniqueIds.length !== input.locationIds.length) throw new Error("LOCATION_SELECTION_INVALID");
+        const activeLocations = await tx.location.findMany({
+          where:{tenantId,id:{in:uniqueIds},isActive:true},select:{id:true},
+        });
+        if (activeLocations.length !== uniqueIds.length ||
+            (!request.auth!.allLocationsAccess &&
+              uniqueIds.some(id => !request.auth!.manageableLocationIds?.includes(id)))) {
+          throw new Error("LOCATION_GRANT_DENIED");
+        }
+      }
       const userExists = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
       // Prevent existing identities from being silently added to a company.
       if (userExists) throw new Error("EMAIL_ALREADY_EXISTS");
@@ -119,10 +137,18 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
         include: { role: { select: { id: true, key: true, name: true } },
           user: { select: { id: true, email: true, fullName: true } } },
       });
+      if (!input.allLocationsAccess) {
+        await tx.membershipLocation.createMany({
+          data:input.locationIds.map(locationId => ({
+            tenantId, membershipId: member.id, locationId, canManage: false,
+          })),
+        });
+      }
       await tx.auditLog.create({ data: {
         tenantId, actorUserId: request.auth!.userId, action: "member.created",
         entityType: "Membership", entityId: member.id,
-        newData: { email: user.email, roleId: role.id, allLocationsAccess: input.allLocationsAccess },
+        newData: { email: user.email, roleId: role.id, allLocationsAccess: input.allLocationsAccess,
+          locationIds: input.allLocationsAccess ? [] : input.locationIds },
       } });
       return member;
     });
@@ -144,6 +170,7 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
       SUBSCRIPTION_NOT_CONFIGURED: 409, SUBSCRIPTION_INACTIVE: 403,
       SUBSCRIPTION_EXPIRED: 403, USER_PLAN_LIMIT_REACHED: 409,
       ROLE_NOT_FOUND: 400, ROLE_ASSIGNMENT_DENIED: 403, EMAIL_ALREADY_EXISTS: 409,
+      LOCATION_GRANT_DENIED:403, LOCATION_SELECTION_INVALID:400,
     };
     if (code in statuses) {
       response.status(statuses[code]!).json({ error: { code } }); return;
