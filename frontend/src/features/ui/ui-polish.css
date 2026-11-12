@@ -492,3 +492,85 @@
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* P0 responsive workspace drawer: a real vertically scrolling sidebar on
+   mobile instead of the previous horizontal tab strip. */
+.mobile-menu-trigger,.mobile-menu-close,.mobile-nav-backdrop { display:none; }
+@media(max-width:780px) {
+  .mobile-menu-trigger {
+    display:inline-flex; justify-content:center; align-items:center; flex:0 0 40px;
+    width:40px; height:40px; border:1px solid #dce5db; border-radius:10px;
+    background:#fff; color:#376a51; font-size:22px; cursor:pointer;
+  }
+  .mobile-menu-close {
+    display:inline-grid; place-items:center; width:32px; height:32px;
+    margin-left:auto; border:1px solid #dce5db; border-radius:8px;
+    background:#fff; color:#376a51; font-size:22px;
+  }
+  .mobile-nav-backdrop {
+    display:block; position:fixed; inset:0; z-index:90; border:0;
+    background:#1d302493; cursor:pointer;
+  }
+  .app-shell .sidebar {
+    position:fixed; left:0; right:auto; top:0; bottom:0; z-index:91;
+    width:min(310px, calc(100vw - 48px)); height:100dvh; min-height:0;
+    padding:22px 17px; display:flex; flex-direction:column;
+    overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+    border-right:1px solid var(--line); border-bottom:0;
+    transform:translateX(-105%); visibility:hidden;
+    transition:transform .18s ease, visibility .18s ease;
+    box-shadow:10px 0 40px #1e372024;
+  }
+  .app-shell .sidebar.mobile-open {
+    transform:translateX(0); visibility:visible;
+  }
+  .app-shell .sidebar .brand { padding:0 10px 22px; }
+  .app-shell .sidebar .workspace-label {
+    display:flex; align-items:center; padding:0 11px 13px;
+  }
+  .app-shell .sidebar .side-nav {
+    display:grid; overflow:visible; padding:0; gap:5px;
+    flex:0 0 auto;
+  }
+  .app-shell .sidebar .nav-item {
+    width:100%; display:flex; flex:0 0 auto; min-height:43px;
+    padding:0 12px; white-space:normal; font-size:12px;
+  }
+  .app-shell .sidebar .sidebar-bottom {
+    display:block; flex:0 0 auto; padding-top:16px; margin-top:auto;
+  }
+  .topbar .breadcrumb { flex:1 1 auto; min-width:0; }
+  .main-area { overflow-x:clip; }
+}
+@media(max-width:540px) {
+  .topbar { display:flex; gap:8px; align-items:center; }
+  .topbar-right { margin-left:auto; flex-shrink:0; }
+  .mobile-menu-trigger { flex-basis:36px; width:36px; height:36px; }
+}
+/* All workspace/platform tables: scroll inside their frame rather than
+   expanding the document or clipping destructive action buttons. */
+.asset-table-wrap,.platform-table-frame {
+  max-width:100%; min-width:0; overflow-x:auto; overflow-y:auto;
+  overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+@media(max-width:900px) {
+  .asset-table-wrap .asset-table,.platform-table-frame .platform-table {
+    width:max-content; min-width:100%;
+  }
+  .asset-table-wrap th,.asset-table-wrap td,
+  .platform-table-frame th,.platform-table-frame td {
+    white-space:nowrap;
+  }
+  .asset-table-wrap td:has(.text-button),
+  .platform-table-frame td:has(button) { white-space:normal; min-width:140px; }
+}
+@media(max-width:540px) {
+  .asset-table-wrap,.platform-table-frame { border-radius:10px; }
+  .asset-table-wrap .asset-table,.platform-table-frame .platform-table { font-size:11px; }
+  .asset-table-wrap th,.asset-table-wrap td { padding:11px; }
+  .asset-table-wrap:focus-visible,.platform-table-frame:focus-visible {
+    outline:2px solid #376a51; outline-offset:2px;
+  }
+}
