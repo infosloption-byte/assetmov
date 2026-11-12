@@ -77,7 +77,7 @@ function EmployeePage({
 
   const canRead = permissions.includes("employee.read");
   const canManage = permissions.includes("employee.manage");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","employee.read","employee.manage"].includes(key));
 
   const visibleLocations = locations.filter((location) =>
     allLocationsAccess || accessibleLocationIds.includes(location.id),
@@ -145,7 +145,7 @@ function EmployeePage({
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
