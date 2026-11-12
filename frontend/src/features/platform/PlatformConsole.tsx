@@ -103,14 +103,18 @@ export default function PlatformConsole({
       <nav className="platform-nav" aria-label="Platform sections">
         {navigation.map(group => <div className="platform-nav-group" key={group.label}>
           <div className="platform-nav-heading">{group.label}</div>
-          {group.items.map(item => <button type="button" key={item.id}
+          {group.items.map(item => <a key={item.id} href={"/platform/" + item.id}
             className={"platform-nav-item" + (page === item.id ? " active" : "")}
             aria-current={page === item.id ? "page" : undefined}
-            onClick={() => navigate(item.id)}>
+            onClick={event => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              navigate(item.id);
+            }}>
             <span className="platform-nav-icon" aria-hidden="true">{item.symbol}</span>
             <span>{item.label}</span>
             {page === item.id && <span className="platform-nav-indicator" aria-hidden="true"/>}
-          </button>)}
+          </a>)}
         </div>)}
       </nav>
       <div className="platform-sidebar-bottom">
