@@ -59,13 +59,24 @@ function App() {
   const [route, setRoute] = useState<AppRoute>(() => readAppRoute(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activePage: WorkspacePage = route.kind === "workspace" ? route.page : "overview";
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuSidebarRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    mobileMenuSidebarRef.current?.querySelector<HTMLButtonElement>(".mobile-menu-close")?.focus();
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileMenuOpen(false);
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        mobileMenuTriggerRef.current?.focus();
+      }
     };
     document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [mobileMenuOpen]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
@@ -526,15 +537,27 @@ function App() {
     <div className="app-shell">
       {mobileMenuOpen && <button className="mobile-nav-backdrop" aria-label="Close navigation"
         type="button" onClick={() => setMobileMenuOpen(false)}/>}
-      <aside id="workspace-sidebar" className={"sidebar" + (mobileMenuOpen ? " mobile-open" : "")}
-        aria-label="Workspace sidebar">
+      <aside ref={mobileMenuSidebarRef} id="workspace-sidebar" className={"sidebar" + (mobileMenuOpen ? " mobile-open" : "")}
+        aria-label="Workspace sidebar" onKeyDown={event => {
+          if (event.key !== "Tab" || !mobileMenuOpen) return;
+          const list = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            'a[href],button:not([disabled])',
+          )).filter(node => node.getClientRects().length > 0);
+          if (!list.length) return;
+          const first=list[0],last=list[list.length-1];
+          if(event.shiftKey && document.activeElement===first) {
+            event.preventDefault();last?.focus();
+          }else if(!event.shiftKey && document.activeElement===last) {
+            event.preventDefault();first?.focus();
+          }
+        }}>
         <a className="brand" href="/" aria-label="AssetMov home">
           <span className="brand-mark">A<span>.</span></span>
           <span className="brand-copy"><strong>assetmov</strong><small>ASSET LIFECYCLE</small></span>
         </a>
         <div className="workspace-label">WORKSPACE
           <button className="mobile-menu-close" type="button" aria-label="Close navigation"
-            onClick={() => setMobileMenuOpen(false)}>×</button>
+            onClick={() => {setMobileMenuOpen(false);mobileMenuTriggerRef.current?.focus();}}>×</button>
         </div>
         <nav className="side-nav" aria-label="Main navigation">
           {(!user || billingLoading || (!billingError && billingStatus?.allowed)) && <>
@@ -568,7 +591,7 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <button type="button" className="mobile-menu-trigger" aria-controls="workspace-sidebar"
+          <button ref={mobileMenuTriggerRef} type="button" className="mobile-menu-trigger" aria-controls="workspace-sidebar"
             aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(open => !open)}>☰</button>
           <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
