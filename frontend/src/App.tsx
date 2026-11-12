@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import AccountRecoveryPage from "./features/auth/AccountRecoveryPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
@@ -483,7 +483,7 @@ function App() {
   const workspaceSlug = currentTenant?.slug ?? selectedMembership?.tenant.slug ?? "";
   const pageHref = (page: WorkspacePage) => workspaceSlug
     ? appRoutePath({ kind: "workspace", tenantSlug: workspaceSlug, page }) : "/";
-  const followWorkspaceLink = (event: React.MouseEvent<HTMLAnchorElement>, page: WorkspacePage) => {
+  const followWorkspaceLink = (event: MouseEvent<HTMLAnchorElement>, page: WorkspacePage) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setActivePage(page);
