@@ -160,7 +160,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
         <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setNewUserLocations([]); setCreateLocationType(""); setNewUserAllLocations(false); setUserFormOpen(true); }}>Add user ＋</button>
       </div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
           <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div>
             <button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button>
@@ -201,7 +201,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     </>}
     {visibleTab === "roles" && canRoles && tenantId && <>
       <div className="asset-register-toolbar"><span>{roles.length} COMPANY ROLES</span><button className="primary-button" type="button" onClick={() => { setSelectedRole(null); setSelectedPermissions([]); setRoleFormOpen(true); }}>Add role ＋</button></div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Role</th><th>Permissions</th><th>Members</th><th>Actions</th></tr></thead><tbody>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>Role</th><th>Permissions</th><th>Members</th><th>Actions</th></tr></thead><tbody>
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
       </tbody></table></div>
     </>}
