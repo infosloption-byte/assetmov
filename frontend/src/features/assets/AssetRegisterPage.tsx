@@ -183,7 +183,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [bulkNotes, setBulkNotes] = useState("");
 
   const canCreate = permissions.includes("asset.create");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","asset.read","asset.create","asset.assign"].includes(key));
   const canReadAssets = permissions.includes("asset.read");
   const selectedModel = models.find(item => item.id === selectedModelId);
   useEffect(() => {
@@ -283,7 +283,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     const controller = new AbortController();
     async function loadLocations() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
