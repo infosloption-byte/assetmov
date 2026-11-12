@@ -634,7 +634,7 @@ test("registration, session security, tenant isolation, locations and assets wor
       method: "POST", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
         csrfToken: ownerA.csrfToken, json: true, origin: true }),
       body: JSON.stringify({ email, fullName: "Quota Test User", initialPassword: password,
-        roleId: customRole.data.id, allLocationsAccess: false }),
+        roleId: customRole.data.id, allLocationsAccess: false, locationIds: [createdLocation.data.id] }),
     });
     const extraUser = await createExtraUser(anotherMemberEmail);
     assert.equal(extraUser.status, 201);
@@ -647,6 +647,24 @@ test("registration, session security, tenant isolation, locations and assets wor
         csrfToken: ownerA.csrfToken, json: true, origin: true }),
       body: JSON.stringify({ isActive: active, reason: "Integration test changes membership active status" }),
     });
+
+    // The company administrator can reset an eligible local user's password,
+    // but not a company owner's. Sessions are revoked and plaintext is never returned.
+    const resetMemberPassword = await fetch(`${baseUrl}/api/members/${extraMember.data.id}/password/reset`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({temporaryPassword:"Temporary-Reset-2026!-Example",
+        reason:"Employee requested administrator recovery"}),
+    });
+    assert.equal(resetMemberPassword.status,200);
+    const ownerResetDenied = await fetch(`${baseUrl}/api/members/${ownerMembership.id}/password/reset`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({temporaryPassword:"Temporary-Reset-2026!-Example",
+        reason:"Attempt to reset company owner password"}),
+    });
+    assert.equal(ownerResetDenied.status,403);
+
     assert.equal((await changeMemberActive(false)).status, 200);
     assert.equal((await changeMemberActive(true)).status, 200);
 
