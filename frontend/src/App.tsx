@@ -195,7 +195,7 @@ function App() {
 
     void restoreSession();
     return () => controller.abort();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!user || !activeTenantId) {
