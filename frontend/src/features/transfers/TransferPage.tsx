@@ -459,8 +459,36 @@ function TransferPage({
     doc.title = selectedTransfer.status === "IN_TRANSIT" ?
       "Issue Note " + selectedTransfer.transferNumber : "Goods Receipt " + selectedTransfer.transferNumber;
     const style = doc.createElement("style");
-    style.textContent = "@page{size:A4;margin:18mm}body{font:13px Arial,sans-serif;color:#253b2d}h1{font-size:24px}p{margin:6px 0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{border:1px solid #cbd8ce;padding:9px;text-align:left}th{background:#edf4ed}footer{margin-top:38px;display:flex;justify-content:space-between}";
+    style.textContent = `
+      @page { size: A4; margin: 16mm; }
+      * { box-sizing: border-box; }
+      body { font: 12px/1.55 Arial,sans-serif; color: #24382d; }
+      header { display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 16px; border-bottom: 3px solid #376a51; }
+      .brand { font-weight: 800; color: #376a51; letter-spacing: 2px; }
+      .document-type { color: #829087; text-transform: uppercase; font-size: 10px; }
+      h1 { margin: 18px 0 12px; font-size: 24px; color: #224635; }
+      .metadata { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+      p { margin: 6px 0; overflow-wrap: anywhere; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #d4dfd5; padding: 8px; text-align: left; vertical-align: top;
+        overflow-wrap: anywhere; }
+      th { background: #edf4ed; font-weight: 700; }
+      tr { break-inside: avoid; }
+      .summary { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+      .summary span { padding: 7px 10px; background: #edf4ed; border-radius: 5px; }
+      footer { margin-top: 40px; display: flex; justify-content: space-between; gap: 30px; }
+      footer span { flex: 1; border-top: 1px solid #bfcabf; padding-top: 8px; }
+      .printed { color: #819087; font-size: 10px; margin-top: 28px; }
+    `;
     doc.head.appendChild(style);
+    const banner = doc.createElement("header");
+    const brand = doc.createElement("strong"); brand.className = "brand";
+    brand.textContent = "ASSETMOV";
+    const documentType = doc.createElement("span"); documentType.className = "document-type";
+    documentType.textContent = "Asset custody and movement record";
+    banner.append(brand, documentType);
+    doc.body.appendChild(banner);
     const heading = doc.createElement("h1");
     heading.textContent = selectedTransfer.status === "IN_TRANSIT" ? "Asset Issue Note" : "Goods Receipt Note";
     doc.body.appendChild(heading);
@@ -473,12 +501,28 @@ function TransferPage({
       ["Issued by", selectedTransfer.createdBy.fullName],
       ["Notes", selectedTransfer.notes ?? "—"],
     ];
+    const metadata = doc.createElement("section"); metadata.className = "metadata";
     for (const [label, value] of details) {
       const para = doc.createElement("p");
       const strong = doc.createElement("strong"); strong.textContent = label + ": ";
       para.append(strong, doc.createTextNode(value));
-      doc.body.appendChild(para);
+      metadata.appendChild(para);
     }
+    doc.body.appendChild(metadata);
+    const counts = selectedTransfer.lines.reduce((acc, line) => {
+      acc[line.status] = (acc[line.status] ?? 0) + 1;
+      return acc;
+    }, {} as Record<TransferLineStatus,number>);
+    const summary = doc.createElement("div"); summary.className = "summary";
+    for (const label of [
+      "Total items: " + selectedTransfer.lines.length,
+      "Received: " + (counts.RECEIVED ?? 0),
+      "Rejected: " + (counts.REJECTED ?? 0),
+      "Pending: " + (counts.IN_TRANSIT ?? 0),
+    ]) {
+      const chip = doc.createElement("span");chip.textContent = label; summary.appendChild(chip);
+    }
+    doc.body.appendChild(summary);
     const table = doc.createElement("table");
     const thead = doc.createElement("thead"); const header = doc.createElement("tr");
     for (const label of ["Inventory no.", "Description", "Serial", "Receipt status", "Decision reason"]) {
@@ -500,6 +544,10 @@ function TransferPage({
       const span = doc.createElement("span"); span.textContent = label; foot.appendChild(span);
     }
     doc.body.appendChild(foot);
+    const printed = doc.createElement("p"); printed.className = "printed";
+    printed.textContent = "Generated on " + new Date().toLocaleString() +
+      " • Generated from live AssetMov movement records";
+    doc.body.appendChild(printed);
     popup.focus();
     popup.setTimeout(() => popup.print(), 150);
   }
