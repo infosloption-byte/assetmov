@@ -1259,6 +1259,42 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal((await suspended.json() as ErrorResponse).error?.code, "SUBSCRIPTION_INACTIVE");
     assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 2);
 
+    // Concurrency: two dispatch requests race for exactly one AVAILABLE asset.
+    // At most one transfer may obtain custody; the loser must receive 409.
+    await prisma.tenantSubscription.update({
+      where:{tenantId:ownerA.tenant.id},data:{status:"ACTIVE"},
+    });
+    const concurrentLocationResponse=await fetch(`${baseUrl}/api/locations`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Concurrency Destination",code:"CONC_"+suffix,type:"BRANCH"}),
+    });
+    assert.equal(concurrentLocationResponse.status,201);
+    const concurrentLocation=await concurrentLocationResponse.json() as LocationResponse;
+    const concurrentAssetResponse=await fetch(`${baseUrl}/api/assets`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({title:"Concurrent transfer fixture",inventoryNumber:"CT-"+suffix,
+        currentLocationId:createdLocation.data.id}),
+    });
+    assert.equal(concurrentAssetResponse.status,201);
+    const concurrentAsset=await concurrentAssetResponse.json() as AssetResponse;
+    const dispatch=()=>fetch(`${baseUrl}/api/transfers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({originLocationId:createdLocation.data.id,
+        destinationLocationId:concurrentLocation.data.id,assetIds:[concurrentAsset.data.id]}),
+    });
+    const [racedA,racedB]=await Promise.all([dispatch(),dispatch()]);
+    const statuses=[racedA.status,racedB.status].sort();
+    assert.deepEqual(statuses,[201,409],"Exactly one concurrent dispatch must succeed.");
+    assert.equal(await prisma.assetTransferLine.count({
+      where:{tenantId:ownerA.tenant.id,assetId:concurrentAsset.data.id,status:"IN_TRANSIT"},
+    }),1);
+    await prisma.tenantSubscription.update({
+      where:{tenantId:ownerA.tenant.id},data:{status:"SUSPENDED"},
+    });
+
     const auditActions = await prisma.platformAuditLog.findMany({
       where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
       select: { action: true, reason: true },
@@ -1381,6 +1417,8 @@ test("registration, session security, tenant isolation, locations and assets wor
       });
       const tenantIds = tenants.map((tenant) => tenant.id);
       if (tenantIds.length > 0) {
+        await prisma.assetTransferLine.deleteMany({where:{tenantId:{in:tenantIds}}});
+        await prisma.assetTransfer.deleteMany({where:{tenantId:{in:tenantIds}}});
         await prisma.assetTransaction.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.asset.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.location.deleteMany({ where: { tenantId: { in: tenantIds } } });
