@@ -355,8 +355,8 @@ function EmployeePage({
                 <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} placeholder="e.g. +94 77 123 4567" defaultValue={editingEmployee.phone ?? ""} /></div>
               </div>
               <div className="asset-form-two-col">
-                <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer" placeholder="e.g. IT Officer" defaultValue={editingEmployee.designation ?? ""}/></label>
-                <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent" placeholder="e.g. Permanent" defaultValue={editingEmployee.employeeType ?? ""}/></label>
+                <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer" defaultValue={editingEmployee.designation ?? ""}/></label>
+                <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent" defaultValue={editingEmployee.employeeType ?? ""}/></label>
               </div>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
               <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
