@@ -1,4 +1,9 @@
 import { Router } from "express";
+import { randomBytes } from "node:crypto";
+import { env } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
+import { accountEmailReady, sendAccountLink } from "../auth/account-email.js";
+import { issueToken } from "../auth/account.routes.js";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { hashPassword } from "../auth/password.js";
@@ -10,10 +15,15 @@ export const memberRouter = Router();
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(191),
   fullName: z.string().trim().min(2).max(191),
-  initialPassword: z.string().min(12).max(128),
+  initialPassword: z.string().min(12).max(128).optional(),
+  invite: z.boolean().optional(),
   roleId: z.string().trim().min(1).max(36),
   allLocationsAccess: z.boolean().default(false),
-}).strict();
+  locationIds: z.array(z.string().trim().min(1).max(36)).max(500).default([]),
+}).strict().refine(input => input.invite === true
+  ? input.initialPassword === undefined
+  : Boolean(input.initialPassword),
+  "Select email invitation OR an initial development password.");
 const scopeSchema = z.object({
   allLocationsAccess: z.boolean(),
   locationIds: z.array(z.string().trim().min(1).max(36)).max(500),
@@ -27,6 +37,22 @@ const updateSchema = z.object({
 
 memberRouter.use(requireSession, requireTenant, requirePermission("members.manage"));
 
+/** Only eligible, currently active locations can be granted to another user. */
+memberRouter.get("/available-locations", async (request, response, next) => {
+  try {
+    const scope = request.auth!;
+    const locations = await prisma.location.findMany({
+      where:{
+        tenantId:scope.tenantId!, isActive:true,
+        ...(scope.allLocationsAccess ? {} : { id:{ in:scope.manageableLocationIds ?? [] } }),
+      },
+      select:{id:true,name:true,code:true,type:true,parentId:true},
+      orderBy:[{type:"asc"},{name:"asc"}],
+    });
+    response.json({data:locations});
+  } catch (error) { next(error); }
+});
+
 memberRouter.get("/", async (request, response, next) => {
   try {
     const tenantId = request.auth!.tenantId!;
@@ -37,7 +63,7 @@ memberRouter.get("/", async (request, response, next) => {
           id: true, isActive: true, allLocationsAccess: true, createdAt: true,
           locationAssignments: { select: { locationId: true, canManage: true } },
           role: { select: { id: true, key: true, name: true } },
-          user: { select: { id: true, email: true, fullName: true, disabledAt: true } },
+          user: { select: { id: true, email: true, fullName: true, emailVerifiedAt: true, disabledAt: true } },
         },
         orderBy: { createdAt: "asc" },
       }),
@@ -59,15 +85,29 @@ memberRouter.get("/", async (request, response, next) => {
 memberRouter.post("/", requireCsrf, async (request, response, next) => {
   const parsed = createSchema.safeParse(request.body);
   if (!parsed.success) {
-    response.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Check the user's details, role and initial password." } }); return;
+    response.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Check the user details, role and invitation method." } }); return;
   }
   const tenantId = request.auth!.tenantId!;
   const input = parsed.data;
+  if ((!input.allLocationsAccess && input.locationIds.length === 0) ||
+      (input.allLocationsAccess && input.locationIds.length > 0)) {
+    response.status(400).json({ error: { code: "LOCATION_SELECTION_REQUIRED",
+      message: "Select at least one location or explicitly grant all-location access." } }); return;
+  }
   if (input.allLocationsAccess && !request.auth!.allLocationsAccess) {
     response.status(403).json({ error: { code: "LOCATION_GRANT_DENIED" } }); return;
   }
+  if (input.invite && !accountEmailReady()) {
+    response.status(503).json({ error: { code: "EMAIL_UNAVAILABLE",
+      message: "Configure transactional email before sending invitations." } }); return;
+  }
+  if (!input.invite && env.NODE_ENV === "production") {
+    response.status(403).json({ error: { code: "INVITATION_REQUIRED",
+      message: "Production user creation requires a secure email invitation." } }); return;
+  }
   try {
-    const passwordHash = await hashPassword(input.initialPassword);
+    const passwordHash = await hashPassword(input.invite
+      ? randomBytes(48).toString("base64url") : input.initialPassword!);
     const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM Tenant WHERE id = ${tenantId} FOR UPDATE`;
       const subscription = await tx.tenantSubscription.findUnique({
@@ -90,6 +130,18 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
       if ((role.isSystem || await tx.rolePermission.count({
         where: { roleId: role.id, permission: { key: { in: ["members.manage", "roles.manage", "tenant.settings.manage"] } } },
       }) > 0) && request.auth!.roleKey !== "TENANT_OWNER") throw new Error("ROLE_ASSIGNMENT_DENIED");
+      if (!input.allLocationsAccess) {
+        const uniqueIds = [...new Set(input.locationIds)];
+        if (uniqueIds.length !== input.locationIds.length) throw new Error("LOCATION_SELECTION_INVALID");
+        const activeLocations = await tx.location.findMany({
+          where:{tenantId,id:{in:uniqueIds},isActive:true},select:{id:true},
+        });
+        if (activeLocations.length !== uniqueIds.length ||
+            (!request.auth!.allLocationsAccess &&
+              uniqueIds.some(id => !request.auth!.manageableLocationIds?.includes(id)))) {
+          throw new Error("LOCATION_GRANT_DENIED");
+        }
+      }
       const userExists = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
       // Prevent existing identities from being silently added to a company.
       if (userExists) throw new Error("EMAIL_ALREADY_EXISTS");
@@ -101,26 +153,143 @@ memberRouter.post("/", requireCsrf, async (request, response, next) => {
         include: { role: { select: { id: true, key: true, name: true } },
           user: { select: { id: true, email: true, fullName: true } } },
       });
+      if (!input.allLocationsAccess) {
+        await tx.membershipLocation.createMany({
+          data:input.locationIds.map(locationId => ({
+            tenantId, membershipId: member.id, locationId, canManage: false,
+          })),
+        });
+      }
       await tx.auditLog.create({ data: {
         tenantId, actorUserId: request.auth!.userId, action: "member.created",
         entityType: "Membership", entityId: member.id,
-        newData: { email: user.email, roleId: role.id, allLocationsAccess: input.allLocationsAccess },
+        newData: { email: user.email, roleId: role.id, allLocationsAccess: input.allLocationsAccess,
+          locationIds: input.allLocationsAccess ? [] : input.locationIds },
       } });
       return member;
     });
-    response.status(201).json({ data: result });
+    let invitationDelivery = "not_requested";
+    if (input.invite) {
+      try {
+        const raw = await issueToken(result.user.id, "INVITATION", 48 * 60);
+        await sendAccountLink(result.user.email, "invite", raw);
+        invitationDelivery = "sent";
+      } catch {
+        logger.warn("New company user invitation email failed.");
+        invitationDelivery = "failed";
+      }
+    }
+    response.status(201).json({ data: result, invitationDelivery });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const statuses: Record<string, number> = {
       SUBSCRIPTION_NOT_CONFIGURED: 409, SUBSCRIPTION_INACTIVE: 403,
       SUBSCRIPTION_EXPIRED: 403, USER_PLAN_LIMIT_REACHED: 409,
       ROLE_NOT_FOUND: 400, ROLE_ASSIGNMENT_DENIED: 403, EMAIL_ALREADY_EXISTS: 409,
+      LOCATION_GRANT_DENIED:403, LOCATION_SELECTION_INVALID:400,
     };
     if (code in statuses) {
       response.status(statuses[code]!).json({ error: { code } }); return;
     }
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
       response.status(409).json({ error: { code: "EMAIL_ALREADY_EXISTS" } }); return;
+    }
+    next(error);
+  }
+});
+
+memberRouter.post("/:id/invitation", requireCsrf, async (request, response, next) => {
+  if (!accountEmailReady()) {
+    response.status(503).json({ error: { code: "EMAIL_UNAVAILABLE", message: "Transactional email is not configured." } });
+    return;
+  }
+  const membershipId = request.params.id;
+  if (typeof membershipId !== "string" || !membershipId) {
+    response.status(400).json({ error: { code: "VALIDATION_ERROR" } }); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const membership = await prisma.membership.findFirst({
+      where: { id: membershipId, tenantId, isActive: true },
+      include: { user: { select: { id: true, email: true, emailVerifiedAt: true, disabledAt: true } } },
+    });
+    if (!membership || membership.user.disabledAt || membership.user.emailVerifiedAt) {
+      response.status(409).json({ error: { code: "INVITATION_NOT_ALLOWED",
+        message: "Only active, unverified company users can receive an invitation." } }); return;
+    }
+    const since = new Date(Date.now() - 15 * 60_000);
+    const previous = await prisma.accountToken.count({
+      where: { userId: membership.user.id, kind: "INVITATION", createdAt: { gt: since } },
+    });
+    if (previous >= 3) {
+      response.status(429).json({ error: { code: "INVITATION_RATE_LIMITED",
+        message: "Invitation limit reached. Try again later." } }); return;
+    }
+    const raw = await issueToken(membership.user.id, "INVITATION", 48 * 60);
+    await sendAccountLink(membership.user.email, "invite", raw);
+    response.status(202).json({ message: "Invitation sent." });
+  } catch (error) {
+    logger.warn("Company user invitation retry failed.");
+    next(error);
+  }
+});
+
+const memberPasswordResetSchema = z.object({
+  temporaryPassword: z.string().min(12).max(128),
+  reason: z.string().trim().min(8).max(1000),
+}).strict();
+
+/** Company-managed recovery when outbound email has not been configured.
+ * Never return or record plaintext passwords; revoke ALL target sessions.
+ */
+memberRouter.post("/:id/password/reset", requireCsrf, async (request, response, next) => {
+  const parsed = memberPasswordResetSchema.safeParse(request.body);
+  const memberId = request.params.id;
+  if (!parsed.success || typeof memberId !== "string" || !memberId) {
+    response.status(400).json({error:{code:"VALIDATION_ERROR",
+      message:"Provide a temporary password (12+ characters) and an audit reason."}}); return;
+  }
+  try {
+    const tenantId = request.auth!.tenantId!;
+    const actorUserId = request.auth!.userId;
+    const passwordHash = await hashPassword(parsed.data.temporaryPassword);
+    await prisma.$transaction(async tx => {
+      const membership = await tx.membership.findFirst({
+        where: { id: memberId, tenantId, isActive: true },
+        include: {
+          role: { select: { key: true } },
+          user: { select: { id: true, disabledAt: true, isPlatformAdmin: true,
+            memberships: { select: { tenantId: true } } } },
+        },
+      });
+      if (!membership || membership.user.disabledAt) throw new Error("MEMBER_NOT_FOUND");
+      if (membership.userId === actorUserId) throw new Error("RESET_SELF_DENIED");
+      if (membership.user.isPlatformAdmin) throw new Error("RESET_PLATFORM_ADMIN_DENIED");
+      if (membership.role.key === "TENANT_OWNER") throw new Error("RESET_OWNER_DENIED");
+      if (membership.user.memberships.length !== 1) throw new Error("RESET_SHARED_IDENTITY_DENIED");
+      await tx.user.update({ where: { id: membership.userId }, data: { passwordHash } });
+      await tx.session.deleteMany({ where: { userId: membership.userId } });
+      await tx.accountToken.updateMany({
+        where: { userId: membership.userId, usedAt: null }, data: { usedAt: new Date() },
+      });
+      await tx.auditLog.create({data:{
+        tenantId, actorUserId, action:"member.password_reset",
+        entityType:"Membership", entityId:membership.id,
+        newData:{sessionRevoked:true, reason:parsed.data.reason},
+        ipAddress:request.ip?.slice(0,64),
+      }});
+    });
+    response.json({message:"Password reset. All sessions were revoked. Deliver the temporary password privately."});
+  } catch (error) {
+    const code=error instanceof Error ? error.message : "";
+    if (["MEMBER_NOT_FOUND","RESET_SELF_DENIED","RESET_OWNER_DENIED","RESET_PLATFORM_ADMIN_DENIED",
+      "RESET_SHARED_IDENTITY_DENIED"].includes(code)) {
+      response.status(code==="MEMBER_NOT_FOUND" ? 404 : 403).json({
+        error:{code, message:code==="RESET_SHARED_IDENTITY_DENIED"
+          ? "Account also belongs to another company. Use the account recovery process."
+          : code==="RESET_OWNER_DENIED" ? "Owner passwords cannot be reset by company administration."
+          : "This account is not eligible for company-managed password reset."},
+      }); return;
     }
     next(error);
   }

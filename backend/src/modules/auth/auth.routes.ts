@@ -4,6 +4,9 @@ import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { env } from "../../config/env.js";
+import { accountEmailReady } from "./account-email.js";
+import { sendVerificationEmail } from "./account.routes.js";
 import { requireCsrf, requireSession } from "./auth-middleware.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import {
@@ -176,6 +179,10 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
         },
       });
 
+      await tx.assetNumberSequence.create({
+        data: { tenantId: tenant.id, prefix: "AM", nextValue: 1 },
+      });
+
       const trialPlan = await tx.subscriptionPlan.findFirst({
         where: { key: "trial", isActive: true },
       });
@@ -257,6 +264,10 @@ authRouter.post("/register", authLimiter, async (request, response, next) => {
       return { user, membership };
     });
 
+    if (accountEmailReady()) {
+      try { await sendVerificationEmail(result.user.id, result.user.email); }
+      catch { logger.warn("Initial account verification email delivery failed."); }
+    }
     setSessionCookie(response, rawToken);
     response.status(201).json({
       user: {
@@ -324,6 +335,10 @@ authRouter.post("/login", authLimiter, async (request, response, next) => {
       return;
     }
 
+    if (env.REQUIRE_VERIFIED_EMAIL === "true" && !user.emailVerifiedAt) {
+      sendError(response, 403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before signing in.");
+      return;
+    }
     const session = await createSession(user.id, request);
     setSessionCookie(response, session.rawToken);
 

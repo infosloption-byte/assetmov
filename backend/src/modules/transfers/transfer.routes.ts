@@ -349,6 +349,10 @@ transferRouter.post(
         sendError(response, 409, "ASSET_NOT_AVAILABLE", "Every selected asset must be available at the origin location.");
         return;
       }
+      if (errorCode(error) === "P2034") {
+        sendError(response, 409, "TRANSFER_CONFLICT", "A concurrent movement changed the asset. Refresh and retry.");
+        return;
+      }
       if (error instanceof Error && error.message === "TRANSFER_CONCURRENT_CHANGE") {
         sendError(response, 409, "ASSET_CHANGED", "An asset changed while dispatch was being processed. Refresh and try again.");
         return;

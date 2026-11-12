@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { accountRecoveryRouter } from "./modules/auth/account.routes.js";
 import { SESSION_COOKIE_NAME } from "./modules/auth/session.js";
 import { workspaceRouter } from "./modules/tenancy/workspace.routes.js";
 import { assetRouter } from "./modules/assets/asset.routes.js";
@@ -18,6 +19,7 @@ import { platformConsoleRouter } from "./modules/platform/platform-console.route
 import { memberRouter } from "./modules/members/member.routes.js";
 import { roleRouter } from "./modules/roles/role.routes.js";
 import { masterDataRouter } from "./modules/master-data/master-data.routes.js";
+import { vendorRouter } from "./modules/master-data/vendor.routes.js";
 import { fileRouter } from "./modules/storage/file.routes.js";
 import { billingRouter } from "./modules/billing/billing.routes.js";
 import { paddleWebhookRouter } from "./modules/billing/paddle-webhook.routes.js";
@@ -78,11 +80,13 @@ app.get("/api/health", async (_request, response, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/auth", accountRecoveryRouter);
 app.use("/api/platform", platformRouter);
 app.use("/api/platform-console", platformConsoleRouter);
 app.use("/api/members", memberRouter);
 app.use("/api/roles", roleRouter);
 app.use("/api/master-data", masterDataRouter);
+app.use("/api/vendors", vendorRouter);
 app.use("/api/files", fileRouter);
 app.use("/api/billing", billingRouter);
 app.use("/api/workspace", workspaceRouter);

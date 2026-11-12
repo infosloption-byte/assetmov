@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import PaddleCheckoutPage from "./features/billing/PaddleCheckoutPage";
 import "./index.css";
+import "./features/ui/ui-polish.css";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

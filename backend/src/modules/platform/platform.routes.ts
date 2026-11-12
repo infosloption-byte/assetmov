@@ -518,7 +518,10 @@ platformRouter.get("/overview", requireSession, requirePlatformAdmin, async (_re
         paidAmountMinor: payments._sum.amountMinor ?? 0,
         failedWebhookCount: failedWebhooks,
         latestPayments: latestPayments.map(item => ({
-          tenantId: item.tenantId, tenantName: item.tenant.name,
+          tenantId: item.tenantId,
+          // Historical or inconsistent payment records may have no resolvable tenant.
+          // Keep the transaction visible for reconciliation instead of crashing the overview.
+          tenantName: item.tenant?.name ?? "Unavailable company",
           transactionId: item.transactionId, status: item.status,
           amountMinor: item.amountMinor, currency: item.currency, occurredAt: item.occurredAt,
         })),

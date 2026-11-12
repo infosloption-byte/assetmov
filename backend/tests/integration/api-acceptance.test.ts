@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { randomUUID, createHmac } from "node:crypto";
+import { randomUUID, randomBytes, createHmac, createHash } from "node:crypto";
 import test from "node:test";
 import type { Server } from "node:http";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/lib/prisma.js";
-import { hashPassword } from "../../src/modules/auth/password.js";
+import { hashPassword, verifyPassword } from "../../src/modules/auth/password.js";
 
 if (process.env.ASSETMOV_RUN_DB_INTEGRATION_TESTS !== "1") {
   throw new Error(
@@ -420,6 +420,165 @@ test("registration, session security, tenant isolation, locations and assets wor
     const assetListBody = await assetList.json() as AssetListResponse;
     assert.ok(assetListBody.data.some((item) => item.id === createdAsset.data.id));
 
+
+    // P0 operational changes: role/location-checked damage and restoration,
+    // atomic bulk assignment, and custodian deactivation safety.
+    const lifecycleChange = (action: string, message: string) => fetch(
+      `${baseUrl}/api/assets/${createdAsset.data.id}/lifecycle`, {
+        method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+          csrfToken:ownerA.csrfToken,json:true,origin:true}),
+        body:JSON.stringify({action,reason:message}),
+      });
+    const damaged = await lifecycleChange("DAMAGE","Damaged for integration acceptance test");
+    assert.equal(damaged.status,200,"Damage must be tracked with authorization and audit.");
+    assert.equal((await damaged.json() as {data:{status:string}}).data.status,"DAMAGED");
+    const lifecycleRestored = await lifecycleChange("RESTORE","Service inspection complete and asset recovered");
+    assert.equal(lifecycleRestored.status,200);
+    assert.equal((await lifecycleRestored.json() as {data:{status:string}}).data.status,"AVAILABLE");
+
+    const testEmployeeResponse = await fetch(`${baseUrl}/api/employees`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({employeeCode:"P0-"+suffix,firstName:"P0",lastName:"Custodian",
+        homeLocationId:createdLocation.data.id}),
+    });
+    assert.equal(testEmployeeResponse.status,201);
+    const testEmployee = await testEmployeeResponse.json() as {data:{id:string}};
+    const initialLocationHistory = await fetch(
+      `${baseUrl}/api/employees/${testEmployee.data.id}/location-history`,{
+        headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id}),
+      });
+    assert.equal(initialLocationHistory.status,200);
+    assert.ok((await initialLocationHistory.json() as {
+      data:Array<{newLocation:string;reason:string}>
+    }).data.some(e=>e.reason==="Initial employee location"));
+
+    const bulk = await fetch(`${baseUrl}/api/assets/bulk-assign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({assetIds:[createdAsset.data.id],employeeId:testEmployee.data.id,
+        notes:"Verified employee custody"}),
+    });
+    assert.equal(bulk.status,200,"Bulk assignment should work atomically.");
+    assert.equal((await bulk.json() as {data:{count:number}}).data.count,1);
+    const rejectedInactive = await fetch(`${baseUrl}/api/employees/${testEmployee.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(rejectedInactive.status,409,"Custodians with assigned assets cannot be deactivated.");
+    const bulkRepeat = await fetch(`${baseUrl}/api/assets/bulk-assign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({assetIds:[createdAsset.data.id],employeeId:testEmployee.data.id}),
+    });
+    assert.equal(bulkRepeat.status,409,"A second assignment cannot duplicate custody.");
+    const unassigned = await fetch(`${baseUrl}/api/assets/${createdAsset.data.id}/unassign`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({notes:"Custody returned after P0 test"}),
+    });
+    assert.equal(unassigned.status,200);
+    const deactivate = await fetch(`${baseUrl}/api/employees/${testEmployee.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(deactivate.status,200);
+    assert.equal((await deactivate.json() as {data:{isActive:boolean}}).data.isActive,false);
+
+    // P0 company metadata, supplier/master-data isolation and safe location archiving.
+    const profileResponse = await fetch(`${baseUrl}/api/workspace/profile`, {
+      headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
+    });
+    assert.equal(profileResponse.status, 200);
+    const profileBody = await profileResponse.json() as {data:{name:string;timezone:string}};
+    const profileUpdate = await fetch(`${baseUrl}/api/workspace/profile`, {
+      method:"PATCH", headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:profileBody.data.name,timezone:"Asia/Colombo",
+        locale:"en-LK",currency:"LKR",dateFormat:"YYYY-MM-DD",fiscalYearStartMonth:4,
+        inventoryPrefix:"SL-AM"}),
+    });
+    assert.equal(profileUpdate.status,200,"Company owner can update local preferences.");
+    const profileAfter = await profileUpdate.json() as {data:{timezone:string;currency:string}};
+    assert.equal(profileAfter.data.currency,"LKR");
+    const automaticAsset = await fetch(`${baseUrl}/api/assets`, {
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({title:"Automatically numbered asset",inventoryNumber:"",
+        currentLocationId:createdLocation.data.id}),
+    });
+    assert.equal(automaticAsset.status,201,"Automatically numbered assets should be accepted.");
+    const automaticBody = await automaticAsset.json() as {data:{id:string;inventoryNumber:string}};
+    const duplicatePreview = await fetch(`${baseUrl}/api/assets/import/preview`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({inventoryNumbers:[automaticBody.data.inventoryNumber,
+        "CT-NOT-EXISTENT",""]}),
+    });
+    assert.equal(duplicatePreview.status,200);
+    const previewBody=await duplicatePreview.json() as {
+      data:{issues:Array<{index:number;duplicate:boolean}>}
+    };
+    assert.equal(previewBody.data.issues[0]?.duplicate,true);
+    assert.equal(previewBody.data.issues[1]?.duplicate,false);
+
+    assert.match(automaticBody.data.inventoryNumber,/^SL-AM-[0-9]{6,}$/);
+    // Preserve existing integration expectations (two retained test assets).
+    await prisma.assetTransaction.deleteMany({where:{tenantId:ownerA.tenant.id,assetId:automaticBody.data.id}});
+    await prisma.asset.delete({where:{id:automaticBody.data.id}});
+
+    const foreignCompanyProfile = await fetch(`${baseUrl}/api/workspace/profile`, {
+      headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerA.tenant.id}),
+    });
+    assert.equal(foreignCompanyProfile.status,403);
+
+    const supplierResponse = await fetch(`${baseUrl}/api/vendors/suppliers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Integration supplier " + suffix,email:"vendor@example.test"}),
+    });
+    assert.equal(supplierResponse.status,201);
+    const supplier = await supplierResponse.json() as {data:{id:string}};
+    const otherSupplierList = await fetch(`${baseUrl}/api/vendors/suppliers`,{
+      headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerB.tenant.id}),
+    });
+    assert.equal(otherSupplierList.status,200);
+    assert.ok(!(await otherSupplierList.json() as {data:Array<{id:string}>}).data.some(x=>x.id===supplier.data.id));
+    const supplierArchive = await fetch(`${baseUrl}/api/vendors/suppliers/${supplier.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(supplierArchive.status,200);
+    const manufacturerResponse = await fetch(`${baseUrl}/api/vendors/manufacturers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Integration manufacturer " + suffix}),
+    });
+    assert.equal(manufacturerResponse.status,201);
+
+    const cycleLocation = await fetch(`${baseUrl}/api/locations/${createdLocation.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({parentId:createdLocation.data.id}),
+    });
+    assert.equal(cycleLocation.status,400,"Locations cannot become their own parent.");
+    const usedLocationArchive = await fetch(`${baseUrl}/api/locations/${createdLocation.data.id}`,{
+      method:"PATCH",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({isActive:false}),
+    });
+    assert.equal(usedLocationArchive.status,409,"Cannot archive a location holding assets.");
+
+    const filteredAssets = await fetch(`${baseUrl}/api/assets?categoryId=${category.data.id}&pageSize=1&sortBy=createdAt&sortOrder=desc`,{
+      headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id}),
+    });
+    assert.equal(filteredAssets.status,200);
+    assert.equal((await filteredAssets.json() as {pagination:{pageSize:number};data:unknown[]}).pagination.pageSize,1);
+
+
     // The company overview shows real counts, never another tenant's inventory.
     const ownerOverview = await fetch(`${baseUrl}/api/workspace/overview`, {
       headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id }),
@@ -497,7 +656,7 @@ test("registration, session security, tenant isolation, locations and assets wor
       method: "POST", headers: requestHeaders({ cookie: ownerA.cookie, tenantId: ownerA.tenant.id,
         csrfToken: ownerA.csrfToken, json: true, origin: true }),
       body: JSON.stringify({ email, fullName: "Quota Test User", initialPassword: password,
-        roleId: customRole.data.id, allLocationsAccess: false }),
+        roleId: customRole.data.id, allLocationsAccess: false, locationIds: [createdLocation.data.id] }),
     });
     const extraUser = await createExtraUser(anotherMemberEmail);
     assert.equal(extraUser.status, 201);
@@ -510,6 +669,24 @@ test("registration, session security, tenant isolation, locations and assets wor
         csrfToken: ownerA.csrfToken, json: true, origin: true }),
       body: JSON.stringify({ isActive: active, reason: "Integration test changes membership active status" }),
     });
+
+    // The company administrator can reset an eligible local user's password,
+    // but not a company owner's. Sessions are revoked and plaintext is never returned.
+    const resetMemberPassword = await fetch(`${baseUrl}/api/members/${extraMember.data.id}/password/reset`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({temporaryPassword:"Temporary-Reset-2026!-Example",
+        reason:"Employee requested administrator recovery"}),
+    });
+    assert.equal(resetMemberPassword.status,200);
+    const ownerResetDenied = await fetch(`${baseUrl}/api/members/${ownerMembership.id}/password/reset`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({temporaryPassword:"Temporary-Reset-2026!-Example",
+        reason:"Attempt to reset company owner password"}),
+    });
+    assert.equal(ownerResetDenied.status,403);
+
     assert.equal((await changeMemberActive(false)).status, 200);
     assert.equal((await changeMemberActive(true)).status, 200);
 
@@ -679,7 +856,16 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: ownerA.cookie }),
     });
     assert.equal(platformOverview.status, 200);
-    assert.equal(typeof (await platformOverview.json() as { data: { companyCount: number } }).data.companyCount, "number");
+    const overviewData = (await platformOverview.json() as {
+      data: { companyCount: number; paddle: { latestPayments: Array<{
+        tenantId: string; tenantName: string; transactionId: string;
+      }> } };
+    }).data;
+    assert.equal(typeof overviewData.companyCount, "number");
+    assert.ok(Array.isArray(overviewData.paddle.latestPayments));
+    assert.ok(overviewData.paddle.latestPayments.every(item =>
+      typeof item.tenantName === "string" && item.tenantName.length > 0),
+    "Platform overview must display payment history even when a tenant relation is unavailable.");
     const plansBody = await platformPlans.json() as { data: Array<{ id: string; key: string }> };
     assert.ok(plansBody.data.some((plan) => plan.key === "trial"));
 
@@ -1095,6 +1281,42 @@ test("registration, session security, tenant isolation, locations and assets wor
     assert.equal((await suspended.json() as ErrorResponse).error?.code, "SUBSCRIPTION_INACTIVE");
     assert.equal(await prisma.asset.count({ where: { tenantId: ownerA.tenant.id } }), 2);
 
+    // Concurrency: two dispatch requests race for exactly one AVAILABLE asset.
+    // At most one transfer may obtain custody; the loser must receive 409.
+    await prisma.tenantSubscription.update({
+      where:{tenantId:ownerA.tenant.id},data:{status:"ACTIVE"},
+    });
+    const concurrentLocationResponse=await fetch(`${baseUrl}/api/locations`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({name:"Concurrency Destination",code:"CONC_"+suffix,type:"BRANCH"}),
+    });
+    assert.equal(concurrentLocationResponse.status,201);
+    const concurrentLocation=await concurrentLocationResponse.json() as LocationResponse;
+    const concurrentAssetResponse=await fetch(`${baseUrl}/api/assets`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({title:"Concurrent transfer fixture",inventoryNumber:"CT-"+suffix,
+        currentLocationId:createdLocation.data.id}),
+    });
+    assert.equal(concurrentAssetResponse.status,201);
+    const concurrentAsset=await concurrentAssetResponse.json() as AssetResponse;
+    const dispatch=()=>fetch(`${baseUrl}/api/transfers`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({originLocationId:createdLocation.data.id,
+        destinationLocationId:concurrentLocation.data.id,assetIds:[concurrentAsset.data.id]}),
+    });
+    const [racedA,racedB]=await Promise.all([dispatch(),dispatch()]);
+    const statuses=[racedA.status,racedB.status].sort();
+    assert.deepEqual(statuses,[201,409],"Exactly one concurrent dispatch must succeed.");
+    assert.equal(await prisma.assetTransferLine.count({
+      where:{tenantId:ownerA.tenant.id,assetId:concurrentAsset.data.id,status:"IN_TRANSIT"},
+    }),1);
+    await prisma.tenantSubscription.update({
+      where:{tenantId:ownerA.tenant.id},data:{status:"SUSPENDED"},
+    });
+
     const auditActions = await prisma.platformAuditLog.findMany({
       where: { actorUserId: ownerA.userId, entityId: { in: [createdPlanId, assignedBody.data.planId] } },
       select: { action: true, reason: true },
@@ -1142,6 +1364,70 @@ test("registration, session security, tenant isolation, locations and assets wor
       headers: requestHeaders({ cookie: loginCookie }),
     });
     assert.equal(revokedSession.status, 401);
+
+    // One-time email verification and password recovery must reject replay
+    // and revoke all active sessions, without requiring a live email provider.
+    const verifyRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerA.userId,kind:"EMAIL_VERIFY",
+      tokenHash:createHash("sha256").update(verifyRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const confirmation = await fetch(`${baseUrl}/api/auth/email/verification/confirm`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:verifyRaw}),
+    });
+    assert.equal(confirmation.status,200);
+    assert.ok((await prisma.user.findUniqueOrThrow({where:{id:ownerA.userId}})).emailVerifiedAt);
+    const verificationReplay = await fetch(`${baseUrl}/api/auth/email/verification/confirm`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:verifyRaw}),
+    });
+    assert.equal(verificationReplay.status,400);
+
+    const resetRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerA.userId,kind:"PASSWORD_RESET",
+      tokenHash:createHash("sha256").update(resetRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const newPassword = "Secure-Recovery-Password-2026!";
+    const recovered = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:resetRaw,newPassword}),
+    });
+    assert.equal(recovered.status,200);
+    const savedPassword = (await prisma.user.findUniqueOrThrow({where:{id:ownerA.userId}})).passwordHash;
+    assert.ok(await verifyPassword(newPassword,savedPassword));
+    const resetReplay = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:resetRaw,newPassword}),
+    });
+    assert.equal(resetReplay.status,400);
+    const oldSessionAfterReset = await fetch(`${baseUrl}/api/auth/me`,{
+      headers:requestHeaders({cookie:ownerA.cookie}),
+    });
+    assert.equal(oldSessionAfterReset.status,401);
+    // Invited users set their own password and prove mailbox ownership.
+    const inviteRaw = randomBytes(32).toString("base64url");
+    await prisma.accountToken.create({data:{
+      userId:ownerB.userId,kind:"INVITATION",
+      tokenHash:createHash("sha256").update(inviteRaw).digest("hex"),
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const inviteAccept = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:inviteRaw,newPassword:"Secure-Invitation-Password-2026!"}),
+    });
+    assert.equal(inviteAccept.status,200);
+    assert.ok((await prisma.user.findUniqueOrThrow({where:{id:ownerB.userId}})).emailVerifiedAt);
+    const inviteReplay = await fetch(`${baseUrl}/api/auth/password/reset`,{
+      method:"POST",headers:requestHeaders({json:true,origin:true}),
+      body:JSON.stringify({token:inviteRaw,newPassword:"Secure-Invitation-Password-2026!"}),
+    });
+    assert.equal(inviteReplay.status,400);
+
+
   } finally {
     try {
       if (originalSettings) await prisma.platformSetting.upsert({
@@ -1153,6 +1439,8 @@ test("registration, session security, tenant isolation, locations and assets wor
       });
       const tenantIds = tenants.map((tenant) => tenant.id);
       if (tenantIds.length > 0) {
+        await prisma.assetTransferLine.deleteMany({where:{tenantId:{in:tenantIds}}});
+        await prisma.assetTransfer.deleteMany({where:{tenantId:{in:tenantIds}}});
         await prisma.assetTransaction.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.asset.deleteMany({ where: { tenantId: { in: tenantIds } } });
         await prisma.location.deleteMany({ where: { tenantId: { in: tenantIds } } });

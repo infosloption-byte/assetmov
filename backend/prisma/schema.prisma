@@ -96,6 +96,11 @@ model Tenant {
   id                String @id @default(cuid()) @db.VarChar(36)
   name              String               @db.VarChar(191)
   slug              String               @unique @db.VarChar(100)
+  timezone          String               @default("UTC") @db.VarChar(64)
+  locale            String               @default("en-US") @db.VarChar(24)
+  currency          String               @default("USD") @db.VarChar(3)
+  dateFormat        String               @default("YYYY-MM-DD") @db.VarChar(20)
+  fiscalYearStartMonth Int                @default(1)
   status            TenantStatus         @default(TRIAL)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
@@ -103,6 +108,7 @@ model Tenant {
   roles             Role[]
   requestItems      AssetRequestItem[]
   membershipLocations MembershipLocation[]
+  assetNumberSequence AssetNumberSequence?
   locations         Location[]
   employees         Employee[]
   categories        AssetCategory[]
@@ -139,6 +145,7 @@ model User {
   updatedAt       DateTime           @updatedAt
   memberships       Membership[]
   sessions          Session[]
+  accountTokens     AccountToken[]
   auditEvents       AuditLog[]          @relation("AuditActor")
   assetEvents       AssetTransaction[]  @relation("TransactionActor")
   submittedRequests AssetRequest[]      @relation("RequestSubmitter")
@@ -146,6 +153,20 @@ model User {
   createdTransfers  AssetTransfer[]     @relation("TransferCreator")
   resolvedTransferLines AssetTransferLine[] @relation("TransferLineResolver")
   platformAuditEvents   PlatformAuditLog[]   @relation("PlatformAuditActor")
+}
+
+model AccountToken {
+  id        String @id @default(cuid()) @db.VarChar(36)
+  userId    String @db.VarChar(36)
+  kind      String @db.VarChar(32)
+  tokenHash String @unique @db.Char(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, expiresAt])
+  @@index([expiresAt, usedAt])
 }
 
 model Session {
@@ -268,6 +289,8 @@ model Employee {
   employeeCode   String   @db.VarChar(100)
   firstName      String   @db.VarChar(100)
   lastName       String   @db.VarChar(100)
+  designation    String?  @db.VarChar(100)
+  employeeType   String?  @db.VarChar(100)
   email          String?  @db.VarChar(191)
   phone          String?  @db.VarChar(50)
   homeLocationId String? @db.VarChar(36)
@@ -280,11 +303,27 @@ model Employee {
   sentTransactions AssetTransaction[] @relation("TransactionFromEmployee")
   receivedTransactions AssetTransaction[] @relation("TransactionToEmployee")
   licenseAssignments LicenseAssignment[] @relation("LicenseAssignee")
+  locationHistory EmployeeLocationHistory[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, id])
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, homeLocationId])
+}
+
+
+model EmployeeLocationHistory {
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
+  employeeId     String @db.VarChar(36)
+  previousLocationId String? @db.VarChar(36)
+  newLocationId      String? @db.VarChar(36)
+  actorUserId    String @db.VarChar(36)
+  reason         String @db.VarChar(300)
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId, createdAt])
 }
 
 model AssetCategory {
@@ -357,6 +396,13 @@ model Manufacturer {
   @@unique([tenantId, name])
   @@unique([tenantId, id])
   @@index([tenantId, isActive])
+}
+
+model AssetNumberSequence {
+  tenantId  String @id @db.VarChar(36)
+  prefix    String @default("AM") @db.VarChar(16)
+  nextValue Int @default(1)
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Asset {

@@ -4,8 +4,8 @@ import ThemeSelect from "../../components/ThemeSelect";
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type Role = { id: string; key: string; name: string; description: string | null; isSystem: boolean; memberCount: number; permissionKeys: string[] };
 type Permission = { key: string; description: string | null };
-type Location = { id: string; name: string; code: string };
-type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string } };
+type Location = { id: string; name: string; code: string; type: string; parentId?: string | null };
+type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string; emailVerifiedAt?: string | null } };
 type Usage = { activeUsers: number; maxActiveUsers: number | null };
 type SubscriptionUsage = { assets: number; activeUsers: number; storageUsedBytes: string; subscription: null | { status: string; trialEndsAt: string | null; plan: { name: string; maxAssets: number | null; maxActiveUsers: number | null; storageLimitBytes: string | null; trialDurationDays: number } } };
 type Props = { tenantId: string | null; csrfToken: string | null; permissions: string[]; currentUserId: string | null; isOwner: boolean; allLocationsAccess: boolean };
@@ -18,6 +18,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [locations, setLocations] = useState<Location[]>([]);
   const [editingScope, setEditingScope] = useState<Member | null>(null);
   const [editingProfile, setEditingProfile] = useState<Member | null>(null);
+  const [resettingPasswordFor, setResettingPasswordFor] = useState<Member | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage>({ activeUsers: 0, maxActiveUsers: null });
@@ -26,6 +27,11 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [newUserRoleId, setNewUserRoleId] = useState("");
+  const [inviteByEmail, setInviteByEmail] = useState(false);
+  const [createLocationType, setCreateLocationType] = useState("");
+  const [newUserLocations, setNewUserLocations] = useState<string[]>([]);
+  const [newUserAllLocations, setNewUserAllLocations] = useState(false);
+  const [scopeLocationType, setScopeLocationType] = useState("");
   const [confirmation, setConfirmation] = useState<{ title: string; message: string; execute: () => Promise<unknown>; success: string } | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -62,7 +68,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         canRoles ? call<{ data: Role[] }>("/roles") : Promise.resolve({ data: [] as Role[] }),
         canRoles ? call<{ data: Permission[] }>("/roles/permissions") : Promise.resolve({ data: [] as Permission[] }),
         canMembers ? call<{ data: Member[]; usage: Usage }>("/members") : Promise.resolve({ data: [] as Member[], usage: { activeUsers: 0, maxActiveUsers: null } }),
-        canMembers && permissions.includes("location.read") ? call<{ data: Location[] }>("/locations") : Promise.resolve({ data: [] as Location[] }),
+        canMembers ? call<{ data: Location[] }>("/members/available-locations") : Promise.resolve({ data: [] as Location[] }),
       ]);
       setRoles(results[0].data);
       setCatalog(results[1].data);
@@ -108,13 +114,20 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const ok = await run(() => call("/members", "POST", {
-      fullName: String(data.get("fullName") ?? "").trim(),
-      email: String(data.get("email") ?? "").trim(),
-      initialPassword: String(data.get("initialPassword") ?? ""),
-      roleId: newUserRoleId,
-      allLocationsAccess: data.get("allLocationsAccess") === "on",
-    }), "Company user created.");
+    const ok = await run(async () => {
+      const result = await call<{ invitationDelivery?: string }>("/members", "POST", {
+        fullName: String(data.get("fullName") ?? "").trim(),
+        email: String(data.get("email") ?? "").trim(),
+        ...(inviteByEmail ? { invite: true } :
+          { initialPassword: String(data.get("initialPassword") ?? "") }),
+        roleId: newUserRoleId,
+        allLocationsAccess: newUserAllLocations && allLocationsAccess,
+        locationIds: newUserAllLocations ? [] : newUserLocations,
+      });
+      if (inviteByEmail && result.invitationDelivery !== "sent") {
+        throw new Error("User created, but email delivery failed. Close this form and resend invitation from the user list.");
+      }
+    }, inviteByEmail ? "Company user invited." : "Company user created with an initial development password.");
     if (ok) setUserFormOpen(false);
   }
 
@@ -145,11 +158,21 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     {visibleTab === "users" && canMembers && tenantId && <>
       <div className="asset-register-toolbar">
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
-        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setUserFormOpen(true); }}>Add user ＋</button>
+        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setNewUserLocations([]); setCreateLocationType(""); setNewUserAllLocations(false); setUserFormOpen(true); }}>Add user ＋</button>
       </div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
-          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div><button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button></td><td>
+          <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div>
+            <button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button>
+            {member.isActive && member.user.id !== currentUserId && member.role.key !== "TENANT_OWNER" &&
+              <button type="button" className="text-button" disabled={busy}
+                onClick={() => setResettingPasswordFor(member)}>Reset password</button>}
+            {!member.user.emailVerifiedAt && member.isActive &&
+              <button type="button" className="text-button" disabled={busy} onClick={() => {
+                void run(() => call("/members/" + member.id + "/invitation", "POST", {}),
+                  "An invitation email was sent.");
+              }}>Resend invitation</button>}
+          </td><td>
             {canRoles ? <ThemeSelect label={"Role for " + member.user.fullName} value={member.role.id} disabled={busy || member.user.id === currentUserId}
               options={roles.map(role => ({ value: role.id, label: role.name, disabled: !assignableRoles.some(item => item.id === role.id) }))}
               onChange={nextRole => {
@@ -163,6 +186,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId || (!allLocationsAccess && locations.length === 0)} onClick={() => {
             setEditingScope(member); setScopeAll(member.allLocationsAccess);
             setScopeIds(member.locationAssignments.map(item => item.locationId));
+            setScopeLocationType("");
           }}>{member.allLocationsAccess ? "All locations" : member.locationAssignments.length + " locations"} · Edit</button></td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId} onClick={() => {
             setConfirmation({
@@ -177,7 +201,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     </>}
     {visibleTab === "roles" && canRoles && tenantId && <>
       <div className="asset-register-toolbar"><span>{roles.length} COMPANY ROLES</span><button className="primary-button" type="button" onClick={() => { setSelectedRole(null); setSelectedPermissions([]); setRoleFormOpen(true); }}>Add role ＋</button></div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Role</th><th>Permissions</th><th>Members</th><th>Actions</th></tr></thead><tbody>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>Role</th><th>Permissions</th><th>Members</th><th>Actions</th></tr></thead><tbody>
         {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong><div>{role.key}</div></td><td>{role.permissionKeys.length} permissions</td><td>{role.memberCount}</td><td>{role.isSystem ? "System role" : <button type="button" className="topbar-button ghost" onClick={() => { setSelectedRole(role); setSelectedPermissions([...role.permissionKeys]); setRoleFormOpen(true); }}>Edit role</button>}</td></tr>)}
       </tbody></table></div>
     </>}
@@ -190,6 +214,43 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           void (async () => { const ok = await run(item.execute, item.success); if (ok) setConfirmation(null); })();
         }}>Confirm</button></div>
     </section></div>}
+    {resettingPasswordFor && <div className="modal-backdrop">
+      <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="adminPasswordResetTitle">
+        <div className="asset-modal-heading">
+          <h2 id="adminPasswordResetTitle">Reset company user password</h2>
+          <button type="button" className="modal-close" aria-label="Close reset form"
+            onClick={() => setResettingPasswordFor(null)}>×</button>
+        </div>
+        <p className="asset-inline-hint">For {resettingPasswordFor.user.fullName}. All existing sessions will be signed out.
+          Share the temporary password through a private, trusted channel—not through a group chat.</p>
+        <form className="asset-create-form" onSubmit={event => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const password = String(data.get("temporaryPassword") ?? "");
+          if (password !== String(data.get("confirmation") ?? "")) {
+            setError("Temporary passwords do not match."); return;
+          }
+          const reason = String(data.get("reason") ?? "").trim();
+          void (async () => {
+            const ok = await run(() => call("/members/" + resettingPasswordFor.id + "/password/reset",
+              "POST", {temporaryPassword:password, reason}),
+              "User password updated and all existing sessions revoked.");
+            if (ok) setResettingPasswordFor(null);
+          })();
+        }}>
+          <label>Temporary password<input type="password" name="temporaryPassword" autoComplete="new-password"
+            minLength={12} maxLength={128} placeholder="At least 12 characters" required/></label>
+          <label>Confirm temporary password<input type="password" name="confirmation" autoComplete="new-password"
+            minLength={12} maxLength={128} required/></label>
+          <label>Reason for password reset<textarea name="reason" minLength={8} maxLength={1000} rows={2}
+            placeholder="e.g. Employee lost access to their account" required/></label>
+          <div className="asset-modal-actions">
+            <button className="plain-button" type="button" onClick={() => setResettingPasswordFor(null)}>Cancel</button>
+            <button className="primary-button" disabled={busy} type="submit">Reset and revoke sessions</button>
+          </div>
+        </form>
+      </section>
+    </div>}
     {editingProfile && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
       <div className="asset-modal-heading"><h2 id="profileTitle">Edit user profile</h2><button className="modal-close" type="button" onClick={() => setEditingProfile(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => {
@@ -202,7 +263,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           if (ok) setEditingProfile(null);
         })();
       }}>
-        <label>Full name<input name="fullName" required minLength={2} maxLength={191} defaultValue={editingProfile.user.fullName} /></label>
+        <label>Full name<input name="fullName" required minLength={2} maxLength={191} placeholder="Full name" defaultValue={editingProfile.user.fullName} /></label>
         <p className="asset-inline-hint">Email is an account identity and cannot be changed here.</p>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingProfile(null)}>Cancel</button><button className="primary-button" type="submit" disabled={busy}>Save profile</button></div>
       </form></section></div>}
@@ -219,29 +280,64 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         })();
       }}>
         {allLocationsAccess && <label><input type="checkbox" checked={scopeAll} onChange={event => setScopeAll(event.target.checked)} /> All locations</label>}
-        {!scopeAll && <fieldset className="company-permissions"><legend>Accessible locations</legend>
-          {locations.map(location => <label key={location.id}><input type="checkbox" checked={scopeIds.includes(location.id)} onChange={event => setScopeIds(previous => event.target.checked ? [...previous, location.id] : previous.filter(id => id !== location.id))} />{location.name} ({location.code})</label>)}
-        </fieldset>}
+        {!scopeAll && <>
+          <label>Filter by location type</label>
+          <ThemeSelect label="Location type for access" value={scopeLocationType}
+            onChange={setScopeLocationType}
+            options={[{value:"",label:"All location types"},
+              ...[...new Set(locations.map(location=>location.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
+          <fieldset className="company-permissions"><legend>Accessible locations</legend>
+            {locations.filter(location=>!scopeLocationType || location.type===scopeLocationType).map(location =>
+              <label key={location.id}><input type="checkbox" checked={scopeIds.includes(location.id)}
+                onChange={event => setScopeIds(previous => event.target.checked ?
+                  [...previous,location.id] : previous.filter(id => id!==location.id))}/>
+                {location.name} ({location.code})</label>)}
+          </fieldset>
+        </>}
         <p className="asset-inline-hint">Only locations you are allowed to manage may be granted. Child locations inherit access.</p>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingScope(null)}>Cancel</button><button className="primary-button" disabled={busy} type="submit">Save access</button></div>
       </form></section></div>}
     {userFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="newUserTitle">
       <div className="asset-modal-heading"><h2 id="newUserTitle">Add company user</h2><button className="modal-close" type="button" onClick={() => setUserFormOpen(false)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void submitUser(event)}>
-        <label>Full name<input name="fullName" required minLength={2} maxLength={191} /></label>
-        <label>Email<input name="email" type="email" required maxLength={191} /></label>
-        <label>Initial password<input name="initialPassword" type="password" required minLength={12} maxLength={128} autoComplete="new-password" /></label>
-        <p className="asset-inline-hint">Development onboarding: arrange secure delivery of the initial password. One-time password setup is planned before launch.</p>
+        <label>Full name<input name="fullName" required minLength={2} maxLength={191} placeholder="e.g. Nimal Perera" /></label>
+        <label>Email<input name="email" type="email" required maxLength={191} placeholder="e.g. nimal@company.com" /></label>
+        <label><input type="checkbox" checked={inviteByEmail} onChange={event=>setInviteByEmail(event.target.checked)}/>
+          Send secure invitation by email</label>
+        {inviteByEmail ?
+          <p className="asset-inline-hint">Recommended. The new user sets their own password from a one-time email link (requires configured transactional email).</p> :
+          <><label>Initial password (development only)
+            <input name="initialPassword" type="password" placeholder="Set a strong temporary password" required minLength={12} maxLength={128} autoComplete="new-password"/>
+          </label><p className="asset-inline-hint">Development fallback only. Production requires email invitation.</p></>}
         <label>Role</label><ThemeSelect label="New user role" value={newUserRoleId} onChange={setNewUserRoleId} options={assignableRoles.map(role => ({ value: role.id, label: role.name }))}/>
-        {allLocationsAccess && <label><input type="checkbox" name="allLocationsAccess" /> Access all company locations</label>}
-        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId} type="submit">Create user</button></div>
+        {allLocationsAccess && <label className="checkbox-field">
+          <input type="checkbox" checked={newUserAllLocations} onChange={event=>setNewUserAllLocations(event.target.checked)}/>
+          Access all company locations</label>}
+        {!newUserAllLocations && <>
+          <label>Location type</label>
+          <ThemeSelect label="Select a location type" value={createLocationType}
+            onChange={value=>{setCreateLocationType(value);setNewUserLocations([]);}}
+            options={[{value:"",label:"Choose location type"},
+              ...[...new Set(locations.map(location=>location.type))].map(type=>
+                ({value:type,label:type.replaceAll("_"," ")}))]}/>
+          {createLocationType && <fieldset className="company-permissions">
+            <legend>Select locations for this user</legend>
+            {locations.filter(location=>location.type===createLocationType).map(location=>
+              <label key={location.id}><input type="checkbox" checked={newUserLocations.includes(location.id)}
+                onChange={event=>setNewUserLocations(current=>event.target.checked
+                  ? [...current,location.id] : current.filter(id=>id!==location.id))}/>
+                {location.name} ({location.code})</label>)}
+          </fieldset>}
+          {!createLocationType && <p className="asset-inline-hint">Choose a location type, then select the branch, office or department to give this user access.</p>}
+        </>}
+        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId || (!newUserAllLocations && newUserLocations.length===0)} type="submit">Create user</button></div>
       </form></section></div>}
     {roleFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="roleFormTitle">
       <div className="asset-modal-heading"><h2 id="roleFormTitle">{selectedRole ? "Edit role" : "Create role"}</h2><button className="modal-close" type="button" onClick={() => setRoleFormOpen(false)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => void submitRole(event)}>
         {!selectedRole && <label>Role key<input name="key" required pattern="[A-Za-z][A-Za-z0-9_]{1,59}" placeholder="ASSET_MANAGER" /></label>}
-        <label>Role name<input name="name" required minLength={2} defaultValue={selectedRole?.name} /></label>
-        <label>Description<textarea name="description" defaultValue={selectedRole?.description ?? ""} /></label>
+        <label>Role name<input name="name" placeholder="e.g. Asset Officer" required minLength={2} defaultValue={selectedRole?.name} /></label>
+        <label>Description<textarea name="description" placeholder="Describe this role and its responsibilities" defaultValue={selectedRole?.description ?? ""} /></label>
         <fieldset className="company-permissions"><legend>Allowed actions</legend>{availablePermissions.map(permission => <label key={permission.key}><input type="checkbox" checked={selectedPermissions.includes(permission.key)} onChange={event => setSelectedPermissions(previous => event.target.checked ? [...previous, permission.key] : previous.filter(key => key !== permission.key))} /><span><strong>{permission.key}</strong><small>{permission.description}</small></span></label>)}</fieldset>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setRoleFormOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={busy}>Save role</button></div>
       </form></section></div>}

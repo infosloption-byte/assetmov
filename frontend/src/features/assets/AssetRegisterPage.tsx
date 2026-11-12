@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import AssetImportPanel from "./AssetImportPanel";
 import AssetFilesPanel from "./AssetFilesPanel";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
@@ -15,7 +16,7 @@ interface LocationSummary {
 }
 
 type CustomField = { key: string; label: string; type: "text" | "longText" | "number" | "date" | "boolean" | "singleSelect" | "multiSelect"; required: boolean; options?: string[] };
-type AssetModelOption = { id: string; name: string; fieldSchema: { version: number; fields: CustomField[] } | null };
+type AssetModelOption = { id: string; name: string; categoryId: string; category?: {id:string;name:string}; fieldSchema: { version: number; fields: CustomField[] } | null };
 type CustomValue = string | number | boolean | string[];
 
 function collectFields(data: FormData, fields: CustomField[]): Record<string, CustomValue> {
@@ -130,6 +131,8 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
   const [models, setModels] = useState<AssetModelOption[]>([]);
+  const [suppliers, setSuppliers] = useState<Array<{id:string;name:string}>>([]);
+  const [manufacturers, setManufacturers] = useState<Array<{id:string;name:string}>>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [modelError, setModelError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,7 +141,18 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [modelFilter, setModelFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [warrantyBefore, setWarrantyBefore] = useState("");
+  const [sortBy, setSortBy] = useState("inventoryNumber");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [autoInventoryNumber, setAutoInventoryNumber] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -156,9 +170,20 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [assignmentError, setAssignmentError] = useState("");
   const [assignmentSuccess, setAssignmentSuccess] = useState("");
+  const [lifecycleAction, setLifecycleAction] = useState<"DAMAGE" | "RESTORE" | "DISPOSE" | "RETIRE" | "">("");
+  const [lifecycleReason, setLifecycleReason] = useState("");
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState("");
+  const [bulkSelected, setBulkSelected] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [bulkEmployees, setBulkEmployees] = useState<Array<{id:string;firstName:string;lastName:string;employeeCode:string}>>([]);
+  const [bulkEmployeeId, setBulkEmployeeId] = useState("");
+  const [bulkNotes, setBulkNotes] = useState("");
 
   const canCreate = permissions.includes("asset.create");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","asset.read","asset.create","asset.assign"].includes(key));
   const canReadAssets = permissions.includes("asset.read");
   const selectedModel = models.find(item => item.id === selectedModelId);
   useEffect(() => {
@@ -172,6 +197,26 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       return response.json() as Promise<{ data: AssetModelOption[] }>;
     }).then(payload => { if (!controller.signal.aborted) { setModels(payload.data); setModelError(""); } })
       .catch(error => { if (!controller.signal.aborted) setModelError(error instanceof Error ? error.message : "Could not load models."); });
+    return () => controller.abort();
+  }, [tenantId, canReadAssets]);
+  useEffect(() => {
+    if (!tenantId || !canReadAssets) { setSuppliers([]); setManufacturers([]); return; }
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const [a, b] = await Promise.all(["suppliers", "manufacturers"].map(kind =>
+          fetch(apiBaseUrl + "/vendors/" + kind, {
+            credentials: "include", headers: { "X-Tenant-Id": tenantId }, signal: controller.signal,
+          }).then(async response => {
+            if (!response.ok) throw new Error("Could not load supplier/manufacturer data.");
+            return response.json() as Promise<{data:Array<{id:string;name:string}>}>;
+          })));
+        if (!controller.signal.aborted) { setSuppliers(a.data); setManufacturers(b.data); }
+      } catch {
+        if (!controller.signal.aborted) { setSuppliers([]); setManufacturers([]); }
+      }
+    };
+    void load();
     return () => controller.abort();
   }, [tenantId, canReadAssets]);
   const canEditFinancial = permissions.includes("asset.financial.update");
@@ -189,9 +234,13 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: "1", pageSize: "100" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "20", sortBy, sortOrder });
       if (search) params.set("q", search);
       if (statusFilter) params.set("status", statusFilter);
+      if (modelFilter) params.set("modelId", modelFilter);
+      if (categoryFilter) params.set("categoryId", categoryFilter);
+      if (locationFilter) params.set("locationId", locationFilter);
+      if (warrantyBefore) params.set("warrantyBefore", warrantyBefore);
 
       const response = await fetch(apiBaseUrl + "/assets?" + params.toString(), {
         credentials: "include",
@@ -200,11 +249,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
       });
       const payload = await response.json().catch(() => ({})) as {
         data?: AssetSummary[];
+        pagination?: { total: number; pageCount: number };
         error?: { message?: string };
       };
       if (!response.ok) throw new Error(payload.error?.message ?? "Could not load the asset register.");
 
       setAssets(payload.data ?? []);
+      setTotal(payload.pagination?.total ?? 0);
+      setPageCount(Math.max(1, payload.pagination?.pageCount ?? 1));
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
       setError(loadError instanceof Error ? loadError.message : "Could not load the asset register.");
@@ -212,7 +264,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [tenantId, search, statusFilter]);
+  }, [tenantId, search, statusFilter, modelFilter, categoryFilter, locationFilter, warrantyBefore, sortBy, sortOrder, page]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -231,7 +283,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     const controller = new AbortController();
     async function loadLocations() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
@@ -257,6 +309,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     if (!tenantId) return;
     setDetailLoading(true);
     setDetailError("");
+    setLifecycleAction(""); setLifecycleReason(""); setLifecycleError("");
     setEditingAsset(false);
     setEditError("");
     setAssignmentError("");
@@ -403,14 +456,14 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
 
     const formData = new FormData(event.currentTarget);
     const body: Record<string, unknown> = {
-      inventoryNumber: String(formData.get("inventoryNumber") ?? "").trim(),
+      inventoryNumber: autoInventoryNumber ? "" : String(formData.get("inventoryNumber") ?? "").trim(),
       title: String(formData.get("title") ?? "").trim(),
     };
     if (selectedModelId) {
       body.modelId = selectedModelId;
       body.customFields = collectFields(formData, selectedModel?.fieldSchema?.fields ?? []);
     }
-    const optionalFields = ["assetNumber", "serialNumber", "currentLocationId", "notes"] as const;
+    const optionalFields = ["assetNumber", "serialNumber", "currentLocationId", "notes", "supplierId", "manufacturerId"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
@@ -472,7 +525,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     if (selectedAsset.model) {
       body.customFields = collectFields(formData, selectedAsset.model.fieldSchema?.fields ?? []);
     }
-    const optionalFields = ["assetNumber", "serialNumber", "description", "notes"] as const;
+    const optionalFields = ["assetNumber", "serialNumber", "description", "notes", "supplierId", "manufacturerId"] as const;
     for (const field of optionalFields) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
@@ -531,6 +584,68 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
     }
   }
 
+  async function openBulkAssignment() {
+    if (!tenantId || !canAssignAssets || !canReadEmployees) {
+      setBulkError("Assignment requires asset and employee permissions."); return;
+    }
+    const selected = assets.filter(a => bulkSelected.includes(a.id) && a.status === "AVAILABLE");
+    const locationId = selected[0]?.currentLocationId;
+    if (!selected.length || !locationId || selected.some(a => a.currentLocationId !== locationId)) {
+      setBulkError("Select available assets at one location for bulk assignment."); return;
+    }
+    setBulkOpen(true);setBulkError("");setBulkEmployeeId("");setBulkEmployees([]);
+    try {
+      const params = new URLSearchParams({locationId,page:"1",pageSize:"100"});
+      const response = await fetch(apiBaseUrl + "/employees?" + params, {
+        credentials:"include",headers:{"X-Tenant-Id":tenantId},
+      });
+      const payload = await response.json().catch(()=>({})) as {data?:typeof bulkEmployees;error?:{message?:string}};
+      if (!response.ok) throw new Error(payload.error?.message ?? "Could not load employees.");
+      setBulkEmployees(payload.data ?? []);
+    } catch (error) { setBulkError(error instanceof Error ? error.message : "Employee lookup failed."); }
+  }
+
+  async function applyBulkAssignment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !bulkEmployeeId || bulkBusy) return;
+    const ids = assets.filter(a => bulkSelected.includes(a.id) && a.status === "AVAILABLE").map(a => a.id);
+    setBulkBusy(true);setBulkError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/bulk-assign", {
+        method:"POST",credentials:"include",
+        headers:{"X-Tenant-Id":tenantId,"X-CSRF-Token":csrfToken,"Content-Type":"application/json"},
+        body:JSON.stringify({assetIds:ids,employeeId:bulkEmployeeId,notes:bulkNotes}),
+      });
+      const payload = await response.json().catch(()=>({})) as {data?:{count:number};error?:{message?:string}};
+      if (!response.ok) throw new Error(payload.error?.message ?? "Bulk assignment failed.");
+      setBulkOpen(false);setBulkSelected([]);setBulkNotes("");
+      setSuccessMessage("Assigned " + (payload.data?.count ?? ids.length) + " assets.");
+      await loadAssets();
+    } catch (error) { setBulkError(error instanceof Error ? error.message : "Bulk assignment failed."); }
+    finally { setBulkBusy(false); }
+  }
+
+  async function applyLifecycle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenantId || !csrfToken || !selectedAsset || !lifecycleAction || lifecycleBusy) return;
+    setLifecycleBusy(true);setLifecycleError("");
+    try {
+      const response = await fetch(apiBaseUrl + "/assets/" + encodeURIComponent(selectedAsset.id) + "/lifecycle", {
+        method: "POST", credentials:"include",
+        headers: { "Content-Type":"application/json","X-Tenant-Id":tenantId,"X-CSRF-Token":csrfToken },
+        body: JSON.stringify({ action:lifecycleAction, reason:lifecycleReason.trim() }),
+      });
+      const payload = await response.json().catch(()=>({})) as { data?: AssetSummary; error?: {message?:string} };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? "Lifecycle update failed.");
+      const updatedAsset = payload.data;
+      setSelectedAsset(current => current ? { ...current, ...updatedAsset } : current);
+      setLifecycleAction("");setLifecycleReason("");
+      setSuccessMessage("Asset lifecycle updated.");
+      await loadAssets();
+    } catch (error) { setLifecycleError(error instanceof Error ? error.message : "Lifecycle update failed."); }
+    finally { setLifecycleBusy(false); }
+  }
+
   return (
     <section className="asset-register-page">
       <div className="asset-page-heading">
@@ -539,38 +654,109 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
           <h1 className="asset-page-title">Asset register</h1>
           <p>Find equipment, confirm its current location and open the full lifecycle history.</p>
         </div>
-        {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
+        <div className="asset-heading-actions">
+          {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
+          {canCreate && permissions.includes("asset.import") && canReadLocations && csrfToken &&
+            <button className="topbar-button ghost" type="button" onClick={() => setImportOpen(true)}>Import CSV / XLSX</button>}
+        </div>
       </div>
 
-      <div className="asset-register-toolbar">
-        <form className="asset-search-form" onSubmit={(event) => { event.preventDefault(); setSearch(searchInput.trim()); }}>
-          <label className="sr-only" htmlFor="assetSearch">Search assets</label>
-          <span className="search-symbol" aria-hidden="true">⌕</span>
-          <input id="assetSearch" value={searchInput} onChange={(event) => setSearchInput(event.currentTarget.value)} placeholder="Search inventory no., title or serial no." />
-          <button type="submit">Search</button>
-        </form>
-        <label className="asset-status-filter">
-          <span>Status</span>
-          <ThemeSelect label="Filter by asset status" value={statusFilter} onChange={setStatusFilter} options={[{value:"",label:"All statuses"}, ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[]).map(status => ({value:status,label:statusLabel(status)}))]}/>
-        </label>
+      <div className="asset-search-panel" aria-label="Asset search and filters">
+        <div className="asset-search-actions">
+          <form className="asset-search-form" onSubmit={(event) => {
+            event.preventDefault(); setPage(1); setSearch(searchInput.trim());
+          }}>
+            <label className="sr-only" htmlFor="assetSearch">Search assets</label>
+            <span className="search-symbol" aria-hidden="true">⌕</span>
+            <input id="assetSearch" value={searchInput}
+              onChange={event => setSearchInput(event.currentTarget.value)}
+              placeholder="Search by inventory number, asset or serial number"/>
+            <button type="submit">Search</button>
+          </form>
+          <button className="topbar-button ghost" type="button" onClick={() => {
+            setSearchInput(""); setSearch(""); setStatusFilter(""); setCategoryFilter("");
+            setModelFilter(""); setLocationFilter(""); setWarrantyBefore("");
+            setSortBy("inventoryNumber"); setSortOrder("asc"); setPage(1);
+          }}>Clear filters</button>
+        </div>
+        <div className="asset-register-filters">
+          <label className="asset-filter-field"><span>Status</span>
+            <ThemeSelect label="Filter by asset status" value={statusFilter}
+              onChange={value => { setPage(1); setStatusFilter(value); }}
+              options={[{value:"",label:"All statuses"},
+                ...(["AVAILABLE","ASSIGNED","IN_TRANSIT","IN_SERVICE","DAMAGED","DISPOSED","RETIRED","DRAFT"] as AssetStatus[])
+                  .map(status => ({value:status,label:statusLabel(status)}))]}/>
+          </label>
+          <label className="asset-filter-field"><span>Category</span>
+            <ThemeSelect label="Filter by category" value={categoryFilter}
+              onChange={value => {setPage(1);setCategoryFilter(value);setModelFilter("");}}
+              options={[{value:"",label:"All categories"},
+                ...Array.from(new Map(models.filter(m => m.category)
+                  .map(m => [m.categoryId,{value:m.categoryId,label:m.category!.name}])).values())]}/>
+          </label>
+          <label className="asset-filter-field"><span>Model</span>
+            <ThemeSelect label="Filter by asset model" value={modelFilter}
+              onChange={value => {setPage(1);setModelFilter(value);}}
+              options={[{value:"",label:"All models"},
+                ...models.filter(m => !categoryFilter || m.categoryId === categoryFilter)
+                  .map(m => ({value:m.id,label:m.name}))]}/>
+          </label>
+          {canReadLocations && <label className="asset-filter-field"><span>Location</span>
+            <ThemeSelect label="Filter by location" value={locationFilter}
+              onChange={value => {setPage(1);setLocationFilter(value);}}
+              options={[{value:"",label:"All accessible locations"},
+                ...locations.map(l => ({value:l.id,label:l.name}))]}/>
+          </label>}
+          <label className="asset-filter-field"><span>Warranty ends by</span>
+            <input aria-label="Warranty ending by date" type="date" value={warrantyBefore}
+              onChange={event => {setPage(1);setWarrantyBefore(event.target.value);}}/>
+          </label>
+          <label className="asset-filter-field"><span>Sort by</span>
+            <ThemeSelect label="Sort asset register" value={sortBy}
+              onChange={value => {setPage(1);setSortBy(value);}}
+              options={[{value:"inventoryNumber",label:"Inventory number"},
+                {value:"title",label:"Title"},{value:"createdAt",label:"Created date"},
+                {value:"updatedAt",label:"Updated date"},{value:"warrantyEnd",label:"Warranty date"},
+                {value:"status",label:"Status"}]}/>
+          </label>
+          <label className="asset-filter-field"><span>Direction</span>
+            <ThemeSelect label="Sort direction" value={sortOrder}
+              onChange={value => {setPage(1);setSortOrder(value);}}
+              options={[{value:"asc",label:"Ascending"},{value:"desc",label:"Descending"}]}/>
+          </label>
+        </div>
       </div>
 
+      {canAssignAssets && canReadEmployees && bulkSelected.length > 0 && <div className="asset-bulk-bar">
+        <strong>{bulkSelected.length} selected for assignment</strong>
+        <button className="primary-button" type="button" disabled={bulkSelected.length === 0} onClick={() => void openBulkAssignment()}>
+          Assign selected assets
+        </button>
+        {bulkSelected.length > 0 && <button className="topbar-button ghost" type="button" onClick={() => setBulkSelected([])}>Clear selection</button>}
+      </div>}
+      {!bulkOpen && bulkError && <div role="alert" className="asset-inline-error">{bulkError}</div>}
       {successMessage && <div className="asset-success" role="status">{successMessage}</div>}
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && <div className="asset-inline-hint" role="status">Location choices could not be loaded: {locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table">
           <thead>
-            <tr><th>Asset</th><th>Serial number</th><th>Category / model</th><th>Location</th><th>Purchase cost</th><th>Status</th><th><span className="sr-only">Open details</span></th></tr>
+            <tr>{canAssignAssets && <th><span className="sr-only">Select for bulk assignment</span></th>}<th>Asset</th><th>Serial number</th><th>Category / model</th><th>Location</th><th>Purchase cost</th><th>Status</th><th><span className="sr-only">Open details</span></th></tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="asset-table-message"><span className="table-loader" /> Loading assets…</td></tr>
+              <tr><td colSpan={canAssignAssets ? 8 : 7} className="asset-table-message"><span className="table-loader" /> Loading assets…</td></tr>
             ) : assets.length === 0 ? (
-              <tr><td colSpan={7} className="asset-table-message"><span className="empty-icon">◫</span><strong>No assets found</strong><span>Try another search or register the first asset in this workspace.</span>{canCreate && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Register an asset ↗</button>}</td></tr>
+              <tr><td colSpan={canAssignAssets ? 8 : 7} className="asset-table-message"><span className="empty-icon">◫</span><strong>No assets found</strong><span>Try another search or register the first asset in this workspace.</span>{canCreate && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Register an asset ↗</button>}</td></tr>
             ) : assets.map((asset) => (
               <tr key={asset.id}>
+                {canAssignAssets && <td><input type="checkbox" aria-label={"Select " + asset.inventoryNumber}
+                  disabled={asset.status !== "AVAILABLE" || !asset.currentLocationId ||
+                    (!allLocationsAccess && !manageableLocationIds.includes(asset.currentLocationId))}
+                  checked={bulkSelected.includes(asset.id)}
+                  onChange={event => setBulkSelected(previous => event.target.checked ?
+                    [...previous.filter(id => id !== asset.id), asset.id] : previous.filter(id => id !== asset.id))}/></td>}
                 <td><button className="asset-name-button" type="button" onClick={() => void openAsset(asset.id)}>{asset.title}</button><span className="asset-number">{asset.inventoryNumber}</span></td>
                 <td>{asset.serialNumber || "—"}</td>
                 <td>{asset.model ? <>{asset.model.category?.name ?? "—"}<span className="asset-number">{asset.model.name}</span></> : "—"}</td>
@@ -584,15 +770,44 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         </table>
       </div>
 
-      <div className="asset-table-footer"><span>Showing {assets.length} asset{assets.length === 1 ? "" : "s"} from this workspace</span><span>List currently capped at 100 records per query</span></div>
+      <div className="asset-table-footer">
+        <span>Showing {assets.length} of {total} matching assets · Page {page} of {pageCount}</span>
+        <div style={{display:"flex",gap:"8px"}}>
+          <button className="topbar-button ghost" type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1,p-1))}>Previous</button>
+          <button className="topbar-button ghost" type="button" disabled={page >= pageCount || loading} onClick={() => setPage(p => p+1)}>Next</button>
+        </div>
+      </div>
 
+      {bulkOpen && <div className="modal-backdrop" role="presentation">
+        <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="bulkAssignTitle">
+          <div className="asset-modal-heading"><h2 id="bulkAssignTitle">Bulk assign {bulkSelected.length} assets</h2>
+            <button className="modal-close" aria-label="Close bulk assignment" type="button" onClick={()=>setBulkOpen(false)}>×</button></div>
+          <p className="asset-inline-hint">All selected assets must be available at the employee's home location. The server assigns all or none.</p>
+          <form className="asset-create-form" onSubmit={event=>void applyBulkAssignment(event)}>
+            <label>Employee</label>
+            <ThemeSelect label="Bulk assignment employee" value={bulkEmployeeId} onChange={setBulkEmployeeId} required
+              options={[{value:"",label:"Choose employee"},...bulkEmployees.map(e=>({value:e.id,label:e.firstName+" "+e.lastName+" ("+e.employeeCode+")"}))]}/>
+            <label>Handover note<textarea rows={3} maxLength={4000} value={bulkNotes} onChange={event=>setBulkNotes(event.target.value)}/></label>
+            {bulkError && <div className="asset-inline-error" role="alert">{bulkError}</div>}
+            <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={()=>setBulkOpen(false)}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={bulkBusy || !bulkEmployeeId}>
+                {bulkBusy ? "Assigning…" : "Confirm bulk assignment"}</button></div>
+          </form>
+        </section></div>}
+      {importOpen && tenantId && csrfToken &&
+        <AssetImportPanel tenantId={tenantId} csrfToken={csrfToken}
+          allLocationsAccess={allLocationsAccess} locations={locations} onFinished={() => loadAssets()}
+          onClose={() => setImportOpen(false)}/>}
       {showCreate && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
           <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="assetCreateTitle">
             <div className="asset-modal-heading"><div><span className="module-tag">NEW INVENTORY RECORD</span><h2 id="assetCreateTitle">Register an asset</h2><p>Start with its unique inventory number and basic details.</p></div><button type="button" className="modal-close" aria-label="Close form" onClick={() => setShowCreate(false)}>×</button></div>
             <form className="asset-create-form" onSubmit={(event) => void createAsset(event)}>
-              <label htmlFor="inventoryNumber">Inventory number <span>*</span></label>
-              <input id="inventoryNumber" name="inventoryNumber" autoComplete="off" maxLength={191} required placeholder="e.g. AM-IT-000124" />
+              <label className="checkbox-field"><input type="checkbox" checked={autoInventoryNumber} onChange={event => setAutoInventoryNumber(event.target.checked)}/>
+                Generate inventory number automatically</label>
+              <label htmlFor="inventoryNumber">Inventory number {!autoInventoryNumber && <span>*</span>}</label>
+              <input id="inventoryNumber" name="inventoryNumber" autoComplete="off" maxLength={191}
+                disabled={autoInventoryNumber} required={!autoInventoryNumber} placeholder={autoInventoryNumber ? "Automatically assigned when saved" : "e.g. AM-000124"}/>
               <label htmlFor="assetTitle">Asset name <span>*</span></label>
               <input id="assetTitle" name="title" maxLength={191} required placeholder="e.g. Lenovo ThinkPad T14" />
               <div className="asset-form-two-col">
@@ -604,6 +819,12 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   <ThemeSelect label="Asset location" name="currentLocationId" defaultValue="" required={!allLocationsAccess} options={[{value:"",label:"No location selected"}, ...locations.map(location => ({value:location.id,label:location.name + " (" + location.code + ")"}))]}/>
                 </div>
                 {canEditFinancial && <div><label htmlFor="purchaseCost">Purchase cost</label><input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="Optional" /></div>}
+              </div>
+              <div className="asset-form-two-col">
+                <div><label>Supplier</label><ThemeSelect label="Asset supplier" name="supplierId" defaultValue=""
+                  options={[{value:"",label:"No supplier"},...suppliers.map(v=>({value:v.id,label:v.name}))]}/></div>
+                <div><label>Manufacturer</label><ThemeSelect label="Asset manufacturer" name="manufacturerId" defaultValue=""
+                  options={[{value:"",label:"No manufacturer"},...manufacturers.map(v=>({value:v.id,label:v.name}))]}/></div>
               </div>
               <label>Asset model</label>
               <ThemeSelect label="Asset model" value={selectedModelId} onChange={setSelectedModelId}
@@ -646,10 +867,18 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
             {selectedAsset && (editingAsset ? (
               <form className="asset-edit-form" onSubmit={(event) => void saveAssetEdit(event)}>
                 <label htmlFor="editAssetTitle">Asset name <span>*</span></label>
-                <input id="editAssetTitle" name="title" required maxLength={191} defaultValue={selectedAsset.title} />
+                <input id="editAssetTitle" name="title" required maxLength={191} placeholder="e.g. Dell Latitude 7450" defaultValue={selectedAsset.title} />
                 <div className="asset-form-two-col">
-                  <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} defaultValue={selectedAsset.assetNumber ?? ""} /></div>
-                  <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} defaultValue={selectedAsset.serialNumber ?? ""} /></div>
+                  <div><label htmlFor="editAssetNumber">Asset / reference no.</label><input id="editAssetNumber" name="assetNumber" maxLength={191} placeholder="Optional reference" defaultValue={selectedAsset.assetNumber ?? ""} /></div>
+                  <div><label htmlFor="editSerialNumber">Serial number</label><input id="editSerialNumber" name="serialNumber" maxLength={191} placeholder="e.g. SN123456" defaultValue={selectedAsset.serialNumber ?? ""} /></div>
+                </div>
+                <div className="asset-form-two-col">
+                  <div><label>Supplier</label><ThemeSelect label="Edit supplier" name="supplierId"
+                    defaultValue={selectedAsset.supplier?.id ?? ""}
+                    options={[{value:"",label:"Keep or no supplier"},...suppliers.map(v=>({value:v.id,label:v.name}))]}/></div>
+                  <div><label>Manufacturer</label><ThemeSelect label="Edit manufacturer" name="manufacturerId"
+                    defaultValue={selectedAsset.manufacturer?.id ?? ""}
+                    options={[{value:"",label:"Keep or no manufacturer"},...manufacturers.map(v=>({value:v.id,label:v.name}))]}/></div>
                 </div>
                 {selectedAsset.model && <CustomFieldInputs fields={selectedAsset.model.fieldSchema?.fields ?? []}
                   values={selectedAsset.customFields ?? {}}/>}
@@ -661,11 +890,11 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   <>
                     <div className="asset-edit-section-label">Financial and warranty details</div>
                     <div className="asset-form-two-col">
-                      <div><label htmlFor="editPurchaseCost">Purchase cost</label><input id="editPurchaseCost" name="purchaseCost" type="number" min="0" step="0.01" defaultValue={selectedAsset.purchaseCost == null ? "" : String(selectedAsset.purchaseCost)} /></div>
-                      <div><label htmlFor="editAccountCode">Account code</label><input id="editAccountCode" name="accountCode" maxLength={100} defaultValue={selectedAsset.accountCode ?? ""} /></div>
+                      <div><label htmlFor="editPurchaseCost">Purchase cost</label><input id="editPurchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="0.00" defaultValue={selectedAsset.purchaseCost == null ? "" : String(selectedAsset.purchaseCost)} /></div>
+                      <div><label htmlFor="editAccountCode">Account code</label><input id="editAccountCode" name="accountCode" maxLength={100} placeholder="Optional" defaultValue={selectedAsset.accountCode ?? ""} /></div>
                     </div>
                     <div className="asset-form-two-col">
-                      <div><label htmlFor="editPurchaseOrder">Purchase order</label><input id="editPurchaseOrder" name="purchaseOrderNumber" maxLength={191} defaultValue={selectedAsset.purchaseOrderNumber ?? ""} /></div>
+                      <div><label htmlFor="editPurchaseOrder">Purchase order</label><input id="editPurchaseOrder" name="purchaseOrderNumber" maxLength={191} placeholder="e.g. PO-2026-001" defaultValue={selectedAsset.purchaseOrderNumber ?? ""} /></div>
                       <div><label htmlFor="editWarrantyEnd">Warranty end</label><input id="editWarrantyEnd" name="warrantyEnd" type="date" defaultValue={selectedAsset.warrantyEnd?.slice(0, 10) ?? ""} /></div>
                     </div>
                   </>
@@ -717,6 +946,35 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
                   {assignmentError && <div className="asset-inline-error" role="alert">{assignmentError}</div>}
                   {assignmentSuccess && <div className="asset-success" role="status">{assignmentSuccess}</div>}
                 </div>
+                {(permissions.includes("asset.update") || permissions.includes("asset.dispose")) &&
+                  (allLocationsAccess || Boolean(selectedAsset.currentLocationId && manageableLocationIds.includes(selectedAsset.currentLocationId))) &&
+                  <section className="asset-custody-panel" aria-label="Asset lifecycle controls">
+                    <strong>Lifecycle actions</strong>
+                    <p className="asset-inline-hint">Changes are permanent history events. Return assigned equipment before changing its condition.</p>
+                    <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                      {permissions.includes("asset.update") && selectedAsset.status === "AVAILABLE" &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("DAMAGE")}>Mark damaged</button>}
+                      {permissions.includes("asset.update") && selectedAsset.status === "DAMAGED" &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("RESTORE")}>Restore to available</button>}
+                      {permissions.includes("asset.dispose") && ["AVAILABLE","DAMAGED"].includes(selectedAsset.status) &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("DISPOSE")}>Dispose asset</button>}
+                      {permissions.includes("asset.dispose") && ["DRAFT","AVAILABLE","DAMAGED"].includes(selectedAsset.status) &&
+                        <button type="button" className="topbar-button ghost" onClick={()=>setLifecycleAction("RETIRE")}>Retire asset</button>}
+                    </div>
+                    {lifecycleAction && <form className="asset-custody-form" onSubmit={event=>void applyLifecycle(event)}>
+                      <label>Reason for {lifecycleAction.toLowerCase()} (required)
+                        <textarea value={lifecycleReason} onChange={event=>setLifecycleReason(event.target.value)}
+                          minLength={8} maxLength={4000} rows={3} required placeholder="Describe the condition and approval context"/>
+                      </label>
+                      <div style={{display:"flex",gap:"8px"}}>
+                        <button className="plain-button" type="button" onClick={()=>setLifecycleAction("")}>Cancel</button>
+                        <button className="primary-button" type="submit" disabled={lifecycleBusy || lifecycleReason.trim().length < 8}>
+                          {lifecycleBusy ? "Saving…" : "Confirm lifecycle change"}
+                        </button>
+                      </div>
+                    </form>}
+                    {lifecycleError && <div role="alert" className="asset-inline-error">{lifecycleError}</div>}
+                  </section>}
                 <div className="asset-detail-grid">
                   <Detail label="Status"><span className={"asset-status-badge " + selectedAsset.status.toLowerCase().replaceAll("_", "-")}>{statusLabel(selectedAsset.status)}</span></Detail>
                   <Detail label="Serial number">{selectedAsset.serialNumber || "—"}</Detail>

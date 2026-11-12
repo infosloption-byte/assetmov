@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
+import AccountRecoveryPage from "./features/auth/AccountRecoveryPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
 import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 import LocationsPage from "./features/locations/LocationsPage";
 import TransferPage from "./features/transfers/TransferPage";
 import EmployeePage from "./features/employees/EmployeePage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
+import CompanyProfilePage from "./features/company/CompanyProfilePage";
 import MasterDataPage from "./features/master-data/MasterDataPage";
 import PlatformConsole from "./features/platform/PlatformConsole";
 import CompanyBillingPage from "./features/billing/CompanyBillingPage";
 import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
+import AccountMenu from "./components/AccountMenu";
+import { canOpenWorkspacePage } from "./navigation/access";
+import { appRoutePath, isProtectedRoute, readAppRoute, type AppRoute, type WorkspacePage, type PlatformPage } from "./navigation/routes";
 
 type ApiHealth = "checking" | "online" | "offline";
 type BillingStatus = { allowed: boolean; reason: string | null; isCompanyAdmin: boolean; status: string | null; planName: string | null; trialEndsAt: string | null; periodEndsAt: string | null };
@@ -49,9 +54,31 @@ const modules = [
 
 function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "masterData" | "billing">("overview");
+  const [recoveryMode] = useState(() => ["forgot", "reset", "verify"].includes(new URLSearchParams(window.location.search).get("accountAction") ?? ""));
+  const [accountNotice, setAccountNotice] = useState("");
+  const [route, setRoute] = useState<AppRoute>(() => readAppRoute(window.location.pathname));
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const activePage: WorkspacePage = route.kind === "workspace" ? route.page : "overview";
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuSidebarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    mobileMenuSidebarRef.current?.querySelector<HTMLButtonElement>(".mobile-menu-close")?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        mobileMenuTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileMenuOpen]);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [platformMode, setPlatformMode] = useState(false);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -71,22 +98,53 @@ function App() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState("");
   const [billingEpoch, setBillingEpoch] = useState(0);
+  const lastBillingTenant = useRef<string | null>(null);
   const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
   const [overviewEpoch, setOverviewEpoch] = useState(0);
   const refreshBilling = useCallback(() => setBillingEpoch(n => n + 1), []);
+  // A passive focus/visibility event must never replace a page or unmount its
+  // in-progress form. Subscription rechecks remain explicit (or after checkout).
+  const navigate = useCallback((next: AppRoute, replace = false, preserveBilling = false) => {
+    setMobileMenuOpen(false);
+    const path = appRoutePath(next) + (preserveBilling ? "?billing=pending" : "");
+    if (window.location.pathname + window.location.search !== path) {
+      window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    }
+    setRoute(next);
+  }, []);
+
+  const navigateWorkspace = (page: WorkspacePage, tenantId = activeTenantId) => {
+    const tenant = user?.memberships.find(m => m.tenant.id === tenantId)
+      ?? user?.memberships[0];
+    if (!tenant) {
+      navigate({ kind: "home" });
+      return;
+    }
+    setActiveTenantId(tenant.tenant.id);
+    navigate({ kind: "workspace", tenantSlug: tenant.tenant.slug, page });
+  };
+  const navigatePlatform = (page: PlatformPage) => {
+    if (user?.isPlatformAdmin) navigate({ kind: "platform", page });
+  };
+  const setActivePage = (page: WorkspacePage) => navigateWorkspace(page);
+
+  // popstate is raised for browser Back/Forward only; pushState is handled by
+  // navigate() above. Neither path reloads the document.
   useEffect(() => {
-    const onReturnToApp = () => {
-      if (document.visibilityState === "visible") refreshBilling();
+    const onBackForward = () => {
+      const next = readAppRoute(window.location.pathname);
+      setRoute(next);
+      setMobileMenuOpen(false);
+      if (next.kind === "workspace") {
+        const tenant = user?.memberships.find(m => m.tenant.slug === next.tenantSlug);
+        setActiveTenantId(tenant?.tenant.id ?? null);
+      }
     };
-    window.addEventListener("focus", refreshBilling);
-    document.addEventListener("visibilitychange", onReturnToApp);
-    return () => {
-      window.removeEventListener("focus", refreshBilling);
-      document.removeEventListener("visibilitychange", onReturnToApp);
-    };
-  }, [refreshBilling]);
+    window.addEventListener("popstate", onBackForward);
+    return () => window.removeEventListener("popstate", onBackForward);
+  }, [user]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -114,19 +172,32 @@ function App() {
           credentials: "include",
           signal: controller.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (isProtectedRoute(readAppRoute(window.location.pathname))) setAuthMode("login");
+          return;
+        }
 
         const payload = await response.json() as { user?: AuthUser };
         if (!payload.user) return;
 
         setUser(payload.user);
-        // Platform administrators default to their own control plane, not a
-        // tenant/company dashboard. A checkout return stays in company billing.
-        setPlatformMode(payload.user.isPlatformAdmin && !(
-          new URLSearchParams(window.location.search).get("billing") === "pending" &&
-          payload.user.memberships.length > 0
-        ));
-        setActiveTenantId(payload.user.memberships[0]?.tenant.id ?? null);
+        const requestedRoute = readAppRoute(window.location.pathname);
+        const pendingCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
+        const requestedTenant = requestedRoute.kind === "workspace"
+          ? payload.user.memberships.find(m => m.tenant.slug === requestedRoute.tenantSlug)
+          : undefined;
+        const defaultTenant = requestedTenant ?? payload.user.memberships[0];
+        setActiveTenantId(requestedRoute.kind === "workspace"
+          ? requestedTenant?.tenant.id ?? null : defaultTenant?.tenant.id ?? null);
+        if (requestedRoute.kind === "home") {
+          if (pendingCheckout && defaultTenant) {
+            navigate({ kind: "workspace", tenantSlug: defaultTenant.tenant.slug, page: "billing" }, true, true);
+          } else if (payload.user.isPlatformAdmin) {
+            navigate({ kind: "platform", page: "overview" }, true);
+          } else if (defaultTenant) {
+            navigate({ kind: "workspace", tenantSlug: defaultTenant.tenant.slug, page: "overview" }, true);
+          }
+        }
 
         const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", {
           credentials: "include",
@@ -147,7 +218,7 @@ function App() {
 
     void restoreSession();
     return () => controller.abort();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!user || !activeTenantId) {
@@ -203,11 +274,18 @@ function App() {
 
   useEffect(() => {
     if (!user?.id || !activeTenantId) {
+      lastBillingTenant.current = null;
       setBillingStatus(null); setBillingLoading(false); setBillingError("");
       return;
     }
     const controller = new AbortController();
-    setBillingStatus(null); setBillingLoading(true); setBillingError("");
+    // Preserve the current screen and its in-progress form during a refresh.
+    // Only a genuine tenant switch clears the previously checked status.
+    if (lastBillingTenant.current !== activeTenantId) {
+      lastBillingTenant.current = activeTenantId;
+      setBillingStatus(null);
+    }
+    setBillingLoading(true); setBillingError("");
     void fetch(apiBaseUrl + "/billing/status", {
       credentials: "include", signal: controller.signal, headers: { "X-Tenant-Id": activeTenantId },
     }).then(async response => {
@@ -222,12 +300,7 @@ function App() {
     return () => controller.abort();
   }, [user?.id, activeTenantId, billingEpoch]);
 
-  useEffect(() => {
-    const fromCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
-    setActivePage(fromCheckout ? "billing" : "overview");
-  }, [activeTenantId]);
-
-  // Platform navigation uses platformMode, never a "platform" company page.
+  // Platform navigation is URL-driven and never grants tenant access.
   // Re-query when the selected workspace or its location permissions change.
   useEffect(() => {
     if (
@@ -340,17 +413,40 @@ function App() {
       if (!response.ok) throw new Error(payload.error?.message ?? "Could not sign out.");
 
       setUser(null);
-      setPlatformMode(false);
       setCsrfToken(null);
       setActiveTenantId(null);
       setWorkspaceContext(null);
       setWorkspaceError("");
       setBillingStatus(null);
       setBillingError("");
-      setActivePage("overview");
+      navigate({ kind: "home" }, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
     }
+  }
+
+  if (recoveryMode) return <AccountRecoveryPage/>;
+  // Do not render a protected deep link using a temporary anonymous or
+  // previously selected tenant while the session is still being restored.
+  if (sessionLoading && isProtectedRoute(route)) {
+    return <main className="route-access-message" role="status">
+      <h1>Restoring workspace…</h1><p>Checking your session and page access.</p>
+    </main>;
+  }
+
+  async function requestEmailVerification(): Promise<void> {
+    if (!csrfToken) { setActionError("Please sign in again to verify your email."); return; }
+    try {
+      const response = await fetch(apiBaseUrl + "/auth/email/verification/request", {
+        method: "POST", credentials: "include",
+        headers: { "X-CSRF-Token": csrfToken, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const result = await response.json().catch(() => ({})) as {message?:string;error?:{message?:string}};
+      if (!response.ok) throw new Error(result.error?.message ?? "Unable to send verification email.");
+      setAccountNotice(result.message ?? "Please check your inbox.");
+      setActionError("");
+    } catch (error) { setActionError(error instanceof Error ? error.message : "Verification request failed."); }
   }
 
   if (authMode) {
@@ -358,12 +454,28 @@ function App() {
       <AuthPage
         mode={authMode}
         onModeChange={setAuthMode}
-        onCancel={() => setAuthMode(null)}
+        onCancel={() => {
+          setAuthMode(null);
+          if (isProtectedRoute(readAppRoute(window.location.pathname))) navigate({ kind: "home" }, true);
+        }}
         onAuthenticated={(authenticatedUser, token) => {
           setUser(authenticatedUser);
-          setPlatformMode(authenticatedUser.isPlatformAdmin);
           setCsrfToken(token);
-          setActiveTenantId(authenticatedUser.memberships[0]?.tenant.id ?? null);
+          const requested = readAppRoute(window.location.pathname);
+          const chosen = requested.kind === "workspace"
+            ? authenticatedUser.memberships.find(m => m.tenant.slug === requested.tenantSlug)
+            : authenticatedUser.memberships[0];
+          setActiveTenantId(chosen?.tenant.id ?? null);
+          if (requested.kind === "home") {
+            const pendingCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
+            if (pendingCheckout && chosen) {
+              navigate({ kind: "workspace", tenantSlug: chosen.tenant.slug, page: "billing" }, true, true);
+            } else if (authenticatedUser.isPlatformAdmin) {
+              navigate({ kind: "platform", page: "overview" }, true);
+            } else if (chosen) {
+              navigate({ kind: "workspace", tenantSlug: chosen.tenant.slug, page: "overview" }, true);
+            }
+          }
           setWorkspaceContext(null);
           setAuthMode(null);
           setActionError("");
@@ -373,47 +485,102 @@ function App() {
     );
   }
 
-  if (user?.isPlatformAdmin && platformMode) {
+  if (user && route.kind === "platform" && !user.isPlatformAdmin) {
+    return <main className="route-access-message" role="alert">
+      <h1>Platform access denied</h1><p>This account does not have Platform Super Admin access.</p>
+      <button type="button" className="primary-button" onClick={() => navigateWorkspace("overview")}>Go to your workspace</button>
+    </main>;
+  }
+  if (user?.isPlatformAdmin && route.kind === "platform") {
     return <PlatformConsole
       user={user} csrfToken={csrfToken} apiHealth={apiHealth}
+      page={route.page} onNavigate={navigatePlatform}
       error={actionError}
       onSignOut={() => { void handleLogout(); }}
-      onCompanySwitch={() => { setPlatformMode(false); setActivePage("overview"); setActionError(""); }}
+      onCompanySwitch={() => { navigateWorkspace("overview"); setActionError(""); }}
     />;
+  }
+  if (route.kind === "notFound" ||
+      (user && route.kind === "workspace" &&
+       !user.memberships.some(m => m.tenant.slug === route.tenantSlug))) {
+    return <main className="route-access-message" role="alert">
+      <h1>Page unavailable</h1><p>This page does not exist or your account cannot access its workspace.</p>
+      <button type="button" className="primary-button" onClick={() => {
+        if (user?.isPlatformAdmin) navigatePlatform("overview");
+        else navigateWorkspace("overview");
+      }}>Go to overview</button>
+    </main>;
   }
 
   const selectedMembership = user?.memberships.find((membership) => membership.tenant.id === activeTenantId)
     ?? user?.memberships[0];
   const activeWorkspaceContext = workspaceContext?.tenant.id === activeTenantId ? workspaceContext : null;
   const currentTenant = activeWorkspaceContext?.tenant ?? selectedMembership?.tenant;
+  const workspaceSlug = currentTenant?.slug ?? selectedMembership?.tenant.slug ?? "";
+  const pageHref = (page: WorkspacePage) => workspaceSlug
+    ? appRoutePath({ kind: "workspace", tenantSlug: workspaceSlug, page }) : "/";
+  const followWorkspaceLink = (event: MouseEvent<HTMLAnchorElement>, page: WorkspacePage) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setActivePage(page);
+  };
   const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
   const displayedError = actionError || workspaceError;
+  const permissionsForMenu = activeWorkspaceContext?.permissions ?? [];
+  const menuRoleKey = activeWorkspaceContext?.membership.role.key ?? selectedMembership?.role.key ?? null;
+  const canSee = (page: WorkspacePage) => canOpenWorkspacePage(page, permissionsForMenu, menuRoleKey);
+
+
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {mobileMenuOpen && <button className="mobile-nav-backdrop" aria-label="Close navigation"
+        type="button" onClick={() => setMobileMenuOpen(false)}/>}
+      <aside ref={mobileMenuSidebarRef} id="workspace-sidebar" className={"sidebar" + (mobileMenuOpen ? " mobile-open" : "")}
+        aria-label="Workspace sidebar" onKeyDown={event => {
+          if (event.key !== "Tab" || !mobileMenuOpen) return;
+          const list = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            'a[href],button:not([disabled])',
+          )).filter(node => node.getClientRects().length > 0);
+          if (!list.length) return;
+          const first=list[0],last=list[list.length-1];
+          if(event.shiftKey && document.activeElement===first) {
+            event.preventDefault();last?.focus();
+          }else if(!event.shiftKey && document.activeElement===last) {
+            event.preventDefault();first?.focus();
+          }
+        }}>
         <a className="brand" href="/" aria-label="AssetMov home">
           <span className="brand-mark">A<span>.</span></span>
           <span className="brand-copy"><strong>assetmov</strong><small>ASSET LIFECYCLE</small></span>
         </a>
-        <div className="workspace-label">WORKSPACE</div>
+        <div className="workspace-label">WORKSPACE
+          <button className="mobile-menu-close" type="button" aria-label="Close navigation"
+            onClick={() => {setMobileMenuOpen(false);mobileMenuTriggerRef.current?.focus();}}>×</button>
+        </div>
         <nav className="side-nav" aria-label="Main navigation">
           {(!user || billingLoading || (!billingError && billingStatus?.allowed)) && <>
-          <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
-          <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
-          <button className={"nav-item " + (activePage === "transfers" ? "active" : "")} type="button" onClick={() => setActivePage("transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</button>
-          <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
-          <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
+          {(!user || canSee("overview")) && <a className={"nav-item " + (activePage === "overview" ? "active" : "")} href={pageHref("overview")} aria-current={activePage === "overview" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "overview")}><span className="nav-icon">▦</span> Overview</a>}
+          {(!user || canSee("assets")) && <a className={"nav-item " + (activePage === "assets" ? "active" : "")} href={pageHref("assets")} aria-current={activePage === "assets" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "assets")}><span className="nav-icon">◫</span> Asset register</a>}
+          {(!user || canSee("transfers")) && <a className={"nav-item " + (activePage === "transfers" ? "active" : "")} href={pageHref("transfers")} aria-current={activePage === "transfers" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</a>}
+          {(!user || canSee("employees")) && <a className={"nav-item " + (activePage === "employees" ? "active" : "")} href={pageHref("employees")} aria-current={activePage === "employees" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "employees")}><span className="nav-icon">♙</span> Employees</a>}
+          {(!user || canSee("locations")) && <a className={"nav-item " + (activePage === "locations" ? "active" : "")} href={pageHref("locations")} aria-current={activePage === "locations" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "locations")}><span className="nav-icon">⌂</span> Locations</a>}
           </>}
-          {user?.isPlatformAdmin && <button className="nav-item" type="button" onClick={() => setPlatformMode(true)}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></button>}
-          {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Categories & models</button>}
-          {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
+          {user?.isPlatformAdmin && <a className="nav-item" href="/platform/overview" onClick={event => {
+            if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+              event.preventDefault(); navigatePlatform("overview");
+            }
+          }}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></a>}
+          {billingStatus?.allowed && canSee("company") && <a className={"nav-item " + (activePage === "company" ? "active" : "")} href={pageHref("company")} aria-current={activePage === "company" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "company")}><span className="nav-icon">♧</span> Users & roles</a>}
+          {billingStatus?.allowed && canSee("profile") && <a className={"nav-item " + (activePage === "profile" ? "active" : "")} href={pageHref("profile")} aria-current={activePage === "profile" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "profile")}><span className="nav-icon">♧</span> Company profile</a>}
+          {billingStatus?.allowed && canSee("masterData") && <a className={"nav-item " + (activePage === "masterData" ? "active" : "")} href={pageHref("masterData")} aria-current={activePage === "masterData" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "masterData")}><span className="nav-icon">▧</span> Master data</a>}
+          {!user && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a></>}
-          {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
-            <button className={"nav-item " + (activePage === "billing" ? "active" : "")}
-              type="button" onClick={() => setActivePage("billing")}><span className="nav-icon">▤</span> Billing & Plan</button>
+          {user && canSee("billing") && (
+            <a className={"nav-item " + (activePage === "billing" ? "active" : "")}
+              href={pageHref("billing")} aria-current={activePage === "billing" ? "page" : undefined}
+              onClick={event => followWorkspaceLink(event, "billing")}><span className="nav-icon">▤</span> Billing & Plan</a>
           )}
         </nav>
         <div className="sidebar-bottom">
@@ -424,7 +591,10 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "masterData" ? "Categories & models" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
+          <button ref={mobileMenuTriggerRef} type="button" className="mobile-menu-trigger" aria-controls="workspace-sidebar"
+            aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(open => !open)}>☰</button>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -433,16 +603,18 @@ function App() {
               <>
                 {user.memberships.length > 1 && (
                   <ThemeSelect className="workspace-select" label="Active workspace" value={activeTenantId ?? ""}
-                    onChange={value => setActiveTenantId(value || null)}
+                    onChange={value => navigateWorkspace("overview", value || null)}
                     options={user.memberships.map(membership => ({
                       value: membership.tenant.id, label: membership.tenant.name,
                     }))}/>
                 )}
-                <div className="signed-in-copy"><strong>{user.fullName}</strong><small>{workspaceLoading ? "Loading workspace…" : activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}</small></div>
-                <div className="avatar" aria-label={user.fullName}>{initials}</div>
-                <button className="topbar-button ghost" type="button" onClick={() => { setPasswordError(""); setPasswordDialog(true); }}>Password</button>
-                <button className="topbar-button ghost" type="button" onClick={() => { setSessionsDialog(true); void loadSessions(); }}>Sessions</button>
-                <button className="topbar-button ghost" type="button" onClick={() => void handleLogout()}>Sign out</button>
+                <AccountMenu user={user} initials={initials}
+                  roleLabel={workspaceLoading ? "Loading workspace…" :
+                    activeWorkspaceContext?.membership.role.name ?? selectedMembership?.role.name ?? "Member"}
+                  onVerifyEmail={() => void requestEmailVerification()}
+                  onPassword={() => { setPasswordError(""); setPasswordDialog(true); }}
+                  onSessions={() => { setSessionsDialog(true); void loadSessions(); }}
+                  onSignOut={() => void handleLogout()}/>
               </>
             ) : (
               <>
@@ -480,12 +652,14 @@ function App() {
             <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setPasswordDialog(false)}>Cancel</button><button className="primary-button" disabled={passwordBusy} type="submit">Update password</button></div>
           </form></section></div>}
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
+        {billingError && billingStatus?.allowed && <div className="action-error" role="status">Unable to refresh subscription status. Your work remains open; retry from Billing &amp; Plan.</div>}
+        {accountNotice && <div className="asset-success" role="status">{accountNotice}</div>}
 
-        {user && activeTenantId && (billingLoading || !billingStatus && !billingError) ? (
+        {user && activeTenantId && !billingStatus && !billingError ? (
           <div className="billing-gate" role="status"><div className="billing-gate-body">
             <h2>Checking company subscription…</h2><p>Verifying active trial or Paddle billing status with the API.</p>
           </div></div>
-        ) : user && activeTenantId && (billingError || billingStatus?.allowed === false) &&
+        ) : user && activeTenantId && ((billingError && !billingStatus) || billingStatus?.allowed === false) &&
           activePage !== "billing" ? (
           <section className="billing-gate" aria-label="Subscription attention required">
             <div className="billing-gate-body">
@@ -499,10 +673,18 @@ function App() {
               <button className="topbar-button ghost" type="button" onClick={refreshBilling}>Recheck subscription</button>
             </div>
           </section>
+        ) : user && activeWorkspaceContext && !canSee(activePage) ? (
+          <section className="route-access-message" role="alert">
+            <h1>Access not available</h1>
+            <p>Your company role does not allow access to this page. Contact an administrator if you need another permission.</p>
+            <button className="primary-button" type="button" onClick={() => setActivePage("overview")}>Go to overview</button>
+          </section>
         ) : activePage === "billing" ? (
           <CompanyBillingPage tenantId={activeTenantId} csrfToken={csrfToken}
             isCompanyAdmin={activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER"}
             onChanged={refreshBilling}/>
+        ) : activePage === "profile" ? (
+          <CompanyProfilePage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} />
         ) : activePage === "masterData" ? (
           <MasterDataPage tenantId={activeTenantId} csrfToken={csrfToken} permissions={activeWorkspaceContext?.permissions ?? []} />
         ) : activePage === "company" ? (

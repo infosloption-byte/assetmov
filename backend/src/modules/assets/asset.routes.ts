@@ -30,7 +30,7 @@ const optionalDate = z.string().trim().max(40).optional().refine(
 );
 
 const assetCreateSchema = z.object({
-  inventoryNumber: z.string().trim().min(1).max(191),
+  inventoryNumber: z.string().trim().max(191).default(""),
   assetNumber: z.string().trim().max(191).optional(),
   serialNumber: z.string().trim().max(191).optional(),
   title: z.string().trim().min(1).max(191),
@@ -56,6 +56,12 @@ const listQuerySchema = z.object({
   q: z.string().trim().max(191).optional(),
   status: z.enum(assetStatuses).optional(),
   locationId: z.string().trim().min(1).optional(),
+  modelId: z.string().trim().min(1).max(36).optional(),
+  categoryId: z.string().trim().min(1).max(36).optional(),
+  custodianId: z.string().trim().min(1).max(36).optional(),
+  warrantyBefore: z.iso.date().optional(),
+  sortBy: z.enum(["inventoryNumber", "title", "createdAt", "updatedAt", "status", "warrantyEnd"]).default("inventoryNumber"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -103,7 +109,7 @@ assetRouter.get(
         return;
       }
 
-      const { q, status, locationId, page, pageSize } = parsed.data;
+      const { q, status, locationId, modelId, categoryId, custodianId, warrantyBefore, sortBy, sortOrder, page, pageSize } = parsed.data;
       if (locationId && !request.auth.allLocationsAccess && !(request.auth.accessibleLocationIds ?? []).includes(locationId)) {
         sendError(response, 403, "LOCATION_ACCESS_DENIED", "You cannot list assets in that location.");
         return;
@@ -113,6 +119,10 @@ assetRouter.get(
         tenantId,
         ...(status ? { status } : {}),
         ...(locationId ? { currentLocationId: locationId } : {}),
+        ...(modelId ? { modelId } : {}),
+        ...(categoryId ? { model: { categoryId } } : {}),
+        ...(custodianId ? { assignedEmployeeId: custodianId } : {}),
+        ...(warrantyBefore ? { warrantyEnd: { lte: new Date(warrantyBefore + "T23:59:59.999Z") } } : {}),
         ...(q ? {
           OR: [
             { inventoryNumber: { contains: q } },
@@ -131,7 +141,15 @@ assetRouter.get(
         prisma.asset.findMany({
           where,
           include: assetInclude,
-          orderBy: [{ inventoryNumber: "asc" }],
+          orderBy: [
+            sortBy === "title" ? { title: sortOrder } :
+            sortBy === "createdAt" ? { createdAt: sortOrder } :
+            sortBy === "updatedAt" ? { updatedAt: sortOrder } :
+            sortBy === "status" ? { status: sortOrder } :
+            sortBy === "warrantyEnd" ? { warrantyEnd: sortOrder } :
+            { inventoryNumber: sortOrder },
+            { id: "asc" },
+          ],
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
@@ -309,10 +327,35 @@ assetRouter.post(
         if (assignedLocationId && !location) throw new Error("REFERENCE_LOCATION_INVALID");
         const validatedFields = validateCustomFieldValues(model?.fieldSchema ?? null, input.customFields ?? {});
 
+        // The locked tenant subscription row above serializes manual and
+        // generated numbering. Sequence is tenant-owned and persists through
+        // restarts; skip any identifiers that already exist in legacy data.
+        let inventoryNumber = input.inventoryNumber;
+        if (!inventoryNumber) {
+          let candidate = "";
+          for (let attempt = 0; attempt < 10000; attempt++) {
+            const sequence = await tx.assetNumberSequence.update({
+              where: { tenantId },
+              data: { nextValue: { increment: 1 } },
+              select: { prefix: true, nextValue: true },
+            });
+            const number = sequence.nextValue - 1;
+            if (number < 1 || number > 2_000_000_000) throw new Error("ASSET_NUMBER_EXHAUSTED");
+            candidate = sequence.prefix + "-" + String(number).padStart(6, "0");
+            const exists = await tx.asset.findFirst({
+              where: { tenantId, inventoryNumber: candidate }, select: { id: true },
+            });
+            if (!exists) break;
+            candidate = "";
+          }
+          if (!candidate) throw new Error("ASSET_NUMBER_EXHAUSTED");
+          inventoryNumber = candidate;
+        }
+
         const asset = await tx.asset.create({
           data: {
             tenantId,
-            inventoryNumber: input.inventoryNumber,
+            inventoryNumber,
             assetNumber: input.assetNumber || undefined,
             serialNumber: input.serialNumber || undefined,
             title: input.title,
@@ -392,6 +435,10 @@ assetRouter.post(
       if (error instanceof SubscriptionAccessError) {
         const statusCode = error.code === "SUBSCRIPTION_NOT_CONFIGURED" ? 409 : 403;
         sendError(response, statusCode, error.code, error.message);
+        return;
+      }
+      if (error instanceof Error && error.message === "ASSET_NUMBER_EXHAUSTED") {
+        sendError(response, 409, "ASSET_NUMBER_EXHAUSTED", "No free inventory number could be allocated.");
         return;
       }
       if (isUniqueConstraintError(error)) {
@@ -935,5 +982,184 @@ assetRouter.post(
       }
       next(error);
     }
+  },
+);
+
+const lifecycleSchema = z.object({
+  action: z.enum(["DAMAGE", "RESTORE", "DISPOSE", "RETIRE"]),
+  reason: z.string().trim().min(8).max(4000),
+}).strict();
+
+/** Non-destructive lifecycle transitions: preserve history and terminal state. */
+assetRouter.post("/:id/lifecycle", requireSession, requireTenant, requireCsrf,
+  async (request, response, next) => {
+    const parsed = lifecycleSchema.safeParse(request.body);
+    const id = request.params.id;
+    const tenantId = request.auth?.tenantId;
+    const actorUserId = request.auth?.userId;
+    if (!parsed.success || typeof id !== "string" || !id || !tenantId || !actorUserId) {
+      sendError(response, 400, "VALIDATION_ERROR", "Provide a valid asset, action and reason."); return;
+    }
+    const { action, reason } = parsed.data;
+    const permission = action === "DISPOSE" || action === "RETIRE" ? "asset.dispose" : "asset.update";
+    if (!request.auth?.permissions?.includes(permission)) {
+      sendError(response, 403, "PERMISSION_DENIED", "You cannot make this lifecycle change."); return;
+    }
+    const destination = action === "DAMAGE" ? "DAMAGED" :
+      action === "RESTORE" ? "AVAILABLE" : action === "DISPOSE" ? "DISPOSED" : "RETIRED";
+    const eventType = action === "DAMAGE" ? "MARKED_DAMAGED" :
+      action === "RESTORE" ? "MARKED_AVAILABLE" : action === "DISPOSE" ? "DISPOSED" : "RETIRED";
+
+    try {
+      const record = await prisma.$transaction(async tx => {
+        const existing = await tx.asset.findFirst({ where: { tenantId, id } });
+        if (!existing) throw new Error("ASSET_NOT_FOUND");
+        if (!request.auth?.allLocationsAccess && (
+            !existing.currentLocationId ||
+            !(request.auth?.manageableLocationIds ?? []).includes(existing.currentLocationId)
+          )) throw new Error("ASSET_LOCATION_DENIED");
+        // Returning assigned assets to stock precedes damage/disposal; prevent
+        // silently discarding custody or interrupting in-transit assets.
+        const allowed = action === "DAMAGE" ? existing.status === "AVAILABLE" :
+          action === "RESTORE" ? existing.status === "DAMAGED" :
+          action === "DISPOSE" ? ["AVAILABLE", "DAMAGED"].includes(existing.status) :
+          ["DRAFT", "AVAILABLE", "DAMAGED"].includes(existing.status);
+        if (!allowed || existing.assignedEmployeeId) throw new Error("LIFECYCLE_TRANSITION_DENIED");
+
+        const changed = await tx.asset.updateMany({
+          where: { id, tenantId, status: existing.status, assignedEmployeeId: null },
+          data: { status: destination,
+            ...(action === "DISPOSE" ? { disposedAt: new Date() } :
+              action === "RESTORE" ? { disposedAt: null } : {}),
+          },
+        });
+        if (changed.count !== 1) throw new Error("LIFECYCLE_CONCURRENT_CHANGE");
+        await tx.assetTransaction.create({ data: {
+          tenantId, assetId: id, eventType, actorUserId, notes: reason,
+          fromLocationId: existing.currentLocationId, toLocationId: existing.currentLocationId,
+        } });
+        await tx.auditLog.create({ data: {
+          tenantId, actorUserId, action: "asset.lifecycle." + action.toLowerCase(),
+          entityType: "Asset", entityId: id,
+          oldData: { status: existing.status }, newData: { status: destination, reason },
+          ipAddress: request.ip?.slice(0, 64),
+        } });
+        return tx.asset.findFirst({ where: { tenantId, id }, include: assetInclude });
+      });
+      response.json({ data: record });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      if (["ASSET_NOT_FOUND","ASSET_LOCATION_DENIED","LIFECYCLE_TRANSITION_DENIED",
+        "LIFECYCLE_CONCURRENT_CHANGE"].includes(code)) {
+        sendError(response, code === "ASSET_NOT_FOUND" ? 404 :
+          code === "ASSET_LOCATION_DENIED" ? 403 : 409, code,
+          code === "LIFECYCLE_TRANSITION_DENIED"
+            ? "Return assigned assets first. This lifecycle transition is not allowed."
+            : code.replaceAll("_", " ").toLowerCase());
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+const bulkAssignmentSchema = z.object({
+  assetIds: z.array(z.string().min(1).max(36)).min(1).max(50),
+  employeeId: z.string().trim().min(1).max(36),
+  notes: z.string().trim().max(4000).optional(),
+}).strict().refine(input => new Set(input.assetIds).size === input.assetIds.length,
+  "Assets must be unique in bulk assignment.");
+
+/** Atomic bulk handover. If any asset is invalid or has changed, no assignments commit. */
+assetRouter.post("/bulk-assign", requireSession, requireTenant,
+  requirePermission("asset.assign"), requireCsrf, async (request, response, next) => {
+    const parsed = bulkAssignmentSchema.safeParse(request.body);
+    const tenantId = request.auth?.tenantId, actorUserId = request.auth?.userId;
+    if (!parsed.success || !tenantId || !actorUserId) {
+      sendError(response, 400, "VALIDATION_ERROR", "Choose up to 50 distinct assets and an employee."); return;
+    }
+    const { assetIds, employeeId, notes } = parsed.data;
+    try {
+      const data = await prisma.$transaction(async tx => {
+        const employee = await tx.employee.findFirst({
+          where: { tenantId, id: employeeId, isActive: true },
+        });
+        if (!employee || !employee.homeLocationId) throw new Error("EMPLOYEE_NOT_ELIGIBLE");
+        const assets = await tx.asset.findMany({
+          where: { tenantId, id: { in: assetIds } }, orderBy: { id: "asc" },
+        });
+        if (assets.length !== assetIds.length) throw new Error("ASSET_NOT_FOUND");
+        for (const asset of assets) {
+          if (!request.auth?.allLocationsAccess && (
+              !asset.currentLocationId ||
+              !(request.auth?.manageableLocationIds ?? []).includes(asset.currentLocationId)
+            )) throw new Error("ASSET_LOCATION_SCOPE_DENIED");
+          if (asset.status !== "AVAILABLE" || asset.assignedEmployeeId ||
+              asset.currentLocationId !== employee.homeLocationId) {
+            throw new Error("ASSET_NOT_ASSIGNABLE");
+          }
+          const result = await tx.asset.updateMany({
+            where: { id: asset.id, tenantId, status: "AVAILABLE", assignedEmployeeId: null,
+              currentLocationId: employee.homeLocationId },
+            data: { status: "ASSIGNED", assignedEmployeeId: employeeId },
+          });
+          if (result.count !== 1) throw new Error("ASSET_CONCURRENT_CHANGE");
+          await tx.assetTransaction.create({ data: {
+            tenantId, assetId: asset.id, eventType: "ASSIGNED",
+            fromLocationId: asset.currentLocationId, toLocationId: asset.currentLocationId,
+            toEmployeeId: employee.id, actorUserId,
+            notes: "Bulk assignment to " + employee.firstName + " " + employee.lastName +
+              (notes ? ". " + notes : ""),
+          } });
+          await tx.auditLog.create({ data: {
+            tenantId, actorUserId, action: "asset.assigned", entityType: "Asset", entityId: asset.id,
+            oldData: { status: asset.status, assignedEmployeeId: null },
+            newData: { status: "ASSIGNED", assignedEmployeeId: employee.id, bulk: true },
+            ipAddress: request.ip?.slice(0, 64),
+          } });
+        }
+        return { count: assets.length, assetIds: assets.map(asset => asset.id), employeeId };
+      });
+      response.json({ data });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      if (["EMPLOYEE_NOT_ELIGIBLE", "ASSET_NOT_FOUND", "ASSET_NOT_ASSIGNABLE",
+        "ASSET_LOCATION_SCOPE_DENIED", "ASSET_CONCURRENT_CHANGE"].includes(code)) {
+        sendError(response, code === "ASSET_NOT_FOUND" ? 404 :
+          code === "ASSET_LOCATION_SCOPE_DENIED" ? 403 : code === "EMPLOYEE_NOT_ELIGIBLE" ? 400 : 409,
+          code, code.replaceAll("_", " ").toLowerCase() + ". Refresh the register.");
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+const importPreviewSchema = z.object({
+  inventoryNumbers:z.array(z.string().trim().max(191)).max(100),
+}).strict();
+
+/** Dry-run duplicate reconciliation. The create endpoint remains the final
+ * concurrency-safe authority and can still return a 409 if another user wins. */
+assetRouter.post("/import/preview", requireSession, requireTenant,
+  requirePermission("asset.import"), requireCsrf, async(request,response,next)=>{
+    const parsed=importPreviewSchema.safeParse(request.body);
+    if(!parsed.success || !(request.auth?.permissions??[]).includes("asset.read")) {
+      sendError(response,400,"VALIDATION_ERROR","Invalid import preview or missing asset visibility.");
+      return;
+    }
+    try {
+      const tenantId=request.auth!.tenantId!;
+      const identifiers=[...new Set(parsed.data.inventoryNumbers.filter(Boolean))];
+      const existing=await prisma.asset.findMany({
+        where:{tenantId,inventoryNumber:{in:identifiers}},
+        select:{inventoryNumber:true,id:true},
+      });
+      const registered=new Set(existing.map(a=>a.inventoryNumber.toUpperCase()));
+      const issues=parsed.data.inventoryNumbers.map((value,index)=>({
+        index,duplicate:Boolean(value)&&registered.has(value.toUpperCase()),
+      }));
+      response.json({data:{issues}});
+    }catch(error){next(error);}
   },
 );

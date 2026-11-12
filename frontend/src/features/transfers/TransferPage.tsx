@@ -126,7 +126,7 @@ function TransferPage({
   const [submittingReceipt, setSubmittingReceipt] = useState(false);
 
   const canReadAssets = permissions.includes("asset.read");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","asset.transfer.read","asset.transfer.dispatch","asset.transfer.receive"].includes(key));
   const canDispatch = permissions.includes("asset.transfer.dispatch");
   const canReceive = permissions.includes("asset.transfer.receive");
   const canReadTransfers = permissions.some((permission) => [
@@ -208,7 +208,7 @@ function TransferPage({
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
@@ -450,6 +450,108 @@ function TransferPage({
     }
   }
 
+  function printTransfer() {
+    if (!selectedTransfer) return;
+    const popup = window.open("", "_blank", "width=920,height=750");
+    if (!popup) { setDetailError("Your browser blocked the print window. Allow popups for this site."); return; }
+    popup.opener = null;
+    const doc = popup.document;
+    doc.title = selectedTransfer.status === "IN_TRANSIT" ?
+      "Issue Note " + selectedTransfer.transferNumber : "Goods Receipt " + selectedTransfer.transferNumber;
+    const style = doc.createElement("style");
+    style.textContent = `
+      @page { size: A4; margin: 16mm; }
+      * { box-sizing: border-box; }
+      body { font: 12px/1.55 Arial,sans-serif; color: #24382d; }
+      header { display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 16px; border-bottom: 3px solid #376a51; }
+      .brand { font-weight: 800; color: #376a51; letter-spacing: 2px; }
+      .document-type { color: #829087; text-transform: uppercase; font-size: 10px; }
+      h1 { margin: 18px 0 12px; font-size: 24px; color: #224635; }
+      .metadata { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+      p { margin: 6px 0; overflow-wrap: anywhere; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #d4dfd5; padding: 8px; text-align: left; vertical-align: top;
+        overflow-wrap: anywhere; }
+      th { background: #edf4ed; font-weight: 700; }
+      tr { break-inside: avoid; }
+      .summary { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+      .summary span { padding: 7px 10px; background: #edf4ed; border-radius: 5px; }
+      footer { margin-top: 40px; display: flex; justify-content: space-between; gap: 30px; }
+      footer span { flex: 1; border-top: 1px solid #bfcabf; padding-top: 8px; }
+      .printed { color: #819087; font-size: 10px; margin-top: 28px; }
+    `;
+    doc.head.appendChild(style);
+    const banner = doc.createElement("header");
+    const brand = doc.createElement("strong"); brand.className = "brand";
+    brand.textContent = "ASSETMOV";
+    const documentType = doc.createElement("span"); documentType.className = "document-type";
+    documentType.textContent = "Asset custody and movement record";
+    banner.append(brand, documentType);
+    doc.body.appendChild(banner);
+    const heading = doc.createElement("h1");
+    heading.textContent = selectedTransfer.status === "IN_TRANSIT" ? "Asset Issue Note" : "Goods Receipt Note";
+    doc.body.appendChild(heading);
+    const details: Array<[string,string]> = [
+      ["Reference", selectedTransfer.transferNumber], ["Status", titleCase(selectedTransfer.status)],
+      ["Origin", selectedTransfer.originLocation.name + " (" + selectedTransfer.originLocation.code + ")"],
+      ["Destination", selectedTransfer.destinationLocation.name + " (" + selectedTransfer.destinationLocation.code + ")"],
+      ["Dispatched", formatDate(selectedTransfer.dispatchedAt)],
+      ["Completed", formatDate(selectedTransfer.completedAt)],
+      ["Issued by", selectedTransfer.createdBy.fullName],
+      ["Notes", selectedTransfer.notes ?? "—"],
+    ];
+    const metadata = doc.createElement("section"); metadata.className = "metadata";
+    for (const [label, value] of details) {
+      const para = doc.createElement("p");
+      const strong = doc.createElement("strong"); strong.textContent = label + ": ";
+      para.append(strong, doc.createTextNode(value));
+      metadata.appendChild(para);
+    }
+    doc.body.appendChild(metadata);
+    const counts = selectedTransfer.lines.reduce((acc, line) => {
+      acc[line.status] = (acc[line.status] ?? 0) + 1;
+      return acc;
+    }, {} as Record<TransferLineStatus,number>);
+    const summary = doc.createElement("div"); summary.className = "summary";
+    for (const label of [
+      "Total items: " + selectedTransfer.lines.length,
+      "Received: " + (counts.RECEIVED ?? 0),
+      "Rejected: " + (counts.REJECTED ?? 0),
+      "Pending: " + (counts.IN_TRANSIT ?? 0),
+    ]) {
+      const chip = doc.createElement("span");chip.textContent = label; summary.appendChild(chip);
+    }
+    doc.body.appendChild(summary);
+    const table = doc.createElement("table");
+    const thead = doc.createElement("thead"); const header = doc.createElement("tr");
+    for (const label of ["Inventory no.", "Description", "Serial", "Receipt status", "Decision reason"]) {
+      const th = doc.createElement("th"); th.textContent = label; header.appendChild(th);
+    }
+    thead.appendChild(header); table.appendChild(thead);
+    const tbody = doc.createElement("tbody");
+    for (const item of selectedTransfer.lines) {
+      const row = doc.createElement("tr");
+      for (const value of [item.asset.inventoryNumber, item.asset.title, item.asset.serialNumber ?? "—",
+        titleCase(item.status), item.decisionReason ?? "—"]) {
+        const td = doc.createElement("td"); td.textContent = value; row.appendChild(td);
+      }
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody); doc.body.appendChild(table);
+    const foot = doc.createElement("footer");
+    for (const label of ["Issued by: __________________", "Received by: __________________"]) {
+      const span = doc.createElement("span"); span.textContent = label; foot.appendChild(span);
+    }
+    doc.body.appendChild(foot);
+    const printed = doc.createElement("p"); printed.className = "printed";
+    printed.textContent = "Generated on " + new Date().toLocaleString() +
+      " • Generated from live AssetMov movement records";
+    doc.body.appendChild(printed);
+    popup.focus();
+    popup.setTimeout(() => popup.print(), 150);
+  }
+
   const currentPendingLines = selectedTransfer?.lines.filter((line) => line.status === "IN_TRANSIT") ?? [];
   const canReceiveSelected = Boolean(
     selectedTransfer &&
@@ -506,7 +608,7 @@ function TransferPage({
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && <div className="asset-inline-hint" role="status">{locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table transfers-table">
           <thead><tr><th>Transfer</th><th>Origin</th><th>Destination</th><th>Assets</th><th>Dispatched</th><th>Status</th><th><span className="sr-only">View transfer</span></th></tr></thead>
           <tbody>
@@ -537,7 +639,7 @@ function TransferPage({
               <div><span className="module-tag">NEW MOVEMENT</span><h2 id="transferDispatchTitle">Dispatch assets</h2><p>Only available assets currently assigned to the chosen origin can be selected.</p></div>
               <button type="button" className="modal-close" aria-label="Close dispatch" onClick={() => setShowDispatch(false)}>×</button>
             </div>
-            {(!canReadAssets || !canReadLocations) && <div className="asset-inline-error" role="alert">Your role needs asset-read and location-read access to prepare a transfer.</div>}
+            {(!canReadAssets || !canReadLocations) && <div className="asset-inline-error" role="alert">Your role needs asset-read and transfer permissions to prepare a dispatch.</div>}
             <form className="asset-create-form" onSubmit={(event) => void dispatchTransfer(event)}>
               <div className="asset-form-two-col">
                 <div>
@@ -602,6 +704,7 @@ function TransferPage({
               <div><span className="module-tag">TRANSFER DETAILS</span><h2 id="transferDetailTitle">{selectedTransfer?.transferNumber ?? (detailLoading ? "Loading transfer…" : "Transfer details")}</h2>
                 {selectedTransfer && <p>{selectedTransfer.originLocation.name} → {selectedTransfer.destinationLocation.name}</p>}
               </div>
+              {selectedTransfer && <button type="button" className="topbar-button ghost" onClick={printTransfer}>Print note / GRN</button>}
               <button type="button" className="modal-close" aria-label="Close transfer details" onClick={() => { setSelectedTransfer(null); setDetailError(""); setReceiptError(""); }}>×</button>
             </div>
             {detailLoading && <div className="asset-table-message"><span className="table-loader" /> Loading transfer lines…</div>}

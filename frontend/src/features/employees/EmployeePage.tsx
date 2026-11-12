@@ -7,6 +7,7 @@ interface LocationItem {
   id: string;
   name: string;
   code: string;
+  type: string;
 }
 
 interface EmployeeItem {
@@ -14,6 +15,8 @@ interface EmployeeItem {
   employeeCode: string;
   firstName: string;
   lastName: string;
+  designation: string | null;
+  employeeType: string | null;
   email: string | null;
   phone: string | null;
   homeLocationId: string | null;
@@ -49,6 +52,12 @@ function EmployeePage({
 }: EmployeePageProps) {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
+  const [createLocationType, setCreateLocationType] = useState("");
+  const [editLocationType, setEditLocationType] = useState("");
+  const [editedHomeLocationId, setEditedHomeLocationId] = useState("");
+  const [locationHistory, setLocationHistory] = useState<Array<{
+    id:string;createdAt:string;reason:string;previousLocation:string;newLocation:string;
+  }>>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationsError, setLocationsError] = useState("");
@@ -56,6 +65,7 @@ function EmployeePage({
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [success, setSuccess] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -67,7 +77,7 @@ function EmployeePage({
 
   const canRead = permissions.includes("employee.read");
   const canManage = permissions.includes("employee.manage");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","employee.read","employee.manage"].includes(key));
 
   const visibleLocations = locations.filter((location) =>
     allLocationsAccess || accessibleLocationIds.includes(location.id),
@@ -95,6 +105,7 @@ function EmployeePage({
     try {
       const params = new URLSearchParams({ page: "1", pageSize: "100" });
       if (search) params.set("q", search);
+      if (showInactive && canManage) params.set("includeInactive", "true");
       const response = await fetch(apiBaseUrl + "/employees?" + params.toString(), {
         credentials: "include",
         headers: { "X-Tenant-Id": tenantId },
@@ -113,7 +124,7 @@ function EmployeePage({
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [tenantId, canRead, search]);
+  }, [tenantId, canRead, search, showInactive, canManage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -134,7 +145,7 @@ function EmployeePage({
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
@@ -172,7 +183,7 @@ function EmployeePage({
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
     };
-    for (const field of ["email", "phone", "homeLocationId"] as const) {
+    for (const field of ["email", "phone", "homeLocationId", "designation", "employeeType"] as const) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
@@ -215,15 +226,20 @@ function EmployeePage({
     }
 
     const formData = new FormData(event.currentTarget);
-    const body: Record<string, string> = {
+    const body: Record<string, string | boolean> = {
       employeeCode: String(formData.get("employeeCode") ?? "").trim(),
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
     };
-    for (const field of ["email", "phone", "homeLocationId"] as const) {
+    for (const field of ["email", "phone", "homeLocationId", "designation", "employeeType"] as const) {
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
+    if (editedHomeLocationId !== (editingEmployee.homeLocationId ?? "")) {
+      body.locationChangeReason = String(formData.get("locationChangeReason") ?? "").trim();
+    }
+
+    body.isActive = formData.get("isActive") === "on";
 
     setSavingEdit(true);
     setEditError("");
@@ -262,7 +278,7 @@ function EmployeePage({
           <h1 className="asset-page-title">Employees</h1>
           <p>Maintain employee and custodian records, their home locations, and how many assets are currently assigned to them.</p>
         </div>
-        {canManage && <button className="primary-button" type="button" onClick={() => { setCreateError(""); setShowCreate(true); }}>Add employee <span>＋</span></button>}
+        {canManage && <button className="primary-button" type="button" onClick={() => { setCreateError(""); setCreateLocationType(""); setShowCreate(true); }}>Add employee <span>＋</span></button>}
       </div>
 
       <div className="asset-register-toolbar">
@@ -273,13 +289,14 @@ function EmployeePage({
           <button type="submit">Search</button>
         </form>
         <button className="topbar-button ghost" type="button" onClick={() => void loadEmployees()}>Refresh ↻</button>
+        {canManage && <label><input type="checkbox" checked={showInactive} onChange={event => setShowInactive(event.target.checked)}/> Include inactive</label>}
       </div>
 
       {success && <div className="asset-success" role="status">{success}</div>}
       {error && <div className="asset-inline-error" role="alert">{error}</div>}
       {locationsError && canManage && <div className="asset-inline-hint" role="status">Location choices: {locationsError}</div>}
 
-      <div className="asset-table-wrap">
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
         <table className="asset-table employees-table">
           <thead><tr><th>Employee</th><th>Contact</th><th>Home location</th><th>Assigned assets</th><th>Status</th><th><span className="sr-only">Edit employee</span></th></tr></thead>
           <tbody>
@@ -289,12 +306,22 @@ function EmployeePage({
               <tr><td colSpan={6} className="asset-table-message"><span className="empty-icon">♙</span><strong>No employees found</strong><span>Add your employees and custodians before assigning equipment.</span>{canManage && <button className="text-button" type="button" onClick={() => setShowCreate(true)}>Add the first employee ↗</button>}</td></tr>
             ) : employees.map((employee) => (
               <tr key={employee.id}>
-                <td><strong className="employee-name">{employee.firstName} {employee.lastName}</strong><span className="asset-number">{employee.employeeCode}</span></td>
+                <td><strong className="employee-name">{employee.firstName} {employee.lastName}</strong><span className="asset-number">{employee.employeeCode}</span><span className="asset-number">{[employee.designation, employee.employeeType].filter(Boolean).join(" · ")}</span></td>
                 <td>{employee.email ?? "—"}<span className="asset-number">{employee.phone ?? ""}</span></td>
                 <td>{employee.homeLocation ? <>{employee.homeLocation.name}<span className="asset-number">{employee.homeLocation.code}</span></> : "Not assigned"}</td>
                 <td>{employee._count?.assignedAssets ?? 0}</td>
                 <td><span className={"asset-status-badge " + (employee.isActive ? "available" : "retired")}>{employee.isActive ? "Active" : "Inactive"}</span></td>
-                <td>{canManage && <button className="row-open-button" type="button" aria-label={"Edit " + employee.firstName + " " + employee.lastName} onClick={() => { setEditingEmployee(employee); setEditError(""); }}>✎</button>}</td>
+                <td>{canManage && <button className="row-open-button" type="button" aria-label={"Edit " + employee.firstName + " " + employee.lastName} onClick={() => {
+                  setEditingEmployee(employee); setEditError("");
+                  setEditedHomeLocationId(employee.homeLocationId ?? "");
+                  setEditLocationType(locations.find(l=>l.id===employee.homeLocationId)?.type ?? "");
+                  setLocationHistory([]);
+                  if (tenantId) void fetch(apiBaseUrl+"/employees/"+employee.id+"/location-history",{
+                    credentials:"include",headers:{"X-Tenant-Id":tenantId},
+                  }).then(response=>response.ok ? response.json():{data:[]})
+                    .then(payload=>setLocationHistory(payload.data ?? []))
+                    .catch(()=>setLocationHistory([]));
+                }}>✎</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -318,8 +345,20 @@ function EmployeePage({
                 <div><label htmlFor="employeeEmail">Email</label><input id="employeeEmail" name="email" type="email" maxLength={191} placeholder="Optional" /></div>
                 <div><label htmlFor="employeePhone">Phone</label><input id="employeePhone" name="phone" maxLength={50} placeholder="Optional" /></div>
               </div>
+              <div className="asset-form-two-col">
+                <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer"/></label>
+                <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent"/></label>
+              </div>
+              <label>Location type</label>
+              <ThemeSelect label="Select employee location type" value={createLocationType} onChange={setCreateLocationType}
+                options={[{value:"",label:"Choose location type"},...
+                  [...new Set(manageableLocations.map(l=>l.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
               <label htmlFor="employeeHomeLocation">Home location {!allLocationsAccess && <span>*</span>}</label>
-              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
+              <ThemeSelect key={createLocationType} label="Employee home location" name="homeLocationId"
+                defaultValue="" required={!allLocationsAccess}
+                options={[{value:"",label:"Choose location"},...manageableLocations
+                  .filter(l=>l.type===createLocationType)
+                  .map(location=>({value:location.id,label:location.name+" ("+location.code+")"}))]}/>
               {!allLocationsAccess && manageableLocations.length === 0 && <p className="asset-inline-hint">You need a manageable location to add an employee. Ask an administrator to grant location access.</p>}
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="primary-button" type="submit" disabled={creating || locationsLoading || (!allLocationsAccess && manageableLocations.length === 0)}>{creating ? "Saving…" : "Save employee"} {!creating && <span>↗</span>}</button></div>
@@ -334,17 +373,42 @@ function EmployeePage({
             <div className="asset-modal-heading"><div><span className="module-tag">WORKFORCE DIRECTORY</span><h2 id="employeeEditTitle">Edit employee</h2><p>{editingEmployee.employeeCode}</p></div><button type="button" className="modal-close" aria-label="Close form" onClick={() => setEditingEmployee(null)}>×</button></div>
             <form className="asset-create-form" onSubmit={(event) => void updateEmployee(event)}>
               <label htmlFor="editEmployeeCode">Employee code <span>*</span></label>
-              <input id="editEmployeeCode" name="employeeCode" required maxLength={100} defaultValue={editingEmployee.employeeCode} />
+              <input id="editEmployeeCode" name="employeeCode" required maxLength={100} placeholder="e.g. EMP-001" defaultValue={editingEmployee.employeeCode} />
               <div className="asset-form-two-col">
-                <div><label htmlFor="editEmployeeFirstName">First name <span>*</span></label><input id="editEmployeeFirstName" name="firstName" required maxLength={100} defaultValue={editingEmployee.firstName} /></div>
-                <div><label htmlFor="editEmployeeLastName">Last name <span>*</span></label><input id="editEmployeeLastName" name="lastName" required maxLength={100} defaultValue={editingEmployee.lastName} /></div>
+                <div><label htmlFor="editEmployeeFirstName">First name <span>*</span></label><input id="editEmployeeFirstName" name="firstName" required maxLength={100} placeholder="First name" defaultValue={editingEmployee.firstName} /></div>
+                <div><label htmlFor="editEmployeeLastName">Last name <span>*</span></label><input id="editEmployeeLastName" name="lastName" required maxLength={100} placeholder="Last name" defaultValue={editingEmployee.lastName} /></div>
               </div>
               <div className="asset-form-two-col">
-                <div><label htmlFor="editEmployeeEmail">Email</label><input id="editEmployeeEmail" name="email" type="email" maxLength={191} defaultValue={editingEmployee.email ?? ""} /></div>
-                <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} defaultValue={editingEmployee.phone ?? ""} /></div>
+                <div><label htmlFor="editEmployeeEmail">Email</label><input id="editEmployeeEmail" name="email" type="email" maxLength={191} placeholder="e.g. employee@company.com" defaultValue={editingEmployee.email ?? ""} /></div>
+                <div><label htmlFor="editEmployeePhone">Phone</label><input id="editEmployeePhone" name="phone" maxLength={50} placeholder="e.g. +94 77 123 4567" defaultValue={editingEmployee.phone ?? ""} /></div>
               </div>
+              <div className="asset-form-two-col">
+                <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer" defaultValue={editingEmployee.designation ?? ""}/></label>
+                <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent" defaultValue={editingEmployee.employeeType ?? ""}/></label>
+              </div>
+              <label>Location type</label>
+              <ThemeSelect label="Edit employee location type" value={editLocationType}
+                onChange={value=>{setEditLocationType(value);setEditedHomeLocationId("");}}
+                options={[{value:"",label:"Choose location type"},...
+                  [...new Set(manageableLocations.map(l=>l.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
-              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
+              <ThemeSelect label="Employee home location" value={editedHomeLocationId}
+                name="homeLocationId" onChange={setEditedHomeLocationId} required={!allLocationsAccess}
+                options={[{value:"",label:"Choose location"},...manageableLocations.filter(
+                  l=>l.type===editLocationType || l.id===editingEmployee.homeLocationId,
+                ).map(l=>({value:l.id,label:l.name+" ("+l.code+")"}))]}/>
+              {editedHomeLocationId !== (editingEmployee.homeLocationId ?? "") &&
+                <label>Reason for moving employee<input name="locationChangeReason"
+                  placeholder="e.g. Transferred to another branch" minLength={8} maxLength={300} required/></label>}
+              {locationHistory.length > 0 && <section className="employee-location-history">
+                <strong>Location history</strong>
+                <ol>{locationHistory.map(item=><li key={item.id}>
+                  <span>{item.previousLocation} → {item.newLocation}</span>
+                  <small>{new Date(item.createdAt).toLocaleString()} · {item.reason}</small>
+                </li>)}</ol>
+              </section>}
+              <label className="status-toggle"><input type="checkbox" role="switch" name="isActive" defaultChecked={editingEmployee.isActive}/> Active employee</label>
+              <p className="asset-inline-hint">Employees with assigned assets cannot be deactivated until custody is transferred or returned.</p>
               {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setEditingEmployee(null)}>Cancel</button><button className="primary-button" type="submit" disabled={savingEdit || locationsLoading}>{savingEdit ? "Saving…" : "Save changes"} {!savingEdit && <span>↗</span>}</button></div>
             </form>
