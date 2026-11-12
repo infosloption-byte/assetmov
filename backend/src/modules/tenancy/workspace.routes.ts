@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireCsrf, requireSession } from "../auth/auth-middleware.js";
-import { requirePermission, requireTenant } from "./tenant-context.js";
+import { requireAnyPermission, requirePermission, requireTenant } from "./tenant-context.js";
 
 export const workspaceRouter = Router();
 
@@ -39,6 +39,25 @@ workspaceRouter.get("/context", requireSession, requireTenant, (request, respons
     },
   });
 });
+
+// Read-only scope choices: asset operators need location names in forms
+// without acquiring location.read or location.manage (no location admin menu).
+workspaceRouter.get("/location-options", requireSession, requireTenant,
+  requireAnyPermission(["asset.read","asset.create","asset.assign",
+    "asset.transfer.read","asset.transfer.dispatch","asset.transfer.receive",
+    "employee.read","employee.manage"]), async(request,response,next)=>{
+    try {
+      const auth=request.auth!;
+      const data=await prisma.location.findMany({
+        where:{tenantId:auth.tenantId!,isActive:true,
+          ...(auth.allLocationsAccess ? {} : {id:{in:auth.accessibleLocationIds??[]}})},
+        select:{id:true,name:true,code:true,type:true,parentId:true,isActive:true},
+        orderBy:[{type:"asc"},{name:"asc"}],
+      });
+      response.json({data});
+    }catch(error){next(error);}
+  },
+);
 
 // Asset metrics follow the same tenant, role and location visibility rules as
 // GET /api/assets. The company dashboard must not disclose hidden locations.
