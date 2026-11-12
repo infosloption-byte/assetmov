@@ -14,6 +14,7 @@ import CompanyBillingPage from "./features/billing/CompanyBillingPage";
 import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
 import AccountMenu from "./components/AccountMenu";
+import { canOpenWorkspacePage } from "./navigation/access";
 import { appRoutePath, isProtectedRoute, readAppRoute, type AppRoute, type WorkspacePage, type PlatformPage } from "./navigation/routes";
 
 type ApiHealth = "checking" | "online" | "offline";
@@ -56,6 +57,7 @@ function App() {
   const [recoveryMode] = useState(() => ["forgot", "reset", "verify"].includes(new URLSearchParams(window.location.search).get("accountAction") ?? ""));
   const [accountNotice, setAccountNotice] = useState("");
   const [route, setRoute] = useState<AppRoute>(() => readAppRoute(window.location.pathname));
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activePage: WorkspacePage = route.kind === "workspace" ? route.page : "overview";
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
@@ -86,6 +88,7 @@ function App() {
   // A passive focus/visibility event must never replace a page or unmount its
   // in-progress form. Subscription rechecks remain explicit (or after checkout).
   const navigate = useCallback((next: AppRoute, replace = false, preserveBilling = false) => {
+    setMobileMenuOpen(false);
     const path = appRoutePath(next) + (preserveBilling ? "?billing=pending" : "");
     if (window.location.pathname + window.location.search !== path) {
       window.history[replace ? "replaceState" : "pushState"](null, "", path);
@@ -114,6 +117,7 @@ function App() {
     const onBackForward = () => {
       const next = readAppRoute(window.location.pathname);
       setRoute(next);
+      setMobileMenuOpen(false);
       if (next.kind === "workspace") {
         const tenant = user?.memberships.find(m => m.tenant.slug === next.tenantSlug);
         setActiveTenantId(tenant?.tenant.id ?? null);
@@ -504,34 +508,52 @@ function App() {
   const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
   const displayedError = actionError || workspaceError;
+  const permissionsForMenu = activeWorkspaceContext?.permissions ?? [];
+  const menuRoleKey = activeWorkspaceContext?.membership.role.key ?? selectedMembership?.role.key ?? null;
+  const canSee = (page: WorkspacePage) => canOpenWorkspacePage(page, permissionsForMenu, menuRoleKey);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [mobileMenuOpen]);
+
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {mobileMenuOpen && <button className="mobile-nav-backdrop" aria-label="Close navigation"
+        type="button" onClick={() => setMobileMenuOpen(false)}/>}
+      <aside id="workspace-sidebar" className={"sidebar" + (mobileMenuOpen ? " mobile-open" : "")}
+        aria-label="Workspace sidebar">
         <a className="brand" href="/" aria-label="AssetMov home">
           <span className="brand-mark">A<span>.</span></span>
           <span className="brand-copy"><strong>assetmov</strong><small>ASSET LIFECYCLE</small></span>
         </a>
-        <div className="workspace-label">WORKSPACE</div>
+        <div className="workspace-label">WORKSPACE
+          <button className="mobile-menu-close" type="button" aria-label="Close navigation"
+            onClick={() => setMobileMenuOpen(false)}>×</button>
+        </div>
         <nav className="side-nav" aria-label="Main navigation">
           {(!user || billingLoading || (!billingError && billingStatus?.allowed)) && <>
-          <a className={"nav-item " + (activePage === "overview" ? "active" : "")} href={pageHref("overview")} aria-current={activePage === "overview" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "overview")}><span className="nav-icon">▦</span> Overview</a>
-          <a className={"nav-item " + (activePage === "assets" ? "active" : "")} href={pageHref("assets")} aria-current={activePage === "assets" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "assets")}><span className="nav-icon">◫</span> Asset register</a>
-          <a className={"nav-item " + (activePage === "transfers" ? "active" : "")} href={pageHref("transfers")} aria-current={activePage === "transfers" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</a>
-          <a className={"nav-item " + (activePage === "employees" ? "active" : "")} href={pageHref("employees")} aria-current={activePage === "employees" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "employees")}><span className="nav-icon">♙</span> Employees</a>
-          <a className={"nav-item " + (activePage === "locations" ? "active" : "")} href={pageHref("locations")} aria-current={activePage === "locations" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "locations")}><span className="nav-icon">⌂</span> Locations</a>
+          {(!user || canSee("overview")) && <a className={"nav-item " + (activePage === "overview" ? "active" : "")} href={pageHref("overview")} aria-current={activePage === "overview" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "overview")}><span className="nav-icon">▦</span> Overview</a>}
+          {(!user || canSee("assets")) && <a className={"nav-item " + (activePage === "assets" ? "active" : "")} href={pageHref("assets")} aria-current={activePage === "assets" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "assets")}><span className="nav-icon">◫</span> Asset register</a>}
+          {(!user || canSee("transfers")) && <a className={"nav-item " + (activePage === "transfers" ? "active" : "")} href={pageHref("transfers")} aria-current={activePage === "transfers" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</a>}
+          {(!user || canSee("employees")) && <a className={"nav-item " + (activePage === "employees" ? "active" : "")} href={pageHref("employees")} aria-current={activePage === "employees" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "employees")}><span className="nav-icon">♙</span> Employees</a>}
+          {(!user || canSee("locations")) && <a className={"nav-item " + (activePage === "locations" ? "active" : "")} href={pageHref("locations")} aria-current={activePage === "locations" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "locations")}><span className="nav-icon">⌂</span> Locations</a>}
           </>}
           {user?.isPlatformAdmin && <a className="nav-item" href="/platform/overview" onClick={event => {
             if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
               event.preventDefault(); navigatePlatform("overview");
             }
           }}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></a>}
-          {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <a className={"nav-item " + (activePage === "company" ? "active" : "")} href={pageHref("company")} aria-current={activePage === "company" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "company")}><span className="nav-icon">♧</span> Users & roles</a>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("tenant.settings.manage") && <a className={"nav-item " + (activePage === "profile" ? "active" : "")} href={pageHref("profile")} aria-current={activePage === "profile" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "profile")}><span className="nav-icon">♧</span> Company profile</a>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <a className={"nav-item " + (activePage === "masterData" ? "active" : "")} href={pageHref("masterData")} aria-current={activePage === "masterData" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "masterData")}><span className="nav-icon">▧</span> Master data</a>}
-          {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
+          {billingStatus?.allowed && canSee("company") && <a className={"nav-item " + (activePage === "company" ? "active" : "")} href={pageHref("company")} aria-current={activePage === "company" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "company")}><span className="nav-icon">♧</span> Users & roles</a>}
+          {billingStatus?.allowed && canSee("profile") && <a className={"nav-item " + (activePage === "profile" ? "active" : "")} href={pageHref("profile")} aria-current={activePage === "profile" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "profile")}><span className="nav-icon">♧</span> Company profile</a>}
+          {billingStatus?.allowed && canSee("masterData") && <a className={"nav-item " + (activePage === "masterData" ? "active" : "")} href={pageHref("masterData")} aria-current={activePage === "masterData" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "masterData")}><span className="nav-icon">▧</span> Master data</a>}
+          {!user && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a></>}
-          {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
+          {user && canSee("billing") && (
             <a className={"nav-item " + (activePage === "billing" ? "active" : "")}
               href={pageHref("billing")} aria-current={activePage === "billing" ? "page" : undefined}
               onClick={event => followWorkspaceLink(event, "billing")}><span className="nav-icon">▤</span> Billing & Plan</a>
@@ -545,6 +567,9 @@ function App() {
 
       <main className="main-area" id="overview">
         <header className="topbar">
+          <button type="button" className="mobile-menu-trigger" aria-controls="workspace-sidebar"
+            aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(open => !open)}>☰</button>
           <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
@@ -623,6 +648,12 @@ function App() {
               <p>Your data remains in the company workspace. Sign out is available above.</p>
               <button className="topbar-button ghost" type="button" onClick={refreshBilling}>Recheck subscription</button>
             </div>
+          </section>
+        ) : user && activeWorkspaceContext && !canSee(activePage) ? (
+          <section className="route-access-message" role="alert">
+            <h1>Access not available</h1>
+            <p>Your company role does not allow access to this page. Contact an administrator if you need another permission.</p>
+            <button className="primary-button" type="button" onClick={() => setActivePage("overview")}>Go to overview</button>
           </section>
         ) : activePage === "billing" ? (
           <CompanyBillingPage tenantId={activeTenantId} csrfToken={csrfToken}
