@@ -102,7 +102,7 @@ export default function CompanyProfilePage({ tenantId, csrfToken, permissions }:
               {value:"MM/DD/YYYY",label:"MM/DD/YYYY"}]}/>
         </div>
       </div>
-      <label>Automatic inventory number prefix<input placeholder="e.g. AM" name="inventoryPrefix" required minLength={2} maxLength={16}
+      <label>Automatic inventory number prefix<input name="inventoryPrefix" required minLength={2} maxLength={16}
         pattern="(?:[A-Za-z0-9_]|-){2,16}" placeholder="e.g. AM or HNB-ASSET" defaultValue={company.inventoryPrefix}/></label>
       <p className="asset-inline-hint">New automatically numbered assets use this prefix. Existing inventory numbers never change.</p>
       <label>Fiscal year starts</label>
