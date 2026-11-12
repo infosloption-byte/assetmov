@@ -37,6 +37,22 @@ const updateSchema = z.object({
 
 memberRouter.use(requireSession, requireTenant, requirePermission("members.manage"));
 
+/** Only eligible, currently active locations can be granted to another user. */
+memberRouter.get("/available-locations", async (request, response, next) => {
+  try {
+    const scope = request.auth!;
+    const locations = await prisma.location.findMany({
+      where:{
+        tenantId:scope.tenantId!, isActive:true,
+        ...(scope.allLocationsAccess ? {} : { id:{ in:scope.manageableLocationIds ?? [] } }),
+      },
+      select:{id:true,name:true,code:true,type:true,parentId:true},
+      orderBy:[{type:"asc"},{name:"asc"}],
+    });
+    response.json({data:locations});
+  } catch (error) { next(error); }
+});
+
 memberRouter.get("/", async (request, response, next) => {
   try {
     const tenantId = request.auth!.tenantId!;
