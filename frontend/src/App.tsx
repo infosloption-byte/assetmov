@@ -403,6 +403,13 @@ function App() {
   }
 
   if (recoveryMode) return <AccountRecoveryPage/>;
+  // Do not render a protected deep link using a temporary anonymous or
+  // previously selected tenant while the session is still being restored.
+  if (sessionLoading && isProtectedRoute(route)) {
+    return <main className="route-access-message" role="status">
+      <h1>Restoring workspace…</h1><p>Checking your session and page access.</p>
+    </main>;
+  }
 
   async function requestEmailVerification(): Promise<void> {
     if (!csrfToken) { setActionError("Please sign in again to verify your email."); return; }
