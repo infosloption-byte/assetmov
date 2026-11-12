@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
+import { readXlsxRows } from "./xlsx-reader";
 
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type RowData = { inventoryNumber: string; title: string; serialNumber: string; notes: string; currentLocationId: string };
@@ -53,12 +54,13 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
     setError("");setRows([]);setProgress(0);
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 512*1024) {
-      setError("CSV file must be smaller than 512 KiB."); return;
+    if (file.size > 2*1024*1024) {
+      setError("The import file must be smaller than 2 MiB."); return;
     }
     try {
-      const text = (await file.text()).replace(/^\uFEFF/, "");
-      const data = parseCsv(text);
+      if(!/\.(csv|xlsx)$/i.test(file.name)) throw new Error("Choose a .csv or .xlsx file.");
+      const data = /\.xlsx$/i.test(file.name) ? await readXlsxRows(file) :
+        parseCsv((await file.text()).replace(/^\uFEFF/, ""));
       const head = data.shift()?.map(cell => cell.trim().replace(/^\uFEFF/,"")) ?? [];
       if (!head.includes("title") || head.some(h => !keys.includes(h as keyof RowData)) ||
           new Set(head).size !== head.length) {
@@ -84,7 +86,18 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
           result: "ready" as const, detail: "" };
       });
       if (parsed.length === 0) throw new Error("There are no asset rows in this file.");
-      setRows(parsed);
+      // Reconcile explicit inventory numbers against this company's existing
+      // register before the user starts importing. Final creation still checks.
+      const response=await fetch(api+"/assets/import/preview",{
+        method:"POST",credentials:"include",
+        headers:{"X-Tenant-Id":tenantId,"X-CSRF-Token":csrfToken,"Content-Type":"application/json"},
+        body:JSON.stringify({inventoryNumbers:parsed.map(row=>row.data.inventoryNumber)}),
+      });
+      if(!response.ok) throw new Error("Could not verify duplicates against this company's register.");
+      const preview=await response.json() as {data:{issues:Array<{index:number;duplicate:boolean}>}};
+      const duplicates=new Set(preview.data.issues.filter(item=>item.duplicate).map(item=>item.index));
+      setRows(parsed.map((row,index)=>duplicates.has(index)
+        ? {...row,problem:row.problem||"Inventory number already registered in this workspace."} : row));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not parse the CSV file.");
     }
@@ -128,17 +141,35 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
     } finally { setBusy(false); }
   }
 
+  function downloadResults() {
+    if(!rows.length)return;
+    const escape=(value:string|number)=>'"'+String(value).replaceAll('"','""')+'"';
+    const header=["row","inventoryNumber","title","serialNumber","location","result","details"];
+    const content=[header.map(escape).join(","),
+      ...rows.map(row=>[row.index,row.data.inventoryNumber,row.data.title,
+        row.data.serialNumber,row.data.currentLocationId||fallbackLocation,row.result,
+        row.problem||row.detail].map(escape).join(","))].join("\r\n");
+    const blob=new Blob([content],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;link.download="assetmov-import-results.csv";
+    document.body.appendChild(link);link.click();link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   const ready = rows.filter(row => row.result !== "imported" && !row.problem).length;
   return <div className="modal-backdrop" role="presentation">
     <section className="asset-modal asset-import-panel" role="dialog" aria-modal="true" aria-labelledby="assetImportTitle"
       style={{width:"min(96vw,1100px)",maxHeight:"90vh",overflow:"auto"}}>
       <div className="asset-modal-heading">
-        <h2 id="assetImportTitle">Import asset register (CSV)</h2>
+        <h2 id="assetImportTitle">Import asset register (CSV / XLSX)</h2>
         <button type="button" className="modal-close" aria-label="Close import" disabled={busy} onClick={onClose}>×</button>
       </div>
-      <p className="asset-inline-hint">Up to 100 rows per import. Header: inventoryNumber,title,serialNumber,notes,currentLocationId. Leave inventoryNumber empty to auto-generate a unique number. Existing company access and quota rules apply.</p>
-      <label>CSV file (.csv, 512 KiB maximum)
-        <input type="file" accept=".csv,text/csv" disabled={busy} onChange={event=>void pick(event)}/>
+      <p className="asset-inline-hint">Import up to 100 records from CSV or the first sheet of an XLSX workbook.
+        Required column: title. Optional: inventoryNumber, serialNumber, notes, currentLocationId.
+        Leave inventoryNumber empty for automatic numbering. Duplicates are checked before import.</p>
+      <label>CSV or XLSX file (2 MiB maximum)
+        <input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} onChange={event=>void pick(event)}/>
       </label>
       <div className="import-location-control">
         <label>Default location for rows without currentLocationId</label>
@@ -161,6 +192,8 @@ export default function AssetImportPanel({ tenantId, csrfToken, allLocationsAcce
         </div>
       </>}
       <div className="asset-modal-actions">
+        {rows.length>0 && <button className="topbar-button ghost" type="button"
+          disabled={busy} onClick={downloadResults}>Download row results CSV</button>}
         <button className="plain-button" type="button" disabled={busy} onClick={onClose}>Close</button>
         <button className="primary-button" type="button" disabled={busy || ready === 0} onClick={()=>void importValidRows()}>
           {busy ? "Importing…" : "Import " + ready + " ready assets"}
