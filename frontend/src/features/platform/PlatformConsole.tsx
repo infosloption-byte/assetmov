@@ -7,9 +7,7 @@ import {
 } from "./PlatformPages";
 import "./platform-console.css";
 
-export type PlatformPage =
-  | "overview" | "companies" | "users" | "reports"
-  | "activities" | "billing" | "plans" | "settings";
+import type { PlatformPage } from "../../navigation/routes";
 
 type Props = {
   user: AuthUser;
@@ -18,6 +16,8 @@ type Props = {
   onCompanySwitch: () => void;
   onSignOut: () => void;
   error?: string;
+  page: PlatformPage;
+  onNavigate: (page: PlatformPage) => void;
 };
 
 const navigation: Array<{ label: string; items: Array<{ id: PlatformPage; label: string; symbol: string }> }> = [
@@ -51,9 +51,8 @@ const headings: Record<PlatformPage, { heading: string; description: string }> =
 };
 
 export default function PlatformConsole({
-  user, csrfToken, apiHealth, onCompanySwitch, onSignOut, error,
+  user, csrfToken, apiHealth, onCompanySwitch, onSignOut, error, page, onNavigate,
 }: Props) {
-  const [page, setPage] = useState<PlatformPage>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -85,7 +84,7 @@ export default function PlatformConsole({
   }, [mobileOpen]);
   const heading = headings[page];
   const navigate = (next: PlatformPage) => {
-    setPage(next); setMobileOpen(false);
+    onNavigate(next); setMobileOpen(false);
   };
   const initials = user.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map(chunk => chunk[0]?.toUpperCase() ?? "").join("") || "PA";
