@@ -277,7 +277,7 @@ function App() {
     return () => controller.abort();
   }, [user?.id, activeTenantId, billingEpoch]);
 
-  // Platform navigation uses platformMode, never a "platform" company page.
+  // Platform navigation is URL-driven and never grants tenant access.
   // Re-query when the selected workspace or its location permissions change.
   useEffect(() => {
     if (
@@ -590,13 +590,14 @@ function App() {
             <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setPasswordDialog(false)}>Cancel</button><button className="primary-button" disabled={passwordBusy} type="submit">Update password</button></div>
           </form></section></div>}
         {displayedError && <div className="action-error" role="alert">{displayedError}</div>}
+        {billingError && billingStatus?.allowed && <div className="action-error" role="status">Unable to refresh subscription status. Your work remains open; retry from Billing &amp; Plan.</div>}
         {accountNotice && <div className="asset-success" role="status">{accountNotice}</div>}
 
-        {user && activeTenantId && (billingLoading || !billingStatus && !billingError) ? (
+        {user && activeTenantId && !billingStatus && !billingError ? (
           <div className="billing-gate" role="status"><div className="billing-gate-body">
             <h2>Checking company subscription…</h2><p>Verifying active trial or Paddle billing status with the API.</p>
           </div></div>
-        ) : user && activeTenantId && (billingError || billingStatus?.allowed === false) &&
+        ) : user && activeTenantId && ((billingError && !billingStatus) || billingStatus?.allowed === false) &&
           activePage !== "billing" ? (
           <section className="billing-gate" aria-label="Subscription attention required">
             <div className="billing-gate-body">
