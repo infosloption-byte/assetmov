@@ -18,6 +18,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [locations, setLocations] = useState<Location[]>([]);
   const [editingScope, setEditingScope] = useState<Member | null>(null);
   const [editingProfile, setEditingProfile] = useState<Member | null>(null);
+  const [resettingPasswordFor, setResettingPasswordFor] = useState<Member | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage>({ activeUsers: 0, maxActiveUsers: null });
@@ -158,6 +159,9 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
           <td><strong>{member.user.fullName}</strong><div>{member.user.email}</div>
             <button type="button" className="text-button" onClick={() => setEditingProfile(member)}>Edit name</button>
+            {member.isActive && member.user.id !== currentUserId && member.role.key !== "TENANT_OWNER" &&
+              <button type="button" className="text-button" disabled={busy}
+                onClick={() => setResettingPasswordFor(member)}>Reset password</button>}
             {!member.user.emailVerifiedAt && member.isActive &&
               <button type="button" className="text-button" disabled={busy} onClick={() => {
                 void run(() => call("/members/" + member.id + "/invitation", "POST", {}),
@@ -204,6 +208,43 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           void (async () => { const ok = await run(item.execute, item.success); if (ok) setConfirmation(null); })();
         }}>Confirm</button></div>
     </section></div>}
+    {resettingPasswordFor && <div className="modal-backdrop">
+      <section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="adminPasswordResetTitle">
+        <div className="asset-modal-heading">
+          <h2 id="adminPasswordResetTitle">Reset company user password</h2>
+          <button type="button" className="modal-close" aria-label="Close reset form"
+            onClick={() => setResettingPasswordFor(null)}>×</button>
+        </div>
+        <p className="asset-inline-hint">For {resettingPasswordFor.user.fullName}. All existing sessions will be signed out.
+          Share the temporary password through a private, trusted channel—not through a group chat.</p>
+        <form className="asset-create-form" onSubmit={event => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const password = String(data.get("temporaryPassword") ?? "");
+          if (password !== String(data.get("confirmation") ?? "")) {
+            setError("Temporary passwords do not match."); return;
+          }
+          const reason = String(data.get("reason") ?? "").trim();
+          void (async () => {
+            const ok = await run(() => call("/members/" + resettingPasswordFor.id + "/password/reset",
+              "POST", {temporaryPassword:password, reason}),
+              "User password updated and all existing sessions revoked.");
+            if (ok) setResettingPasswordFor(null);
+          })();
+        }}>
+          <label>Temporary password<input type="password" name="temporaryPassword" autoComplete="new-password"
+            minLength={12} maxLength={128} placeholder="At least 12 characters" required/></label>
+          <label>Confirm temporary password<input type="password" name="confirmation" autoComplete="new-password"
+            minLength={12} maxLength={128} required/></label>
+          <label>Reason for password reset<textarea name="reason" minLength={8} maxLength={1000} rows={2}
+            placeholder="e.g. Employee lost access to their account" required/></label>
+          <div className="asset-modal-actions">
+            <button className="plain-button" type="button" onClick={() => setResettingPasswordFor(null)}>Cancel</button>
+            <button className="primary-button" disabled={busy} type="submit">Reset and revoke sessions</button>
+          </div>
+        </form>
+      </section>
+    </div>}
     {editingProfile && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
       <div className="asset-modal-heading"><h2 id="profileTitle">Edit user profile</h2><button className="modal-close" type="button" onClick={() => setEditingProfile(null)}>×</button></div>
       <form className="asset-create-form" onSubmit={event => {
