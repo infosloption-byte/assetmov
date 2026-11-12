@@ -303,11 +303,27 @@ model Employee {
   sentTransactions AssetTransaction[] @relation("TransactionFromEmployee")
   receivedTransactions AssetTransaction[] @relation("TransactionToEmployee")
   licenseAssignments LicenseAssignment[] @relation("LicenseAssignee")
+  locationHistory EmployeeLocationHistory[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, id])
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, homeLocationId])
+}
+
+
+model EmployeeLocationHistory {
+  id             String @id @default(cuid()) @db.VarChar(36)
+  tenantId       String @db.VarChar(36)
+  employeeId     String @db.VarChar(36)
+  previousLocationId String? @db.VarChar(36)
+  newLocationId      String? @db.VarChar(36)
+  actorUserId    String @db.VarChar(36)
+  reason         String @db.VarChar(300)
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId, createdAt])
 }
 
 model AssetCategory {
