@@ -6,7 +6,7 @@
  * The API remains responsible for permission enforcement.
  */
 export const workspacePages = [
-  "overview", "assets", "transfers", "employees", "locations",
+  "overview", "assets", "transfers", "requests", "employees", "locations",
   "company", "profile", "masterData", "billing",
 ] as const;
 export type WorkspacePage = (typeof workspacePages)[number];
@@ -25,7 +25,7 @@ export type AppRoute =
 
 const workspaceSlugs: Record<WorkspacePage, string> = {
   overview: "overview", assets: "assets", transfers: "transfers",
-  employees: "employees", locations: "locations", company: "users",
+  employees: "employees", locations: "locations", requests: "requests", company: "users",
   profile: "profile", masterData: "master-data", billing: "billing",
 };
 
