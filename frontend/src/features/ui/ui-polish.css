@@ -443,3 +443,52 @@
 .route-access-message h1 { font: 800 clamp(24px, 4vw, 34px)/1.2 Manrope, sans-serif; }
 .route-access-message p { max-width: 540px; line-height: 1.65; color: #718175; }
 .route-access-message .primary-button { text-decoration: none; }
+
+
+/* Workspace sidebar: the fixed desktop rail must scroll when its menu exceeds
+   the browser height (short screens, zoom, and additional permissioned links).
+   Keep all entries and the help/footer reachable with mouse, touch or keyboard. */
+@media (min-width: 781px) {
+  .sidebar {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #c4d6c8 transparent;
+  }
+  .sidebar > .brand,
+  .sidebar > .workspace-label,
+  .sidebar > .side-nav,
+  .sidebar > .sidebar-bottom {
+    flex-shrink: 0;
+  }
+  .sidebar .sidebar-bottom { padding-top: 16px; }
+  .sidebar::-webkit-scrollbar { width: 7px; }
+  .sidebar::-webkit-scrollbar-thumb {
+    background: #c4d6c8;
+    border: 2px solid #fff;
+    border-radius: 100px;
+  }
+  .sidebar::-webkit-scrollbar-thumb:hover { background: #93ad9b; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar .nav-item:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: -2px;
+  }
+}
+/* Preserve the existing horizontal-scroll navigation below the mobile breakpoint. */
+@media (max-width: 780px) {
+  .sidebar {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+  .sidebar .side-nav {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
