@@ -1134,3 +1134,32 @@ assetRouter.post("/bulk-assign", requireSession, requireTenant,
     }
   },
 );
+
+const importPreviewSchema = z.object({
+  inventoryNumbers:z.array(z.string().trim().max(191)).max(100),
+}).strict();
+
+/** Dry-run duplicate reconciliation. The create endpoint remains the final
+ * concurrency-safe authority and can still return a 409 if another user wins. */
+assetRouter.post("/import/preview", requireSession, requireTenant,
+  requirePermission("asset.import"), requireCsrf, async(request,response,next)=>{
+    const parsed=importPreviewSchema.safeParse(request.body);
+    if(!parsed.success || !(request.auth?.permissions??[]).includes("asset.read")) {
+      sendError(response,400,"VALIDATION_ERROR","Invalid import preview or missing asset visibility.");
+      return;
+    }
+    try {
+      const tenantId=request.auth!.tenantId!;
+      const identifiers=[...new Set(parsed.data.inventoryNumbers.filter(Boolean))];
+      const existing=await prisma.asset.findMany({
+        where:{tenantId,inventoryNumber:{in:identifiers}},
+        select:{inventoryNumber:true,id:true},
+      });
+      const registered=new Set(existing.map(a=>a.inventoryNumber.toUpperCase()));
+      const issues=parsed.data.inventoryNumbers.map((value,index)=>({
+        index,duplicate:Boolean(value)&&registered.has(value.toUpperCase()),
+      }));
+      response.json({data:{issues}});
+    }catch(error){next(error);}
+  },
+);
