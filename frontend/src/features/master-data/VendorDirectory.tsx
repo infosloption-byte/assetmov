@@ -102,7 +102,7 @@ export default function VendorDirectory({ tenantId, csrfToken, permissions, kind
     {error && <div className="asset-inline-error" role="alert">{error}</div>}
     {message && <div className="asset-success" role="status">{message}</div>}
     {!canRead && <p>Asset read permission is required to view these records.</p>}
-    {canRead && <div className="asset-table-wrap">
+    {canRead && <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table">
       <table className="asset-table master-data-table">
         <thead><tr><th>Name</th>
           {kind === "suppliers" && <><th>Email</th><th>Phone</th></>}
