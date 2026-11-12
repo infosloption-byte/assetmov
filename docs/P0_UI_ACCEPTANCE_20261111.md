@@ -48,3 +48,33 @@ npm run build
 ```
 
 Keep the PR in draft until responsive acceptance passes. Do not reset or modify the existing `assetmov` database for CSS-only testing.
+
+
+## Fixed-height company sidebar regression — November 12, 2026
+
+User screenshot shows the authenticated company sidebar exceeding viewport height:
+the lower navigation links and help card are inaccessible because the desktop
+`.sidebar` was `position: fixed` with no vertical overflow policy.
+
+- Desktop (>780px): the fixed sidebar now scrolls **within its own viewport**
+  using `overflow-y: auto`, `height: 100dvh` (100vh fallback), visible slim
+  scrollbar, and non-shrinking branding/nav/footer sections.
+- Tablet and phone (<=780px): preserve the existing horizontal navigation
+  rail; no constrained vertical sidebar height.
+
+### Browser acceptance
+1. At 1440×900 and a 1366×768 viewport, sign in as Company Administrator.
+   Mouse-wheel over the **left sidebar**. Reach Billing & Plan, the help card,
+   and the version line without scrolling the main content.
+2. With the mouse over the main page, scroll the page: the desktop sidebar
+   remains fixed. Repeated wheel/trackpad scrolling over the menu works normally.
+3. Test a short-height browser (e.g. 900×550) and browser zoom 125%, 150% and
+   200%. All menu links stay reachable and the selected page remains legible.
+4. Use Tab/Shift+Tab with keyboard only: focusing an off-screen sidebar link
+   scrolls it into view; focus ring is visible.
+5. At 768px and 390px viewport widths, the sidebar becomes a horizontal
+   scrolling navigation rail, with no forced vertical scrollbar.
+
+**Verification state:** CSS fix committed but not yet confirmed on the local
+browser; automated TypeScript/lint/build for subsequent navigation commits also
+require a fresh WAMP run. No database changes are involved.
