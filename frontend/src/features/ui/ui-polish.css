@@ -427,3 +427,19 @@
   .asset-search-panel .asset-search-actions .asset-search-form { width: 100%; flex-basis: 100%; }
   .asset-search-panel .asset-search-actions > .topbar-button { align-self: flex-start; }
 }
+
+
+/* Link semantics for URL-backed navigation, retaining existing button theme. */
+.side-nav a.nav-item,
+.platform-nav a.platform-nav-item {
+  text-decoration: none;
+}
+.platform-nav a.platform-nav-item { cursor: pointer; }
+.route-access-message {
+  display: grid; place-content: center; justify-items: start; gap: 16px;
+  min-height: 60dvh; padding: clamp(24px, 6vw, 64px);
+  color: #3f5848;
+}
+.route-access-message h1 { font: 800 clamp(24px, 4vw, 34px)/1.2 Manrope, sans-serif; }
+.route-access-message p { max-width: 540px; line-height: 1.65; color: #718175; }
+.route-access-message .primary-button { text-decoration: none; }
