@@ -444,6 +444,15 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     assert.equal(testEmployeeResponse.status,201);
     const testEmployee = await testEmployeeResponse.json() as {data:{id:string}};
+    const initialLocationHistory = await fetch(
+      `${baseUrl}/api/employees/${testEmployee.data.id}/location-history`,{
+        headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id}),
+      });
+    assert.equal(initialLocationHistory.status,200);
+    assert.ok((await initialLocationHistory.json() as {
+      data:Array<{newLocation:string;reason:string}>
+    }).data.some(e=>e.reason==="Initial employee location"));
+
     const bulk = await fetch(`${baseUrl}/api/assets/bulk-assign`,{
       method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
         csrfToken:ownerA.csrfToken,json:true,origin:true}),
@@ -502,6 +511,19 @@ test("registration, session security, tenant isolation, locations and assets wor
     });
     assert.equal(automaticAsset.status,201,"Automatically numbered assets should be accepted.");
     const automaticBody = await automaticAsset.json() as {data:{id:string;inventoryNumber:string}};
+    const duplicatePreview = await fetch(`${baseUrl}/api/assets/import/preview`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({inventoryNumbers:[automaticBody.data.inventoryNumber,
+        "CT-NOT-EXISTENT",""]}),
+    });
+    assert.equal(duplicatePreview.status,200);
+    const previewBody=await duplicatePreview.json() as {
+      data:{issues:Array<{index:number;duplicate:boolean}>}
+    };
+    assert.equal(previewBody.data.issues[0]?.duplicate,true);
+    assert.equal(previewBody.data.issues[1]?.duplicate,false);
+
     assert.match(automaticBody.data.inventoryNumber,/^SL-AM-[0-9]{6,}$/);
     // Preserve existing integration expectations (two retained test assets).
     await prisma.assetTransaction.deleteMany({where:{tenantId:ownerA.tenant.id,assetId:automaticBody.data.id}});
