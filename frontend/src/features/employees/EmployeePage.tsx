@@ -7,6 +7,7 @@ interface LocationItem {
   id: string;
   name: string;
   code: string;
+  type: string;
 }
 
 interface EmployeeItem {
@@ -51,6 +52,12 @@ function EmployeePage({
 }: EmployeePageProps) {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
+  const [createLocationType, setCreateLocationType] = useState("");
+  const [editLocationType, setEditLocationType] = useState("");
+  const [editedHomeLocationId, setEditedHomeLocationId] = useState("");
+  const [locationHistory, setLocationHistory] = useState<Array<{
+    id:string;createdAt:string;reason:string;previousLocation:string;newLocation:string;
+  }>>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationsError, setLocationsError] = useState("");
@@ -228,6 +235,9 @@ function EmployeePage({
       const value = String(formData.get(field) ?? "").trim();
       if (value) body[field] = value;
     }
+    if (editedHomeLocationId !== (editingEmployee.homeLocationId ?? "")) {
+      body.locationChangeReason = String(formData.get("locationChangeReason") ?? "").trim();
+    }
 
     body.isActive = formData.get("isActive") === "on";
 
@@ -268,7 +278,7 @@ function EmployeePage({
           <h1 className="asset-page-title">Employees</h1>
           <p>Maintain employee and custodian records, their home locations, and how many assets are currently assigned to them.</p>
         </div>
-        {canManage && <button className="primary-button" type="button" onClick={() => { setCreateError(""); setShowCreate(true); }}>Add employee <span>＋</span></button>}
+        {canManage && <button className="primary-button" type="button" onClick={() => { setCreateError(""); setCreateLocationType(""); setShowCreate(true); }}>Add employee <span>＋</span></button>}
       </div>
 
       <div className="asset-register-toolbar">
@@ -301,7 +311,17 @@ function EmployeePage({
                 <td>{employee.homeLocation ? <>{employee.homeLocation.name}<span className="asset-number">{employee.homeLocation.code}</span></> : "Not assigned"}</td>
                 <td>{employee._count?.assignedAssets ?? 0}</td>
                 <td><span className={"asset-status-badge " + (employee.isActive ? "available" : "retired")}>{employee.isActive ? "Active" : "Inactive"}</span></td>
-                <td>{canManage && <button className="row-open-button" type="button" aria-label={"Edit " + employee.firstName + " " + employee.lastName} onClick={() => { setEditingEmployee(employee); setEditError(""); }}>✎</button>}</td>
+                <td>{canManage && <button className="row-open-button" type="button" aria-label={"Edit " + employee.firstName + " " + employee.lastName} onClick={() => {
+                  setEditingEmployee(employee); setEditError("");
+                  setEditedHomeLocationId(employee.homeLocationId ?? "");
+                  setEditLocationType(locations.find(l=>l.id===employee.homeLocationId)?.type ?? "");
+                  setLocationHistory([]);
+                  if (tenantId) void fetch(apiBaseUrl+"/employees/"+employee.id+"/location-history",{
+                    credentials:"include",headers:{"X-Tenant-Id":tenantId},
+                  }).then(response=>response.ok ? response.json():{data:[]})
+                    .then(payload=>setLocationHistory(payload.data ?? []))
+                    .catch(()=>setLocationHistory([]));
+                }}>✎</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -329,8 +349,16 @@ function EmployeePage({
                 <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer"/></label>
                 <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent"/></label>
               </div>
+              <label>Location type</label>
+              <ThemeSelect label="Select employee location type" value={createLocationType} onChange={setCreateLocationType}
+                options={[{value:"",label:"Choose location type"},...
+                  [...new Set(manageableLocations.map(l=>l.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
               <label htmlFor="employeeHomeLocation">Home location {!allLocationsAccess && <span>*</span>}</label>
-              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
+              <ThemeSelect key={createLocationType} label="Employee home location" name="homeLocationId"
+                defaultValue="" required={!allLocationsAccess}
+                options={[{value:"",label:"Choose location"},...manageableLocations
+                  .filter(l=>l.type===createLocationType)
+                  .map(location=>({value:location.id,label:location.name+" ("+location.code+")"}))]}/>
               {!allLocationsAccess && manageableLocations.length === 0 && <p className="asset-inline-hint">You need a manageable location to add an employee. Ask an administrator to grant location access.</p>}
               {createError && <div className="asset-inline-error" role="alert">{createError}</div>}
               <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="primary-button" type="submit" disabled={creating || locationsLoading || (!allLocationsAccess && manageableLocations.length === 0)}>{creating ? "Saving…" : "Save employee"} {!creating && <span>↗</span>}</button></div>
@@ -358,8 +386,27 @@ function EmployeePage({
                 <label>Designation<input name="designation" maxLength={100} placeholder="e.g. IT Officer" defaultValue={editingEmployee.designation ?? ""}/></label>
                 <label>Employee type<input name="employeeType" maxLength={100} placeholder="e.g. Permanent" defaultValue={editingEmployee.employeeType ?? ""}/></label>
               </div>
+              <label>Location type</label>
+              <ThemeSelect label="Edit employee location type" value={editLocationType}
+                onChange={value=>{setEditLocationType(value);setEditedHomeLocationId("");}}
+                options={[{value:"",label:"Choose location type"},...
+                  [...new Set(manageableLocations.map(l=>l.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
               <label htmlFor="editEmployeeHomeLocation">Home location</label>
-              <ThemeSelect label="Employee home location" name="homeLocationId" defaultValue={editingEmployee.homeLocationId ?? ""} required={!allLocationsAccess} options={[{value:"",label:"No home location"}, ...manageableLocations.map(location => ({ value:location.id, label:location.name + " (" + location.code + ")" }))]}/>
+              <ThemeSelect label="Employee home location" value={editedHomeLocationId}
+                name="homeLocationId" onChange={setEditedHomeLocationId} required={!allLocationsAccess}
+                options={[{value:"",label:"Choose location"},...manageableLocations.filter(
+                  l=>l.type===editLocationType || l.id===editingEmployee.homeLocationId,
+                ).map(l=>({value:l.id,label:l.name+" ("+l.code+")"}))]}/>
+              {editedHomeLocationId !== (editingEmployee.homeLocationId ?? "") &&
+                <label>Reason for moving employee<input name="locationChangeReason"
+                  placeholder="e.g. Transferred to another branch" minLength={8} maxLength={300} required/></label>}
+              {locationHistory.length > 0 && <section className="employee-location-history">
+                <strong>Location history</strong>
+                <ol>{locationHistory.map(item=><li key={item.id}>
+                  <span>{item.previousLocation} → {item.newLocation}</span>
+                  <small>{new Date(item.createdAt).toLocaleString()} · {item.reason}</small>
+                </li>)}</ol>
+              </section>}
               <label className="status-toggle"><input type="checkbox" role="switch" name="isActive" defaultChecked={editingEmployee.isActive}/> Active employee</label>
               <p className="asset-inline-hint">Employees with assigned assets cannot be deactivated until custody is transferred or returned.</p>
               {editError && <div className="asset-inline-error" role="alert">{editError}</div>}
