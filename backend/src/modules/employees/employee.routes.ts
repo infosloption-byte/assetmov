@@ -34,6 +34,7 @@ const employeeUpdateSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(191).optional(),
   phone: z.string().trim().max(50).optional(),
   homeLocationId: z.string().trim().min(1).optional(),
+  locationChangeReason: z.string().trim().min(8).max(300).optional(),
   isActive: z.boolean().optional(),
 }).strict().refine((input) => Object.values(input).some((value) => value !== undefined), {
   message: "Provide at least one field to update.",
@@ -232,6 +233,11 @@ employeeRouter.post(
           include: employeeInclude,
         });
 
+        await tx.employeeLocationHistory.create({ data: {
+          tenantId, employeeId: employee.id, actorUserId,
+          previousLocationId: null, newLocationId: employee.homeLocationId,
+          reason: "Initial employee location",
+        } });
         await tx.auditLog.create({
           data: {
             tenantId,
@@ -318,6 +324,15 @@ employeeRouter.patch(
           if (!location) throw new Error("EMPLOYEE_LOCATION_INVALID");
         }
 
+        const movingLocation = input.homeLocationId !== undefined &&
+          input.homeLocationId !== existing.homeLocationId;
+        if (movingLocation) {
+          if (!input.locationChangeReason) throw new Error("LOCATION_CHANGE_REASON_REQUIRED");
+          const assignedAssets = await tx.asset.count({
+            where:{tenantId,assignedEmployeeId:existing.id},
+          });
+          if (assignedAssets > 0) throw new Error("EMPLOYEE_HAS_ASSIGNED_ASSETS");
+        }
         // Deactivation cannot silently orphan custody. Return the employee's
         // assets to stock (or transfer custody) before making them inactive.
         if (input.isActive === false && existing.isActive) {
@@ -349,6 +364,14 @@ employeeRouter.patch(
           include: employeeInclude,
         });
 
+        if (movingLocation) {
+          await tx.employeeLocationHistory.create({ data: {
+            tenantId, employeeId:updated.id, actorUserId,
+            previousLocationId:existing.homeLocationId,
+            newLocationId:updated.homeLocationId,
+            reason:input.locationChangeReason!,
+          } });
+        }
         await tx.auditLog.create({
           data: {
             tenantId,
@@ -393,6 +416,11 @@ employeeRouter.patch(
       }
       if (error instanceof Error && error.message === "EMPLOYEE_LOCATION_SCOPE_DENIED") {
         sendError(response, 403, "LOCATION_ACCESS_DENIED", "You must manage both the current and new location to move an employee.");
+        return;
+      }
+      if (error instanceof Error && error.message === "LOCATION_CHANGE_REASON_REQUIRED") {
+        sendError(response, 400, "LOCATION_CHANGE_REASON_REQUIRED",
+          "Explain why this employee is changing home locations.");
         return;
       }
       if (error instanceof Error && error.message === "EMPLOYEE_HAS_ASSIGNED_ASSETS") {
