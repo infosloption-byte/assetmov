@@ -657,7 +657,7 @@ function AssetRegisterPage({ tenantId, csrfToken, permissions, allLocationsAcces
         <div className="asset-heading-actions">
           {canCreate && <button className="primary-button" type="button" onClick={() => { setShowCreate(true); setCreateError(""); }}>Register asset <span>＋</span></button>}
           {canCreate && permissions.includes("asset.import") && canReadLocations && csrfToken &&
-            <button className="topbar-button ghost" type="button" onClick={() => setImportOpen(true)}>Import CSV</button>}
+            <button className="topbar-button ghost" type="button" onClick={() => setImportOpen(true)}>Import CSV / XLSX</button>}
         </div>
       </div>
 
