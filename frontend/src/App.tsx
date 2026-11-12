@@ -6,6 +6,7 @@ import AssetRegisterPage from "./features/assets/AssetRegisterPage";
 import LocationsPage from "./features/locations/LocationsPage";
 import TransferPage from "./features/transfers/TransferPage";
 import EmployeePage from "./features/employees/EmployeePage";
+import RequestsPage from "./features/requests/RequestsPage";
 import CompanyAdminPage from "./features/company/CompanyAdminPage";
 import CompanyProfilePage from "./features/company/CompanyProfilePage";
 import MasterDataPage from "./features/master-data/MasterDataPage";
@@ -564,6 +565,7 @@ function App() {
           {(!user || canSee("overview")) && <a className={"nav-item " + (activePage === "overview" ? "active" : "")} href={pageHref("overview")} aria-current={activePage === "overview" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "overview")}><span className="nav-icon">▦</span> Overview</a>}
           {(!user || canSee("assets")) && <a className={"nav-item " + (activePage === "assets" ? "active" : "")} href={pageHref("assets")} aria-current={activePage === "assets" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "assets")}><span className="nav-icon">◫</span> Asset register</a>}
           {(!user || canSee("transfers")) && <a className={"nav-item " + (activePage === "transfers" ? "active" : "")} href={pageHref("transfers")} aria-current={activePage === "transfers" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</a>}
+          {user && canSee("requests") && <a className={"nav-item " + (activePage === "requests" ? "active" : "")} href={pageHref("requests")} aria-current={activePage === "requests" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "requests")}><span className="nav-icon">☷</span> Requests & approvals</a>}
           {(!user || canSee("employees")) && <a className={"nav-item " + (activePage === "employees" ? "active" : "")} href={pageHref("employees")} aria-current={activePage === "employees" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "employees")}><span className="nav-icon">♙</span> Employees</a>}
           {(!user || canSee("locations")) && <a className={"nav-item " + (activePage === "locations" ? "active" : "")} href={pageHref("locations")} aria-current={activePage === "locations" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "locations")}><span className="nav-icon">⌂</span> Locations</a>}
           </>}
@@ -594,7 +596,7 @@ function App() {
           <button ref={mobileMenuTriggerRef} type="button" className="mobile-menu-trigger" aria-controls="workspace-sidebar"
             aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(open => !open)}>☰</button>
-          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
+          <div className="breadcrumb"><span>{currentTenant?.name ?? "Workspace"}</span><b>/</b><strong>{activePage === "assets" ? "Asset register" : activePage === "locations" ? "Locations" : activePage === "transfers" ? "Transfers & receipts" : activePage === "requests" ? "Requests & approvals" : activePage === "employees" ? "Employees" : activePage === "company" ? "Users & roles" : activePage === "profile" ? "Company profile" : activePage === "masterData" ? "Master data" : activePage === "billing" ? "Billing & Plan" : "Overview"}</strong></div>
           <div className="topbar-right">
             <div className={"api-pill " + apiHealth}><span className="status-dot" />{apiHealth === "checking" ? "Checking API" : apiHealth === "online" ? "API connected" : "API not connected"}</div>
             {sessionLoading ? (
@@ -697,6 +699,9 @@ function App() {
             allLocationsAccess={activeWorkspaceContext?.membership.allLocationsAccess ?? selectedMembership?.allLocationsAccess ?? false}
             manageableLocationIds={activeWorkspaceContext?.locationScope.manageableLocationIds ?? []}
           />
+        ) : activePage === "requests" ? (
+          <RequestsPage tenantId={activeTenantId} csrfToken={csrfToken}
+            permissions={activeWorkspaceContext?.permissions ?? []} currentUserId={user?.id ?? null}/>
         ) : activePage === "transfers" ? (
           <TransferPage
             tenantId={activeTenantId}

@@ -7,7 +7,7 @@ import {
 test("company pages have canonical, refresh-safe addresses", () => {
   const expected = {
     overview: "overview", assets: "assets", transfers: "transfers",
-    employees: "employees", locations: "locations", company: "users",
+    employees: "employees", locations: "locations", requests: "requests", company: "users",
     profile: "profile", masterData: "master-data", billing: "billing",
   } as const;
   for (const page of workspacePages) {

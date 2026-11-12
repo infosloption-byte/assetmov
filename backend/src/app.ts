@@ -14,6 +14,7 @@ import { assetRouter } from "./modules/assets/asset.routes.js";
 import { locationRouter } from "./modules/locations/location.routes.js";
 import { transferRouter } from "./modules/transfers/transfer.routes.js";
 import { employeeRouter } from "./modules/employees/employee.routes.js";
+import { requestRouter } from "./modules/requests/request.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
 import { platformConsoleRouter } from "./modules/platform/platform-console.routes.js";
 import { memberRouter } from "./modules/members/member.routes.js";
@@ -94,6 +95,7 @@ app.use("/api/assets", assetRouter);
 app.use("/api/locations", locationRouter);
 app.use("/api/transfers", transferRouter);
 app.use("/api/employees", employeeRouter);
+app.use("/api/requests", requestRouter);
 
 app.use((_request, response) => {
   response.status(404).json({

@@ -177,6 +177,32 @@ test("registration, session security, tenant isolation, locations and assets wor
 
     const ownerA = await register(0);
     const ownerB = await register(1);
+    // P1 request workflow: tenant isolation and no self-approval.
+    const submitRequest=await fetch(`${baseUrl}/api/requests`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({requestType:"ASSET",businessReason:"New employee requires a laptop",
+        items:[{itemType:"ASSET",description:"Managed company laptop",quantity:1}]}),
+    });
+    assert.equal(submitRequest.status,201);
+    const submitted=await submitRequest.json() as {data:{id:string;status:string}};
+    assert.equal(submitted.data.status,"PENDING");
+    const crossTenantRequest=await fetch(`${baseUrl}/api/requests/${submitted.data.id}`,{
+      headers:requestHeaders({cookie:ownerB.cookie,tenantId:ownerB.tenant.id}),
+    });
+    assert.equal(crossTenantRequest.status,404);
+    const selfApproval=await fetch(`${baseUrl}/api/requests/${submitted.data.id}/decision`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),
+      body:JSON.stringify({decision:"APPROVED",reason:"Cannot approve my own request"}),
+    });
+    assert.equal(selfApproval.status,409);
+    const cancelledRequest=await fetch(`${baseUrl}/api/requests/${submitted.data.id}/cancel`,{
+      method:"POST",headers:requestHeaders({cookie:ownerA.cookie,tenantId:ownerA.tenant.id,
+        csrfToken:ownerA.csrfToken,json:true,origin:true}),body:"{}",
+    });
+    assert.equal(cancelledRequest.status,200);
+
 
     const newCategory = await fetch(`${baseUrl}/api/master-data/categories`, {
       method: "POST",
