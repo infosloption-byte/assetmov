@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import AuthPage from "./features/auth/AuthPage";
 import AccountRecoveryPage from "./features/auth/AccountRecoveryPage";
 import type { AuthMode, AuthUser } from "./features/auth/types";
@@ -14,6 +14,7 @@ import CompanyBillingPage from "./features/billing/CompanyBillingPage";
 import "./features/billing/billing.css";
 import ThemeSelect from "./components/ThemeSelect";
 import AccountMenu from "./components/AccountMenu";
+import { appRoutePath, isProtectedRoute, readAppRoute, type AppRoute, type WorkspacePage, type PlatformPage } from "./navigation/routes";
 
 type ApiHealth = "checking" | "online" | "offline";
 type BillingStatus = { allowed: boolean; reason: string | null; isCompanyAdmin: boolean; status: string | null; planName: string | null; trialEndsAt: string | null; periodEndsAt: string | null };
@@ -54,9 +55,9 @@ function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth>("checking");
   const [recoveryMode] = useState(() => ["forgot", "reset", "verify"].includes(new URLSearchParams(window.location.search).get("accountAction") ?? ""));
   const [accountNotice, setAccountNotice] = useState("");
-  const [activePage, setActivePage] = useState<"overview" | "assets" | "locations" | "transfers" | "employees" | "company" | "profile" | "masterData" | "billing">("overview");
+  const [route, setRoute] = useState<AppRoute>(() => readAppRoute(window.location.pathname));
+  const activePage: WorkspacePage = route.kind === "workspace" ? route.page : "overview";
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [platformMode, setPlatformMode] = useState(false);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -76,22 +77,51 @@ function App() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState("");
   const [billingEpoch, setBillingEpoch] = useState(0);
+  const lastBillingTenant = useRef<string | null>(null);
   const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
   const [overviewEpoch, setOverviewEpoch] = useState(0);
   const refreshBilling = useCallback(() => setBillingEpoch(n => n + 1), []);
+  // A passive focus/visibility event must never replace a page or unmount its
+  // in-progress form. Subscription rechecks remain explicit (or after checkout).
+  const navigate = useCallback((next: AppRoute, replace = false, preserveBilling = false) => {
+    const path = appRoutePath(next) + (preserveBilling ? "?billing=pending" : "");
+    if (window.location.pathname + window.location.search !== path) {
+      window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    }
+    setRoute(next);
+  }, []);
+
+  const navigateWorkspace = (page: WorkspacePage, tenantId = activeTenantId) => {
+    const tenant = user?.memberships.find(m => m.tenant.id === tenantId)
+      ?? user?.memberships[0];
+    if (!tenant) {
+      navigate({ kind: "home" });
+      return;
+    }
+    setActiveTenantId(tenant.tenant.id);
+    navigate({ kind: "workspace", tenantSlug: tenant.tenant.slug, page });
+  };
+  const navigatePlatform = (page: PlatformPage) => {
+    if (user?.isPlatformAdmin) navigate({ kind: "platform", page });
+  };
+  const setActivePage = (page: WorkspacePage) => navigateWorkspace(page);
+
+  // popstate is raised for browser Back/Forward only; pushState is handled by
+  // navigate() above. Neither path reloads the document.
   useEffect(() => {
-    const onReturnToApp = () => {
-      if (document.visibilityState === "visible") refreshBilling();
+    const onBackForward = () => {
+      const next = readAppRoute(window.location.pathname);
+      setRoute(next);
+      if (next.kind === "workspace") {
+        const tenant = user?.memberships.find(m => m.tenant.slug === next.tenantSlug);
+        setActiveTenantId(tenant?.tenant.id ?? null);
+      }
     };
-    window.addEventListener("focus", refreshBilling);
-    document.addEventListener("visibilitychange", onReturnToApp);
-    return () => {
-      window.removeEventListener("focus", refreshBilling);
-      document.removeEventListener("visibilitychange", onReturnToApp);
-    };
-  }, [refreshBilling]);
+    window.addEventListener("popstate", onBackForward);
+    return () => window.removeEventListener("popstate", onBackForward);
+  }, [user]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -119,19 +149,32 @@ function App() {
           credentials: "include",
           signal: controller.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (isProtectedRoute(readAppRoute(window.location.pathname))) setAuthMode("login");
+          return;
+        }
 
         const payload = await response.json() as { user?: AuthUser };
         if (!payload.user) return;
 
         setUser(payload.user);
-        // Platform administrators default to their own control plane, not a
-        // tenant/company dashboard. A checkout return stays in company billing.
-        setPlatformMode(payload.user.isPlatformAdmin && !(
-          new URLSearchParams(window.location.search).get("billing") === "pending" &&
-          payload.user.memberships.length > 0
-        ));
-        setActiveTenantId(payload.user.memberships[0]?.tenant.id ?? null);
+        const requestedRoute = readAppRoute(window.location.pathname);
+        const pendingCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
+        const requestedTenant = requestedRoute.kind === "workspace"
+          ? payload.user.memberships.find(m => m.tenant.slug === requestedRoute.tenantSlug)
+          : undefined;
+        const defaultTenant = requestedTenant ?? payload.user.memberships[0];
+        setActiveTenantId(requestedRoute.kind === "workspace"
+          ? requestedTenant?.tenant.id ?? null : defaultTenant?.tenant.id ?? null);
+        if (requestedRoute.kind === "home") {
+          if (pendingCheckout && defaultTenant) {
+            navigate({ kind: "workspace", tenantSlug: defaultTenant.tenant.slug, page: "billing" }, true, true);
+          } else if (payload.user.isPlatformAdmin) {
+            navigate({ kind: "platform", page: "overview" }, true);
+          } else if (defaultTenant) {
+            navigate({ kind: "workspace", tenantSlug: defaultTenant.tenant.slug, page: "overview" }, true);
+          }
+        }
 
         const csrfResponse = await fetch(apiBaseUrl + "/auth/csrf", {
           credentials: "include",
@@ -208,11 +251,18 @@ function App() {
 
   useEffect(() => {
     if (!user?.id || !activeTenantId) {
+      lastBillingTenant.current = null;
       setBillingStatus(null); setBillingLoading(false); setBillingError("");
       return;
     }
     const controller = new AbortController();
-    setBillingStatus(null); setBillingLoading(true); setBillingError("");
+    // Preserve the current screen and its in-progress form during a refresh.
+    // Only a genuine tenant switch clears the previously checked status.
+    if (lastBillingTenant.current !== activeTenantId) {
+      lastBillingTenant.current = activeTenantId;
+      setBillingStatus(null);
+    }
+    setBillingLoading(true); setBillingError("");
     void fetch(apiBaseUrl + "/billing/status", {
       credentials: "include", signal: controller.signal, headers: { "X-Tenant-Id": activeTenantId },
     }).then(async response => {
@@ -226,11 +276,6 @@ function App() {
     }).finally(() => { if (!controller.signal.aborted) setBillingLoading(false); });
     return () => controller.abort();
   }, [user?.id, activeTenantId, billingEpoch]);
-
-  useEffect(() => {
-    const fromCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
-    setActivePage(fromCheckout ? "billing" : "overview");
-  }, [activeTenantId]);
 
   // Platform navigation uses platformMode, never a "platform" company page.
   // Re-query when the selected workspace or its location permissions change.
