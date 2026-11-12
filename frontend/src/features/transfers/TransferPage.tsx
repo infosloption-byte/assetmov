@@ -126,7 +126,7 @@ function TransferPage({
   const [submittingReceipt, setSubmittingReceipt] = useState(false);
 
   const canReadAssets = permissions.includes("asset.read");
-  const canReadLocations = permissions.includes("location.read");
+  const canReadLocations = permissions.some(key => ["location.read","asset.transfer.read","asset.transfer.dispatch","asset.transfer.receive"].includes(key));
   const canDispatch = permissions.includes("asset.transfer.dispatch");
   const canReceive = permissions.includes("asset.transfer.receive");
   const canReadTransfers = permissions.some((permission) => [
@@ -208,7 +208,7 @@ function TransferPage({
     setLocationsLoading(true);
     async function loadLocationOptions() {
       try {
-        const response = await fetch(apiBaseUrl + "/locations", {
+        const response = await fetch(apiBaseUrl + "/workspace/location-options", {
           credentials: "include",
           headers: { "X-Tenant-Id": selectedTenantId },
           signal: controller.signal,
@@ -591,7 +591,7 @@ function TransferPage({
               <div><span className="module-tag">NEW MOVEMENT</span><h2 id="transferDispatchTitle">Dispatch assets</h2><p>Only available assets currently assigned to the chosen origin can be selected.</p></div>
               <button type="button" className="modal-close" aria-label="Close dispatch" onClick={() => setShowDispatch(false)}>×</button>
             </div>
-            {(!canReadAssets || !canReadLocations) && <div className="asset-inline-error" role="alert">Your role needs asset-read and location-read access to prepare a transfer.</div>}
+            {(!canReadAssets || !canReadLocations) && <div className="asset-inline-error" role="alert">Your role needs asset-read and transfer permissions to prepare a dispatch.</div>}
             <form className="asset-create-form" onSubmit={(event) => void dispatchTransfer(event)}>
               <div className="asset-form-two-col">
                 <div>
