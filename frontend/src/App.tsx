@@ -59,6 +59,14 @@ function App() {
   const [route, setRoute] = useState<AppRoute>(() => readAppRoute(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activePage: WorkspacePage = route.kind === "workspace" ? route.page : "overview";
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [mobileMenuOpen]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -511,14 +519,7 @@ function App() {
   const permissionsForMenu = activeWorkspaceContext?.permissions ?? [];
   const menuRoleKey = activeWorkspaceContext?.membership.role.key ?? selectedMembership?.role.key ?? null;
   const canSee = (page: WorkspacePage) => canOpenWorkspacePage(page, permissionsForMenu, menuRoleKey);
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileMenuOpen(false);
-    };
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [mobileMenuOpen]);
+
 
 
   return (
