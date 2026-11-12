@@ -4,7 +4,7 @@ import ThemeSelect from "../../components/ThemeSelect";
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type Role = { id: string; key: string; name: string; description: string | null; isSystem: boolean; memberCount: number; permissionKeys: string[] };
 type Permission = { key: string; description: string | null };
-type Location = { id: string; name: string; code: string };
+type Location = { id: string; name: string; code: string; type: string; parentId?: string | null };
 type Member = { id: string; allLocationsAccess: boolean; locationAssignments: Array<{ locationId: string; canManage: boolean }>; isActive: boolean; role: { id: string; name: string; key: string }; user: { id: string; email: string; fullName: string; emailVerifiedAt?: string | null } };
 type Usage = { activeUsers: number; maxActiveUsers: number | null };
 type SubscriptionUsage = { assets: number; activeUsers: number; storageUsedBytes: string; subscription: null | { status: string; trialEndsAt: string | null; plan: { name: string; maxAssets: number | null; maxActiveUsers: number | null; storageLimitBytes: string | null; trialDurationDays: number } } };
@@ -27,7 +27,11 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
   const [roleFormOpen, setRoleFormOpen] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [newUserRoleId, setNewUserRoleId] = useState("");
-  const [inviteByEmail, setInviteByEmail] = useState(true);
+  const [inviteByEmail, setInviteByEmail] = useState(false);
+  const [createLocationType, setCreateLocationType] = useState("");
+  const [newUserLocations, setNewUserLocations] = useState<string[]>([]);
+  const [newUserAllLocations, setNewUserAllLocations] = useState(false);
+  const [scopeLocationType, setScopeLocationType] = useState("");
   const [confirmation, setConfirmation] = useState<{ title: string; message: string; execute: () => Promise<unknown>; success: string } | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -64,7 +68,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         canRoles ? call<{ data: Role[] }>("/roles") : Promise.resolve({ data: [] as Role[] }),
         canRoles ? call<{ data: Permission[] }>("/roles/permissions") : Promise.resolve({ data: [] as Permission[] }),
         canMembers ? call<{ data: Member[]; usage: Usage }>("/members") : Promise.resolve({ data: [] as Member[], usage: { activeUsers: 0, maxActiveUsers: null } }),
-        canMembers && permissions.includes("location.read") ? call<{ data: Location[] }>("/locations") : Promise.resolve({ data: [] as Location[] }),
+        canMembers ? call<{ data: Location[] }>("/members/available-locations") : Promise.resolve({ data: [] as Location[] }),
       ]);
       setRoles(results[0].data);
       setCatalog(results[1].data);
@@ -117,7 +121,8 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         ...(inviteByEmail ? { invite: true } :
           { initialPassword: String(data.get("initialPassword") ?? "") }),
         roleId: newUserRoleId,
-        allLocationsAccess: data.get("allLocationsAccess") === "on",
+        allLocationsAccess: newUserAllLocations && allLocationsAccess,
+        locationIds: newUserAllLocations ? [] : newUserLocations,
       });
       if (inviteByEmail && result.invitationDelivery !== "sent") {
         throw new Error("User created, but email delivery failed. Close this form and resend invitation from the user list.");
@@ -153,7 +158,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
     {visibleTab === "users" && canMembers && tenantId && <>
       <div className="asset-register-toolbar">
         <div><strong>Active users: {usage.activeUsers} / {usage.maxActiveUsers ?? "Unlimited"}</strong><p>Only active company memberships count against your plan.</p></div>
-        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setUserFormOpen(true); }}>Add user ＋</button>
+        <button className="primary-button" type="button" disabled={!canRoles || roles.length === 0} onClick={() => { setNewUserRoleId(assignableRoles[0]?.id ?? ""); setNewUserLocations([]); setCreateLocationType(""); setNewUserAllLocations(false); setUserFormOpen(true); }}>Add user ＋</button>
       </div>
       <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Location scope</th><th>Actions</th></tr></thead><tbody>
         {loading ? <tr><td colSpan={5}>Loading users…</td></tr> : members.length === 0 ? <tr><td colSpan={4}>No users found.</td></tr> : members.map(member => <tr key={member.id}>
@@ -181,6 +186,7 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId || (!allLocationsAccess && locations.length === 0)} onClick={() => {
             setEditingScope(member); setScopeAll(member.allLocationsAccess);
             setScopeIds(member.locationAssignments.map(item => item.locationId));
+            setScopeLocationType("");
           }}>{member.allLocationsAccess ? "All locations" : member.locationAssignments.length + " locations"} · Edit</button></td>
           <td><button type="button" className="topbar-button ghost" disabled={busy || member.user.id === currentUserId} onClick={() => {
             setConfirmation({
@@ -274,9 +280,20 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
         })();
       }}>
         {allLocationsAccess && <label><input type="checkbox" checked={scopeAll} onChange={event => setScopeAll(event.target.checked)} /> All locations</label>}
-        {!scopeAll && <fieldset className="company-permissions"><legend>Accessible locations</legend>
-          {locations.map(location => <label key={location.id}><input type="checkbox" checked={scopeIds.includes(location.id)} onChange={event => setScopeIds(previous => event.target.checked ? [...previous, location.id] : previous.filter(id => id !== location.id))} />{location.name} ({location.code})</label>)}
-        </fieldset>}
+        {!scopeAll && <>
+          <label>Filter by location type</label>
+          <ThemeSelect label="Location type for access" value={scopeLocationType}
+            onChange={setScopeLocationType}
+            options={[{value:"",label:"All location types"},
+              ...[...new Set(locations.map(location=>location.type))].map(type=>({value:type,label:type.replaceAll("_"," ")}))]}/>
+          <fieldset className="company-permissions"><legend>Accessible locations</legend>
+            {locations.filter(location=>!scopeLocationType || location.type===scopeLocationType).map(location =>
+              <label key={location.id}><input type="checkbox" checked={scopeIds.includes(location.id)}
+                onChange={event => setScopeIds(previous => event.target.checked ?
+                  [...previous,location.id] : previous.filter(id => id!==location.id))}/>
+                {location.name} ({location.code})</label>)}
+          </fieldset>
+        </>}
         <p className="asset-inline-hint">Only locations you are allowed to manage may be granted. Child locations inherit access.</p>
         <div className="asset-modal-actions"><button type="button" className="plain-button" onClick={() => setEditingScope(null)}>Cancel</button><button className="primary-button" disabled={busy} type="submit">Save access</button></div>
       </form></section></div>}
@@ -293,8 +310,27 @@ export default function CompanyAdminPage({ tenantId, csrfToken, permissions, cur
             <input name="initialPassword" type="password" placeholder="Set a strong temporary password" required minLength={12} maxLength={128} autoComplete="new-password"/>
           </label><p className="asset-inline-hint">Development fallback only. Production requires email invitation.</p></>}
         <label>Role</label><ThemeSelect label="New user role" value={newUserRoleId} onChange={setNewUserRoleId} options={assignableRoles.map(role => ({ value: role.id, label: role.name }))}/>
-        {allLocationsAccess && <label><input type="checkbox" name="allLocationsAccess" /> Access all company locations</label>}
-        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId} type="submit">Create user</button></div>
+        {allLocationsAccess && <label className="checkbox-field">
+          <input type="checkbox" checked={newUserAllLocations} onChange={event=>setNewUserAllLocations(event.target.checked)}/>
+          Access all company locations</label>}
+        {!newUserAllLocations && <>
+          <label>Location type</label>
+          <ThemeSelect label="Select a location type" value={createLocationType}
+            onChange={value=>{setCreateLocationType(value);setNewUserLocations([]);}}
+            options={[{value:"",label:"Choose location type"},
+              ...[...new Set(locations.map(location=>location.type))].map(type=>
+                ({value:type,label:type.replaceAll("_"," ")}))]}/>
+          {createLocationType && <fieldset className="company-permissions">
+            <legend>Select locations for this user</legend>
+            {locations.filter(location=>location.type===createLocationType).map(location=>
+              <label key={location.id}><input type="checkbox" checked={newUserLocations.includes(location.id)}
+                onChange={event=>setNewUserLocations(current=>event.target.checked
+                  ? [...current,location.id] : current.filter(id=>id!==location.id))}/>
+                {location.name} ({location.code})</label>)}
+          </fieldset>}
+          {!createLocationType && <p className="asset-inline-hint">Choose a location type, then select the branch, office or department to give this user access.</p>}
+        </>}
+        <div className="asset-modal-actions"><button className="plain-button" type="button" onClick={() => setUserFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busy || !newUserRoleId || (!newUserAllLocations && newUserLocations.length===0)} type="submit">Create user</button></div>
       </form></section></div>}
     {roleFormOpen && <div className="modal-backdrop"><section className="asset-modal" role="dialog" aria-modal="true" aria-labelledby="roleFormTitle">
       <div className="asset-modal-heading"><h2 id="roleFormTitle">{selectedRole ? "Edit role" : "Create role"}</h2><button className="modal-close" type="button" onClick={() => setRoleFormOpen(false)}>×</button></div>
