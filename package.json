@@ -15,7 +15,7 @@
     "typecheck": "npm run typecheck --workspace @assetmov/frontend && npm run typecheck --workspace @assetmov/backend && npm run typecheck:tests --workspace @assetmov/backend",
     "db:validate": "npm run db:validate --workspace @assetmov/backend",
     "test": "npm test --workspace @assetmov/backend && npm run test:navigation",
-    "test:navigation": "node --import tsx --test frontend/src/navigation/routes.test.ts",
+    "test:navigation": "node --import tsx --test frontend/src/navigation/routes.test.ts frontend/src/navigation/access.test.ts",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,css,html,prisma,md,yml,yaml}\"",
     "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx,css}\" \"backend/src/**/*.ts\" \"backend/prisma/**/*.prisma\"",
     "db:seed:plans": "npm run db:seed:plans --workspace @assetmov/backend",
