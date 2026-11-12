@@ -390,14 +390,13 @@ function App() {
       if (!response.ok) throw new Error(payload.error?.message ?? "Could not sign out.");
 
       setUser(null);
-      setPlatformMode(false);
       setCsrfToken(null);
       setActiveTenantId(null);
       setWorkspaceContext(null);
       setWorkspaceError("");
       setBillingStatus(null);
       setBillingError("");
-      setActivePage("overview");
+      navigate({ kind: "home" }, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not sign out. Please try again.");
     }
@@ -428,9 +427,19 @@ function App() {
         onCancel={() => setAuthMode(null)}
         onAuthenticated={(authenticatedUser, token) => {
           setUser(authenticatedUser);
-          setPlatformMode(authenticatedUser.isPlatformAdmin);
           setCsrfToken(token);
-          setActiveTenantId(authenticatedUser.memberships[0]?.tenant.id ?? null);
+          const requested = readAppRoute(window.location.pathname);
+          const chosen = requested.kind === "workspace"
+            ? authenticatedUser.memberships.find(m => m.tenant.slug === requested.tenantSlug)
+            : authenticatedUser.memberships[0];
+          setActiveTenantId(chosen?.tenant.id ?? null);
+          if (requested.kind === "home") {
+            if (authenticatedUser.isPlatformAdmin) {
+              navigate({ kind: "platform", page: "overview" }, true);
+            } else if (chosen) {
+              navigate({ kind: "workspace", tenantSlug: chosen.tenant.slug, page: "overview" }, true);
+            }
+          }
           setWorkspaceContext(null);
           setAuthMode(null);
           setActionError("");
@@ -440,19 +449,45 @@ function App() {
     );
   }
 
-  if (user?.isPlatformAdmin && platformMode) {
+  if (user && route.kind === "platform" && !user.isPlatformAdmin) {
+    return <main className="route-access-message" role="alert">
+      <h1>Platform access denied</h1><p>This account does not have Platform Super Admin access.</p>
+      <button type="button" className="primary-button" onClick={() => navigateWorkspace("overview")}>Go to your workspace</button>
+    </main>;
+  }
+  if (user?.isPlatformAdmin && route.kind === "platform") {
     return <PlatformConsole
       user={user} csrfToken={csrfToken} apiHealth={apiHealth}
+      page={route.page} onNavigate={navigatePlatform}
       error={actionError}
       onSignOut={() => { void handleLogout(); }}
-      onCompanySwitch={() => { setPlatformMode(false); setActivePage("overview"); setActionError(""); }}
+      onCompanySwitch={() => { navigateWorkspace("overview"); setActionError(""); }}
     />;
+  }
+  if (route.kind === "notFound" ||
+      (user && route.kind === "workspace" &&
+       !user.memberships.some(m => m.tenant.slug === route.tenantSlug))) {
+    return <main className="route-access-message" role="alert">
+      <h1>Page unavailable</h1><p>This page does not exist or your account cannot access its workspace.</p>
+      <button type="button" className="primary-button" onClick={() => {
+        if (user?.isPlatformAdmin) navigatePlatform("overview");
+        else navigateWorkspace("overview");
+      }}>Go to overview</button>
+    </main>;
   }
 
   const selectedMembership = user?.memberships.find((membership) => membership.tenant.id === activeTenantId)
     ?? user?.memberships[0];
   const activeWorkspaceContext = workspaceContext?.tenant.id === activeTenantId ? workspaceContext : null;
   const currentTenant = activeWorkspaceContext?.tenant ?? selectedMembership?.tenant;
+  const workspaceSlug = currentTenant?.slug ?? selectedMembership?.tenant.slug ?? "";
+  const pageHref = (page: WorkspacePage) => workspaceSlug
+    ? appRoutePath({ kind: "workspace", tenantSlug: workspaceSlug, page }) : "/";
+  const followWorkspaceLink = (event: React.MouseEvent<HTMLAnchorElement>, page: WorkspacePage) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setActivePage(page);
+  };
   const initials = user?.fullName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "").join("") || "AM";
   const displayedError = actionError || workspaceError;
@@ -467,21 +502,26 @@ function App() {
         <div className="workspace-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Main navigation">
           {(!user || billingLoading || (!billingError && billingStatus?.allowed)) && <>
-          <button className={"nav-item " + (activePage === "overview" ? "active" : "")} type="button" onClick={() => setActivePage("overview")}><span className="nav-icon">▦</span> Overview</button>
-          <button className={"nav-item " + (activePage === "assets" ? "active" : "")} type="button" onClick={() => setActivePage("assets")}><span className="nav-icon">◫</span> Asset register</button>
-          <button className={"nav-item " + (activePage === "transfers" ? "active" : "")} type="button" onClick={() => setActivePage("transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</button>
-          <button className={"nav-item " + (activePage === "employees" ? "active" : "")} type="button" onClick={() => setActivePage("employees")}><span className="nav-icon">♙</span> Employees</button>
-          <button className={"nav-item " + (activePage === "locations" ? "active" : "")} type="button" onClick={() => setActivePage("locations")}><span className="nav-icon">⌂</span> Locations</button>
+          <a className={"nav-item " + (activePage === "overview" ? "active" : "")} href={pageHref("overview")} aria-current={activePage === "overview" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "overview")}><span className="nav-icon">▦</span> Overview</a>
+          <a className={"nav-item " + (activePage === "assets" ? "active" : "")} href={pageHref("assets")} aria-current={activePage === "assets" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "assets")}><span className="nav-icon">◫</span> Asset register</a>
+          <a className={"nav-item " + (activePage === "transfers" ? "active" : "")} href={pageHref("transfers")} aria-current={activePage === "transfers" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "transfers")}><span className="nav-icon">⇄</span> Transfers & receipts</a>
+          <a className={"nav-item " + (activePage === "employees" ? "active" : "")} href={pageHref("employees")} aria-current={activePage === "employees" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "employees")}><span className="nav-icon">♙</span> Employees</a>
+          <a className={"nav-item " + (activePage === "locations" ? "active" : "")} href={pageHref("locations")} aria-current={activePage === "locations" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "locations")}><span className="nav-icon">⌂</span> Locations</a>
           </>}
-          {user?.isPlatformAdmin && <button className="nav-item" type="button" onClick={() => setPlatformMode(true)}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></button>}
-          {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <button className={"nav-item " + (activePage === "company" ? "active" : "")} type="button" onClick={() => setActivePage("company")}><span className="nav-icon">♧</span> Users & roles</button>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("tenant.settings.manage") && <button className={"nav-item " + (activePage === "profile" ? "active" : "")} type="button" onClick={() => setActivePage("profile")}><span className="nav-icon">♧</span> Company profile</button>}
-          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <button className={"nav-item " + (activePage === "masterData" ? "active" : "")} type="button" onClick={() => setActivePage("masterData")}><span className="nav-icon">▧</span> Master data</button>}
+          {user?.isPlatformAdmin && <a className="nav-item" href="/platform/overview" onClick={event => {
+            if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+              event.preventDefault(); navigatePlatform("overview");
+            }
+          }}><span className="nav-icon">◇</span> Platform Console <span className="nav-lock">Switch ↗</span></a>}
+          {billingStatus?.allowed && (activeWorkspaceContext?.permissions.includes("members.manage") || activeWorkspaceContext?.permissions.includes("roles.manage")) && <a className={"nav-item " + (activePage === "company" ? "active" : "")} href={pageHref("company")} aria-current={activePage === "company" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "company")}><span className="nav-icon">♧</span> Users & roles</a>}
+          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("tenant.settings.manage") && <a className={"nav-item " + (activePage === "profile" ? "active" : "")} href={pageHref("profile")} aria-current={activePage === "profile" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "profile")}><span className="nav-icon">♧</span> Company profile</a>}
+          {billingStatus?.allowed && activeWorkspaceContext?.permissions.includes("asset.read") && <a className={"nav-item " + (activePage === "masterData" ? "active" : "")} href={pageHref("masterData")} aria-current={activePage === "masterData" ? "page" : undefined} onClick={event => followWorkspaceLink(event, "masterData")}><span className="nav-icon">▧</span> Master data</a>}
           {(!user || billingStatus?.allowed) && <><a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">◷</span> Maintenance <span className="nav-lock">Soon</span></a>
           <a className="nav-item" href="#modules" onClick={() => setActivePage("overview")}><span className="nav-icon">▤</span> Reports <span className="nav-lock">Soon</span></a></>}
           {user && (activeWorkspaceContext?.membership.role.key === "TENANT_OWNER" || selectedMembership?.role.key === "TENANT_OWNER") && (
-            <button className={"nav-item " + (activePage === "billing" ? "active" : "")}
-              type="button" onClick={() => setActivePage("billing")}><span className="nav-icon">▤</span> Billing & Plan</button>
+            <a className={"nav-item " + (activePage === "billing" ? "active" : "")}
+              href={pageHref("billing")} aria-current={activePage === "billing" ? "page" : undefined}
+              onClick={event => followWorkspaceLink(event, "billing")}><span className="nav-icon">▤</span> Billing & Plan</a>
           )}
         </nav>
         <div className="sidebar-bottom">
@@ -501,7 +541,7 @@ function App() {
               <>
                 {user.memberships.length > 1 && (
                   <ThemeSelect className="workspace-select" label="Active workspace" value={activeTenantId ?? ""}
-                    onChange={value => setActiveTenantId(value || null)}
+                    onChange={value => navigateWorkspace("overview", value || null)}
                     options={user.memberships.map(membership => ({
                       value: membership.tenant.id, label: membership.tenant.name,
                     }))}/>
