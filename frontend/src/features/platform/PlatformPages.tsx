@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import ThemeSelect from "../../components/ThemeSelect";
-import type { PlatformPage } from "./PlatformConsole";
+import type { PlatformPage } from "../../navigation/routes";
 
 const api = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 type ApiError = { error?: { code?: string; message?: string } };
