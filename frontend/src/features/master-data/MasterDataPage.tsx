@@ -120,7 +120,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
         role="tabpanel" aria-labelledby={"master-tab-" + tab} tabIndex={0}>
         {tab === "categories" && <>
           <div className="asset-register-toolbar master-section-heading"><div><h2>Asset categories</h2><p>Define the groups used to organize your asset models.</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setCategory(null);setError("");setModal("category");}}>Add category ＋</button>}</div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Name</th><th>Code</th><th>Models</th><th>Actions</th></tr></thead>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>Name</th><th>Code</th><th>Models</th><th>Actions</th></tr></thead>
         <tbody>{loading ? <tr><td colSpan={4}>Loading…</td></tr> : categories.length === 0 ? <tr><td colSpan={4} className="asset-table-message"><strong>No categories yet</strong><span>Create a category before adding an asset model.</span></td></tr> :
           categories.map(item => <tr key={item.id}><td><strong>{item.name}</strong><div>{item.description}</div></td><td>{item.code}</td>
             <td>{models.filter(m => m.categoryId === item.id).length}</td>
@@ -128,7 +128,7 @@ export default function MasterDataPage({ tenantId, csrfToken, permissions }: Pro
         </>}
         {tab === "models" && <>
           <div className="asset-register-toolbar master-section-heading"><div><h2>Asset models</h2><p>Set up reusable model definitions and custom attributes.</p></div>{canManage && <button className="primary-button" type="button" disabled={!categories.length} onClick={() => {setEditingModel(null);setSelectedCategory(categories[0]?.id ?? "");setFields([]);setError("");setModal("model");}}>Add model ＋</button>}</div>
-      <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Model</th><th>Category</th><th>Custom fields</th><th>Actions</th></tr></thead><tbody>
+      <div className="asset-table-wrap" tabIndex={0} aria-label="Scrollable data table"><table className="asset-table"><thead><tr><th>Model</th><th>Category</th><th>Custom fields</th><th>Actions</th></tr></thead><tbody>
         {models.length === 0 ? <tr><td colSpan={4} className="asset-table-message"><strong>No asset models yet</strong><span>Create a category, then add a model with optional custom fields.</span></td></tr> :
           models.map(model => <tr key={model.id}><td><strong>{model.name}</strong><div>{model.code ?? "—"}</div></td>
             <td>{categories.find(c => c.id === model.categoryId)?.name ?? "—"}</td>
