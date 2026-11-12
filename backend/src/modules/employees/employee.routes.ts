@@ -178,6 +178,42 @@ employeeRouter.get(
   },
 );
 
+employeeRouter.get("/:id/location-history",
+  requireSession, requireTenant, requirePermission("employee.read"),
+  async (request, response, next) => {
+    try {
+      const id=request.params.id;
+      const tenantId=request.auth!.tenantId!;
+      if (typeof id!=="string" || !id) {
+        sendError(response,400,"INVALID_ROUTE_PARAMETER","Employee ID is required."); return;
+      }
+      const employee=await prisma.employee.findFirst({
+        where:{id,tenantId},select:{id:true,homeLocationId:true},
+      });
+      if (!employee || !canAccessLocation(request,employee.homeLocationId)) {
+        sendError(response,404,"EMPLOYEE_NOT_FOUND","Employee not found in your location scope."); return;
+      }
+      const history=await prisma.employeeLocationHistory.findMany({
+        where:{tenantId,employeeId:id},orderBy:{createdAt:"desc"},take:100,
+      });
+      const locationIds=[...new Set(history.flatMap(entry=>
+        [entry.previousLocationId,entry.newLocationId].filter((value):value is string=>Boolean(value))))];
+      const locations=await prisma.location.findMany({
+        where:{tenantId,id:{in:locationIds}},select:{id:true,name:true,code:true},
+      });
+      const labels=new Map(locations.map(location=>[location.id,
+        location.name+" ("+location.code+")"]));
+      response.json({data:history.map(entry=>({
+        id:entry.id,createdAt:entry.createdAt,reason:entry.reason,
+        previousLocation:entry.previousLocationId
+          ? labels.get(entry.previousLocationId) ?? "Unknown location" : "Not assigned",
+        newLocation:entry.newLocationId
+          ? labels.get(entry.newLocationId) ?? "Unknown location" : "Not assigned",
+      }))});
+    } catch(error){next(error);}
+  },
+);
+
 employeeRouter.post(
   "/",
   requireSession,
