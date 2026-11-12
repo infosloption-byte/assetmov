@@ -424,7 +424,10 @@ function App() {
       <AuthPage
         mode={authMode}
         onModeChange={setAuthMode}
-        onCancel={() => setAuthMode(null)}
+        onCancel={() => {
+          setAuthMode(null);
+          if (isProtectedRoute(readAppRoute(window.location.pathname))) navigate({ kind: "home" }, true);
+        }}
         onAuthenticated={(authenticatedUser, token) => {
           setUser(authenticatedUser);
           setCsrfToken(token);
@@ -434,7 +437,10 @@ function App() {
             : authenticatedUser.memberships[0];
           setActiveTenantId(chosen?.tenant.id ?? null);
           if (requested.kind === "home") {
-            if (authenticatedUser.isPlatformAdmin) {
+            const pendingCheckout = new URLSearchParams(window.location.search).get("billing") === "pending";
+            if (pendingCheckout && chosen) {
+              navigate({ kind: "workspace", tenantSlug: chosen.tenant.slug, page: "billing" }, true, true);
+            } else if (authenticatedUser.isPlatformAdmin) {
               navigate({ kind: "platform", page: "overview" }, true);
             } else if (chosen) {
               navigate({ kind: "workspace", tenantSlug: chosen.tenant.slug, page: "overview" }, true);
